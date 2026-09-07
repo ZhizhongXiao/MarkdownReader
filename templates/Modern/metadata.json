@@ -1,0 +1,8 @@
+{
+    "id": "modern",
+    "name": "Modern",
+    "author": "MDViewer",
+    "version": "1.0.0",
+    "description": "Modern general-purpose reading theme for everyday Markdown notes and long-form documents.",
+    "extends": "default"
+}

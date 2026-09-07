@@ -1,0 +1,4 @@
+markdown>=3.5
+pymdown-extensions>=10.0
+pygments>=2.15
+pywebview>=5.0

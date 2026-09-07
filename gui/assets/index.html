@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MDViewer</title>
+<link rel="stylesheet" href="gui.css">
+</head>
+<body>
+<div class="app">
+    <header class="header">
+        <h1>MDViewer</h1>
+        <div class="header-right">
+            <button class="theme-btn" id="themeToggleBtn" title="切换深色/浅色模式">☾</button>
+            <span class="version">Markdown 到离线 HTML 阅读器</span>
+        </div>
+    </header>
+
+    <section class="status-strip">
+        <div class="status-row">
+            <div class="status-left">
+                <span class="badge" id="statusBadge">READY</span>
+                <span id="statusText">就绪 - 选择 Markdown 文件开始转换</span>
+            </div>
+            <div class="status-actions">
+                <button class="btn-primary btn-run" onclick="runConvert()">开始转换</button>
+                <button class="btn-blue" id="btn-open-dir" onclick="openDir()" disabled>输出目录</button>
+                <button class="btn-primary" id="btn-open-file" onclick="openFile()" disabled>打开 HTML</button>
+            </div>
+        </div>
+    </section>
+
+    <main class="main">
+        <div class="left-wrapper">
+            <button class="scroll-indicator scroll-indicator-top hidden" id="scroll-arrow-up">▲</button>
+            <button class="scroll-indicator scroll-indicator-bottom hidden" id="scroll-arrow-down">▼</button>
+            <div class="left-column">
+                <details class="accordion" open>
+                    <summary><span>输入源</span><span class="badge">INPUT</span></summary>
+                    <div class="accordion-body">
+                        <label>Markdown 文件或目录</label>
+                        <p class="input-drop-hint">文件窗口支持复选；也可将 .md 文件或文件夹直接拖入窗口</p>
+                        <div class="input-summary-row">
+                            <span id="input-summary">尚未选择文档</span>
+                            <button id="btn-clear-inputs" onclick="clearInputs()" disabled>清空</button>
+                        </div>
+                        <div class="path-row input-picker-row">
+                            <button onclick="selectFiles()">添加文件</button>
+                            <button onclick="selectDir()">选择目录</button>
+                        </div>
+                    </div>
+                </details>
+
+                <details class="accordion" open>
+                    <summary><span>输出设置</span><span class="badge">OUTPUT</span></summary>
+                    <div class="accordion-body">
+                        <label>输出目录</label>
+                        <div class="path-row">
+                            <input type="text" id="output-path" placeholder="output/">
+                            <button onclick="selectOutput()">浏览</button>
+                        </div>
+                        <label style="margin-top:8px">模板</label>
+                        <div class="custom-select" id="template-select-wrap">
+                            <button class="custom-select-btn" id="template-select-btn" onclick="toggleTemplateDropdown()">
+                                <span id="template-select-text">modern</span>
+                                <span class="custom-select-arrow">▼</span>
+                            </button>
+                            <div class="custom-select-dropdown hidden" id="template-select-dropdown"></div>
+                        </div>
+                    </div>
+                </details>
+
+                <details class="accordion" open>
+                    <summary><span>选项</span><span class="badge">OPTIONS</span></summary>
+                    <div class="accordion-body">
+                        <div class="check-row">
+                            <label><input type="checkbox" id="chk-auto-open"> 自动打开</label>
+                            <label><input type="checkbox" id="chk-build-index"> 生成索引</label>
+                            <label class="check-wide"><input type="checkbox" id="chk-preserve-structure"> 保留目录结构</label>
+                        </div>
+                    </div>
+                </details>
+            </div>
+        </div>
+
+        <section class="workspace-panel">
+            <div class="workspace-tabs" id="workspace-tabs" data-active="preview">
+                <button class="workspace-tab workspace-tab-primary" id="tab-conversion" onclick="showConversionTab()">
+                    列表 <span class="tab-count" id="conversion-tab-count">0</span>
+                </button>
+                <button class="workspace-tab workspace-tab-primary active" id="tab-preview" onclick="showPreviewTab()">预览</button>
+                <button class="workspace-tab workspace-tab-log" id="tab-log" onclick="showLogTab()" aria-label="日志">
+                    <span class="log-alert-icon hidden" id="log-alert-icon" aria-hidden="true">!</span>
+                    <span>日志</span>
+                    <span class="log-issue-count hidden" id="log-issue-count" aria-hidden="true">0</span>
+                </button>
+            </div>
+
+            <div class="workspace-page conversion-page" id="conversion-page">
+                <div class="conversion-toolbar">
+                    <div class="conversion-stats">
+                        <span>已加入 <strong id="stat-total">0</strong></span>
+                        <span>待转换 <strong id="stat-pending">0</strong></span>
+                        <span class="stat-warning">警告 <strong id="stat-warning">0</strong></span>
+                        <span class="stat-error">失败 <strong id="stat-error">0</strong></span>
+                    </div>
+                    <input type="text" id="conversion-filter" placeholder="搜索文档…" oninput="renderConversionList()">
+                </div>
+                <div class="conversion-messages" id="conversion-messages"></div>
+                <div class="conversion-table-wrap">
+                    <div class="conversion-list" id="conversion-list"></div>
+                    <div class="conversion-empty" id="conversion-empty">
+                        <strong>转换清单为空</strong>
+                        <span>使用左侧按钮选择文件，或从 Windows 资源管理器拖入文件和文件夹。</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="workspace-page preview-page active" id="preview-page">
+                <div class="template-preview preview-modern" id="template-preview">
+                    <div class="preview-stage">
+                        <div class="preview-shell">
+                            <div class="preview-sidebar">
+                                <span></span><span></span><span></span><span></span><span></span>
+                            </div>
+                            <div class="preview-content">
+                                <div class="preview-document">
+                                    <div class="preview-heading"></div>
+                                    <div class="preview-subheading"></div>
+                                    <div class="preview-line long"></div>
+                                    <div class="preview-line"></div>
+                                    <div class="preview-line short"></div>
+                                    <div class="preview-block"></div>
+                                    <div class="preview-grid">
+                                        <span></span><span></span><span></span><span></span>
+                                    </div>
+                                    <div class="preview-line long"></div>
+                                    <div class="preview-line"></div>
+                                    <div class="preview-line tiny"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="workspace-page log-page" id="log-page">
+                <div class="log-area" id="log-area"></div>
+            </div>
+        </section>
+    </main>
+</div>
+<div class="drop-overlay hidden" id="drop-overlay">
+    <div class="drop-overlay-card">
+        <strong>松开鼠标，加入转换清单</strong>
+    </div>
+</div>
+<script src="gui.js"></script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+{
+    "id": "office",
+    "name": "Office",
+    "version": "1.0.0",
+    "description": "Word-like document style using Times New Roman and Songti SC, optimized for formal documents and printing.",
+    "extends": "default"
+}

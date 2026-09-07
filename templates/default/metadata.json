@@ -1,0 +1,9 @@
+{
+    "id": "default",
+    "name": "Base",
+    "author": "MDViewer",
+    "version": "1.0.0",
+    "description": "Base viewer layout and shared theme variables used by MDViewer templates.",
+    "extends": null,
+    "hidden": true
+}

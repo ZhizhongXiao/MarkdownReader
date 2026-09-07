@@ -1,0 +1,8 @@
+{
+    "id": "vscode",
+    "name": "VS Code",
+    "author": "MDViewer",
+    "version": "1.0.0",
+    "description": "VS Code inspired Markdown preview theme for technical notes, code documents, and developer-oriented reading.",
+    "extends": "default"
+}

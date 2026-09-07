@@ -1,0 +1,441 @@
+/* MDViewer Office Template */
+
+:root {
+    --office-page-bg: #ffffff;
+    --office-app-bg: #f3f3f3;
+    --office-border: #d9d9d9;
+    --office-shadow: 0 1px 6px rgba(0, 0, 0, 0.12);
+    --office-accent: #2b579a;
+    --office-accent-soft: #eaf2fb;
+    --office-hover: #f2f7fd;
+    --office-inline-code-border: #e0e0e0;
+    --office-code-block-border: #bfbfbf;
+    --office-hr-border: #bfbfbf;
+
+    --toolbar-height: 40px;
+    --sidebar-width: 280px;
+    --content-max-width: 794px;
+    --font-size-base: 10.5pt;
+    --font-size-code: 9.5pt;
+    --line-height-base: 22pt;
+
+    --font-sans: "Times New Roman", "Songti SC", "Source Han Sans SC", monospace;
+    --font-mono: monospace;
+
+    --color-bg: var(--office-app-bg);
+    --color-surface: var(--office-page-bg);
+    --color-sidebar-bg: #f8f8f8;
+    --color-sidebar-border: var(--office-border);
+    --color-toolbar-bg: #ffffff;
+    --color-toolbar-border: #d0d0d0;
+    --color-toolbar-btn-hover: var(--office-accent-soft);
+    --color-toolbar-btn-active: #d9eaf7;
+    --color-text: #000000;
+    --color-text-light: #333333;
+    --color-heading: #000000;
+    --color-link: #0563c1;
+    --color-link-hover: #004578;
+    --color-code-bg: #f5f5f5;
+    --color-blockquote-border: #a6a6a6;
+    --color-blockquote-bg: #f7f7f7;
+    --color-table-border: #000000;
+    --color-table-stripe: #f2f2f2;
+    --color-toc-active-bg: #dbeafe;
+    --color-toc-active-text: var(--office-accent);
+    --color-toc-hover-bg: var(--office-hover);
+    --color-copy-btn-bg: #ffffff;
+    --color-copy-btn-hover: #f0f6ff;
+    --color-resizer-active: var(--office-accent);
+    --color-shadow: rgba(0, 0, 0, 0.12);
+
+    --toc-indent: 1em;
+    --toc-toggle-width: 20px;
+    --toggle-size: 16px;
+}
+
+[data-theme="dark"] {
+    --office-page-bg: #1f1f1f;
+    --office-app-bg: #121212;
+    --office-border: #3a3a3a;
+    --office-shadow: 0 1px 8px rgba(0, 0, 0, 0.45);
+    --office-accent: #7eb7f0;
+    --office-accent-soft: #26384f;
+    --office-hover: #242f3f;
+    --office-inline-code-border: #555555;
+    --office-code-block-border: #555555;
+    --office-hr-border: #555555;
+
+    --color-bg: var(--office-app-bg);
+    --color-surface: var(--office-page-bg);
+    --color-sidebar-bg: #1b1b1b;
+    --color-sidebar-border: var(--office-border);
+    --color-toolbar-bg: #1f1f1f;
+    --color-toolbar-border: #3a3a3a;
+    --color-toolbar-btn-hover: #26384f;
+    --color-toolbar-btn-active: #2d4b70;
+    --color-text: #f2f2f2;
+    --color-text-light: #d6d6d6;
+    --color-heading: #ffffff;
+    --color-link: #8cc8ff;
+    --color-link-hover: #b7dcff;
+    --color-code-bg: #262626;
+    --color-blockquote-border: #777777;
+    --color-blockquote-bg: #242424;
+    --color-table-border: #9a9a9a;
+    --color-table-stripe: #2a2a2a;
+    --color-toc-active-bg: #26384f;
+    --color-toc-active-text: #9cc9f5;
+    --color-toc-hover-bg: #242f3f;
+    --color-copy-btn-bg: #2a2a2a;
+    --color-copy-btn-hover: #343f4f;
+}
+
+body .content-area {
+    background: var(--office-app-bg);
+    padding: 32px 40px 64px;
+}
+
+body .markdown-body {
+    width: 100%;
+    max-width: var(--content-max-width);
+    min-height: calc(100vh - var(--toolbar-height) - 96px);
+    padding: 48px 64px;
+    background: var(--office-page-bg);
+    border: 1px solid var(--office-border);
+    box-shadow: var(--office-shadow);
+    color: var(--color-text);
+    font-family: "Times New Roman", "Songti SC", "Source Han Sans SC", monospace;
+    font-size: 10.5pt;
+    line-height: 22pt;
+    text-align: justify;
+}
+
+body .markdown-body p {
+    margin-top: 0;
+    margin-bottom: 0;
+    text-indent: 2em;
+    letter-spacing: 0;
+}
+
+body .markdown-body h1,
+body .markdown-body h2,
+body .markdown-body h3,
+body .markdown-body h4,
+body .markdown-body h5,
+body .markdown-body h6 {
+    text-indent: 0;
+    font-family: "Times New Roman", "Songti SC", "Source Han Sans SC", monospace;
+    font-weight: 700;
+    line-height: 1.4;
+    color: var(--color-heading);
+    break-after: avoid;
+    page-break-after: avoid;
+    break-inside: avoid;
+    page-break-inside: avoid;
+}
+
+body .markdown-body h1 {
+    font-size: 16pt;
+    margin-top: 12pt;
+    margin-bottom: 6pt;
+}
+
+body .markdown-body h1:first-child {
+    margin-top: 0;
+}
+
+body .markdown-body h2 {
+    font-size: 14pt;
+    margin-top: 9pt;
+    margin-bottom: 4pt;
+}
+
+body .markdown-body h3 {
+    font-size: 12pt;
+    margin-top: 6pt;
+    margin-bottom: 3pt;
+}
+
+body .markdown-body h4 {
+    font-size: 10.5pt;
+    margin-top: 3pt;
+    margin-bottom: 2pt;
+}
+
+body .markdown-body h5 {
+    font-size: 10.5pt;
+    margin-top: 2pt;
+    margin-bottom: 0;
+}
+
+body .markdown-body h6 {
+    font-size: 10.5pt;
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+body .heading-toggle {
+    text-indent: 0;
+    line-height: 1;
+}
+
+body .markdown-body ul,
+body .markdown-body ol {
+    margin: 0 0 6pt 0;
+    padding-left: 2em;
+    line-height: 22pt;
+    text-indent: 0;
+}
+
+body .markdown-body li,
+body .markdown-body li p {
+    margin-top: 0;
+    margin-bottom: 0;
+    text-indent: 0;
+}
+
+body .markdown-body table,
+body .markdown-body blockquote,
+body .markdown-body pre,
+body .table-wrapper,
+body .code-block-wrapper,
+body .markdown-body .katex-display,
+body .markdown-body .math-block,
+body .markdown-body .math-display,
+body .markdown-body .texmath {
+    text-indent: 0;
+}
+
+body .markdown-body p:has(img) {
+    margin: 6pt 0;
+    text-align: center;
+    text-indent: 0;
+    line-height: 1.5;
+}
+
+body .markdown-body img {
+    max-width: 100%;
+    height: auto;
+    margin: 0 auto;
+    border-radius: 0;
+}
+
+body .markdown-body .katex-display,
+body .markdown-body .math-block,
+body .markdown-body .math-display,
+body .markdown-body .texmath {
+    margin: 6pt 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    text-align: center;
+    line-height: 1.5;
+}
+
+body .markdown-body :not(pre) > code {
+    font-family: monospace;
+    font-size: 9.5pt;
+    background: var(--color-code-bg);
+    border: 1px solid var(--office-inline-code-border);
+    border-radius: 2px;
+    padding: 0 2pt;
+}
+
+body .code-block-wrapper {
+    margin: 6pt 0;
+    text-indent: 0;
+}
+
+body .code-block-wrapper pre,
+body .markdown-body pre {
+    margin: 0;
+    padding: 8pt 10pt;
+    overflow-x: auto;
+    border: 1px solid var(--office-code-block-border);
+    border-radius: 0;
+    background: var(--color-code-bg);
+    color: var(--color-text);
+    font-family: monospace;
+    font-size: 9.5pt;
+    line-height: 1.5;
+    text-align: left;
+    text-indent: 0;
+}
+
+body .markdown-body pre code {
+    font-family: monospace;
+    font-size: inherit;
+    line-height: inherit;
+}
+
+body .copy-btn {
+    font-family: "Times New Roman", "Songti SC", "Source Han Sans SC", monospace;
+    font-size: 12px;
+    line-height: 1.2;
+    border-radius: 2px;
+}
+
+body .table-wrapper {
+    margin: 6pt 0;
+    text-indent: 0;
+}
+
+body .table-wrapper table {
+    margin: 0;
+}
+
+body .markdown-body table {
+    width: 100%;
+    margin: 6pt 0;
+    border-collapse: collapse;
+    font-size: 10.5pt;
+    line-height: 1.5;
+    text-align: left;
+    text-indent: 0;
+}
+
+body .markdown-body th,
+body .markdown-body td {
+    border: 1px solid var(--color-table-border);
+    padding: 4pt 6pt;
+    vertical-align: top;
+    text-align: left;
+    text-indent: 0;
+}
+
+body .markdown-body th {
+    background: var(--color-table-stripe);
+    font-weight: 700;
+}
+
+body .markdown-body tr:nth-child(even) {
+    background: transparent;
+}
+
+body .markdown-body thead th:first-child,
+body .markdown-body thead th:last-child {
+    border-radius: 0;
+}
+
+body .markdown-body blockquote {
+    margin: 6pt 0;
+    padding: 4pt 8pt;
+    border-left: 3px solid var(--color-blockquote-border);
+    border-radius: 0;
+    background: var(--color-blockquote-bg);
+    color: var(--color-text);
+    font-size: 10.5pt;
+    line-height: 22pt;
+    text-indent: 0;
+}
+
+body .markdown-body blockquote p {
+    text-indent: 0;
+}
+
+body .markdown-body hr {
+    border: none;
+    border-top: 1px solid var(--office-hr-border);
+    margin: 6pt 0;
+}
+
+body .markdown-body hr + h1,
+body .markdown-body hr + h2,
+body .markdown-body hr + h3,
+body .markdown-body hr + h4,
+body .markdown-body hr + h5,
+body .markdown-body hr + h6 {
+    margin-top: 6pt;
+}
+
+body .toc-sidebar {
+    background: var(--color-sidebar-bg);
+}
+
+body .toc-header {
+    background: var(--color-toolbar-bg);
+}
+
+body .toc-row.active {
+    background: var(--color-toc-active-bg);
+    border-left-color: var(--office-accent);
+}
+
+body .toc-row:hover {
+    background: var(--color-toc-hover-bg);
+}
+
+body .back-to-top-btn {
+    font-family: "Times New Roman", "Songti SC", "Source Han Sans SC", monospace;
+}
+
+@media print {
+    :root,
+    [data-theme="dark"] {
+        --office-page-bg: #ffffff !important;
+        --office-app-bg: #ffffff !important;
+        --office-border: transparent !important;
+        --office-shadow: none !important;
+        --color-bg: #ffffff !important;
+        --color-text: #000000 !important;
+        --color-heading: #000000 !important;
+        --color-code-bg: #f5f5f5 !important;
+        --color-blockquote-border: #a6a6a6 !important;
+        --color-blockquote-bg: #f7f7f7 !important;
+        --color-table-border: #000000 !important;
+        --color-table-stripe: #f2f2f2 !important;
+        --office-inline-code-border: #e0e0e0 !important;
+        --office-code-block-border: #bfbfbf !important;
+        --office-hr-border: #bfbfbf !important;
+    }
+
+    body .content-area {
+        background: var(--office-app-bg) !important;
+        padding: 0 !important;
+    }
+
+    body .markdown-body {
+        max-width: none !important;
+        min-height: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+        box-shadow: none !important;
+        background: var(--office-page-bg) !important;
+        color: var(--color-text) !important;
+        font-size: 10.5pt;
+        line-height: 22pt;
+    }
+
+    body .markdown-body h1,
+    body .markdown-body h2,
+    body .markdown-body h3,
+    body .markdown-body h4,
+    body .markdown-body h5,
+    body .markdown-body h6 {
+        color: var(--color-heading) !important;
+        break-after: avoid-page;
+        page-break-after: avoid;
+        break-inside: avoid-page;
+        page-break-inside: avoid;
+    }
+
+    body .markdown-body table,
+    body .markdown-body pre,
+    body .code-block-wrapper,
+    body .markdown-body blockquote,
+    body .markdown-body img,
+    body .markdown-body p:has(img),
+    body .markdown-body .katex-display,
+    body .markdown-body .math-block,
+    body .markdown-body .math-display,
+    body .markdown-body .texmath {
+        break-inside: avoid-page;
+        page-break-inside: avoid;
+    }
+
+    body .markdown-body pre,
+    body .code-block-wrapper pre {
+        background: var(--color-code-bg) !important;
+        color: var(--color-text) !important;
+        border-color: var(--office-code-block-border) !important;
+    }
+}

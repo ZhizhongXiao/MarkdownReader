@@ -1,0 +1,9 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>{{TITLE}}</title></head>
+<body>
+<div class="toolbar" id="toolbar"><div class="toolbar-left"><span class="toolbar-title">{{TITLE}}</span></div><div class="toolbar-right"><button id="btn-expand-all-content" title="展开下一级">▼</button><button id="btn-collapse-all-content" title="折叠上一级">▲</button><span class="toolbar-separator"></span><button id="btn-auto-numbering" title="自动编号">🔢</button><button id="btn-dark-mode" title="暗色模式">🌙</button><span class="toolbar-separator"></span><button id="btn-print" title="打印">🖨️</button></div></div>
+<div class="viewer-container"><nav class="toc-sidebar" id="toc-sidebar"><div class="toc-header"><h2>目录</h2><button id="btn-toggle-toc-panel" title="折叠侧边栏" aria-label="折叠侧边栏" aria-expanded="true"></button></div><div class="toc-body" id="toc-body">{{TOC}}</div></nav><div class="toc-resizer" id="toc-resizer"></div><main class="content-area" id="content-area"><article class="markdown-body" id="markdown-body">{{CONTENT}}</article></main></div>
+<button class="back-to-top-btn" id="back-to-top-btn" title="返回顶部">↑</button>
+</body>
+</html>

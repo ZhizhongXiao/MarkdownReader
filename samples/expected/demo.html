@@ -1,0 +1,1908 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>demo</title>
+    <!-- CSS and JS will be embedded by Python during generation -->
+<style>
+/* ================================================================
+   MDViewer — Viewer Stylesheet
+   Phase 1: CSS Grid layout, TOC, typography
+   Phase 2: TOC/content folding, lightbox, code copy, typography+
+   Phase 3: Toolbar, dark mode, auto-numbering, TOC resize,
+            back-to-top, Chinese font stack, print+
+   Uses CSS variables throughout — single theme system.
+   ================================================================ */
+
+/* ================================================================
+   Theme Variables — Light (default)
+   ================================================================ */
+:root {
+    --toolbar-height: 40px;
+    --sidebar-width: 280px;
+    --sidebar-min-width: 180px;
+    --sidebar-max-width: 500px;
+    --content-max-width: 860px;
+    --font-size-base: 16px;
+    --font-size-code: 0.9em;
+    --line-height-base: 1.8;
+
+    /* Colors */
+    --color-bg: #ffffff;
+    --color-surface: #ffffff;
+    --color-sidebar-bg: #f8f9fa;
+    --color-sidebar-border: #e2e2e2;
+    --color-toolbar-bg: #f5f5f5;
+    --color-toolbar-border: #dddddd;
+    --color-toolbar-btn-hover: #e0e0e0;
+    --color-toolbar-btn-active: #cce5ff;
+    --color-text: #333333;
+    --color-text-light: #555555;
+    --color-heading: #1a1a1a;
+    --color-link: #0066cc;
+    --color-link-hover: #004499;
+    --color-code-bg: #f4f4f4;
+    --color-blockquote-border: #0066cc;
+    --color-blockquote-bg: #f0f6ff;
+    --color-table-border: #dddddd;
+    --color-table-stripe: #f8f8f8;
+    --color-toc-active-bg: #e8f0fe;
+    --color-toc-active-text: #0066cc;
+    --color-toc-hover-bg: #eeeeee;
+    --color-copy-btn-bg: #e8e8e8;
+    --color-copy-btn-hover: #d0d0d0;
+    --color-resizer: transparent;
+    --color-resizer-active: #0066cc;
+    --color-back-to-top-bg: rgba(0,0,0,0.5);
+    --color-back-to-top-hover: rgba(0,0,0,0.7);
+    --color-back-to-top-text: #ffffff;
+    --color-shadow: rgba(0,0,0,0.08);
+
+    /* Sizing */
+    --toc-indent: 16px;
+    --toggle-size: 16px;
+}
+
+/* ================================================================
+   Theme Variables — Dark
+   ================================================================ */
+[data-theme="dark"] {
+    --color-bg: #1a1a2e;
+    --color-surface: #16213e;
+    --color-sidebar-bg: #16213e;
+    --color-sidebar-border: #2a3a5c;
+    --color-toolbar-bg: #0f3460;
+    --color-toolbar-border: #2a3a5c;
+    --color-toolbar-btn-hover: #1a4a7a;
+    --color-toolbar-btn-active: #1a5a8a;
+    --color-text: #d4d4d4;
+    --color-text-light: #aaaaaa;
+    --color-heading: #e8e8e8;
+    --color-link: #66aaff;
+    --color-link-hover: #88bbff;
+    --color-code-bg: #252540;
+    --color-blockquote-border: #66aaff;
+    --color-blockquote-bg: #1e2a3a;
+    --color-table-border: #3a3a5c;
+    --color-table-stripe: #1f2937;
+    --color-toc-active-bg: #2a3f5f;
+    --color-toc-active-text: #66aaff;
+    --color-toc-hover-bg: #1f3050;
+    --color-copy-btn-bg: #2a2a45;
+    --color-copy-btn-hover: #3a3a55;
+    --color-resizer: #2a3a5c;
+    --color-resizer-active: #66aaff;
+    --color-back-to-top-bg: rgba(255,255,255,0.2);
+    --color-back-to-top-hover: rgba(255,255,255,0.35);
+    --color-back-to-top-text: #ffffff;
+    --color-shadow: rgba(0,0,0,0.3);
+}
+
+/* ================================================================
+   Font Stack — Cross-platform Chinese typography
+   ================================================================ */
+:root {
+    --font-sans: "PingFang SC", "Microsoft YaHei", "Noto Sans SC",
+                 "WenQuanYi Micro Hei", -apple-system, BlinkMacSystemFont,
+                 "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: "Cascadia Code", "Fira Code", "SF Mono", "Consolas",
+                 "Source Code Pro", "Courier New", monospace;
+}
+
+/* ================================================================
+   Reset
+   ================================================================ */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: var(--font-sans);
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-base);
+    color: var(--color-text);
+    background-color: var(--color-bg);
+}
+
+/* ================================================================
+   Toolbar
+   ================================================================ */
+.toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: var(--toolbar-height);
+    padding: 0 12px;
+    background-color: var(--color-toolbar-bg);
+    border-bottom: 1px solid var(--color-toolbar-border);
+    flex-shrink: 0;
+    z-index: 100;
+    position: relative;
+}
+
+.toolbar-left {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.toolbar-title {
+    font-size: 0.85em;
+    font-weight: 600;
+    color: var(--color-heading);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+.toolbar-right button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 28px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--color-text-light);
+    font-size: 14px;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.toolbar-right button:hover {
+    background-color: var(--color-toolbar-btn-hover);
+    color: var(--color-text);
+}
+
+.toolbar-right button.active {
+    background-color: var(--color-toolbar-btn-active);
+    color: var(--color-link);
+}
+
+.toolbar-separator {
+    display: inline-block;
+    width: 1px;
+    height: 18px;
+    background-color: var(--color-toolbar-border);
+    margin: 0 4px;
+}
+
+/* ================================================================
+   Main Layout
+   ================================================================ */
+.viewer-container {
+    display: grid;
+    grid-template-columns: var(--sidebar-width) 4px 1fr;
+    grid-template-rows: 1fr;
+    height: calc(100vh - var(--toolbar-height));
+}
+
+/* ================================================================
+   TOC Sidebar
+   ================================================================ */
+.toc-sidebar {
+    background-color: var(--color-sidebar-bg);
+    border-right: 1px solid var(--color-sidebar-border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.toc-header {
+    padding: 16px 20px 10px 20px;
+    border-bottom: 1px solid var(--color-sidebar-border);
+    flex-shrink: 0;
+}
+
+.toc-header h2 {
+    font-size: 1em;
+    font-weight: 600;
+    color: var(--color-heading);
+}
+
+.toc-body {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 8px 0 20px 0;
+}
+
+/* TOC List */
+.toc-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.toc-item {
+    margin: 0;
+    padding: 0;
+}
+
+.toc-item a {
+    display: block;
+    padding: 4px 20px;
+    font-size: 0.85em;
+    color: var(--color-text-light);
+    text-decoration: none;
+    border-left: 3px solid transparent;
+    transition: background-color 0.15s ease, color 0.15s ease,
+                border-color 0.15s ease;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.toc-item a:hover {
+    background-color: var(--color-toc-hover-bg);
+    color: var(--color-text);
+}
+
+.toc-item a.active {
+    background-color: var(--color-toc-active-bg);
+    color: var(--color-toc-active-text);
+    border-left-color: var(--color-toc-active-text);
+    font-weight: 500;
+}
+
+/* TOC nesting indentation */
+.toc-level-1 a { padding-left: 20px; }
+.toc-level-2 a { padding-left: calc(20px + var(--toc-indent) * 1); }
+.toc-level-3 a { padding-left: calc(20px + var(--toc-indent) * 2); }
+.toc-level-4 a { padding-left: calc(20px + var(--toc-indent) * 3); }
+.toc-level-5 a { padding-left: calc(20px + var(--toc-indent) * 4); }
+.toc-level-6 a { padding-left: calc(20px + var(--toc-indent) * 5); }
+
+/* TOC toggle arrow */
+.toc-toggle {
+    display: inline-block;
+    width: var(--toggle-size);
+    height: var(--toggle-size);
+    line-height: var(--toggle-size);
+    text-align: center;
+    font-size: 10px;
+    cursor: pointer;
+    user-select: none;
+    color: var(--color-text-light);
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+    margin-right: 2px;
+}
+
+.toc-toggle.collapsed {
+    transform: rotate(-90deg);
+}
+
+.toc-item-content {
+    display: flex;
+    align-items: center;
+}
+
+.toc-collapsed > .toc-list {
+    display: none;
+}
+
+/* ================================================================
+   TOC Resizer Handle
+   ================================================================ */
+.toc-resizer {
+    width: 4px;
+    cursor: col-resize;
+    background-color: var(--color-resizer);
+    transition: background-color 0.2s ease;
+    z-index: 10;
+    position: relative;
+}
+
+.toc-resizer:hover,
+.toc-resizer.active {
+    background-color: var(--color-resizer-active);
+}
+
+/* Prevent text selection during resize */
+body.resizing {
+    user-select: none;
+    cursor: col-resize;
+}
+
+body.resizing .toc-sidebar,
+body.resizing .content-area {
+    pointer-events: none;
+}
+
+/* ================================================================
+   Content Area
+   ================================================================ */
+.content-area {
+    overflow-y: auto;
+    overflow-x: hidden;
+    scroll-behavior: smooth;
+    padding: 40px 48px 80px 48px;
+}
+
+.markdown-body {
+    max-width: var(--content-max-width);
+    margin: 0 auto;
+}
+
+/* ================================================================
+   Content — Headings
+   ================================================================ */
+
+/* Heading toggle button */
+.heading-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: calc(var(--toggle-size) + 4px);
+    height: calc(var(--toggle-size) + 4px);
+    margin-right: 6px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 10px;
+    color: var(--color-text-light);
+    border-radius: 3px;
+    transition: transform 0.2s ease, background-color 0.15s ease;
+    vertical-align: middle;
+    flex-shrink: 0;
+}
+
+.heading-toggle:hover {
+    background-color: var(--color-toc-hover-bg);
+}
+
+.heading-toggle.collapsed {
+    transform: rotate(-90deg);
+}
+
+/* Headings */
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+    color: var(--color-heading);
+    font-weight: 700;
+    line-height: 1.4;
+    margin-top: 2.4em;
+    margin-bottom: 0.9em;
+}
+
+.markdown-body h1:first-child {
+    margin-top: 0;
+}
+
+.markdown-body h1 { font-size: 2em; border-bottom: 2px solid var(--color-sidebar-border); padding-bottom: 0.3em; }
+.markdown-body h2 { font-size: 1.6em; border-bottom: 1px solid var(--color-sidebar-border); padding-bottom: 0.3em; }
+.markdown-body h3 { font-size: 1.35em; }
+.markdown-body h4 { font-size: 1.15em; }
+.markdown-body h5 { font-size: 1.05em; }
+.markdown-body h6 { font-size: 1em; color: var(--color-text-light); }
+
+/* ================================================================
+   Auto Numbering
+   ================================================================ */
+[data-auto-numbering="true"] .markdown-body {
+    counter-reset: h1-counter;
+}
+
+[data-auto-numbering="true"] .markdown-body h1:not(.no-autonumber) {
+    counter-reset: h2-counter h3-counter h4-counter h5-counter h6-counter;
+}
+[data-auto-numbering="true"] .markdown-body h1:not(.no-autonumber)::before {
+    counter-increment: h1-counter;
+    content: counter(h1-counter) "　";
+}
+
+[data-auto-numbering="true"] .markdown-body h2:not(.no-autonumber) {
+    counter-reset: h3-counter h4-counter h5-counter h6-counter;
+}
+[data-auto-numbering="true"] .markdown-body h2:not(.no-autonumber)::before {
+    counter-increment: h2-counter;
+    content: counter(h1-counter) "." counter(h2-counter) "　";
+}
+
+[data-auto-numbering="true"] .markdown-body h3:not(.no-autonumber) {
+    counter-reset: h4-counter h5-counter h6-counter;
+}
+[data-auto-numbering="true"] .markdown-body h3:not(.no-autonumber)::before {
+    counter-increment: h3-counter;
+    content: counter(h1-counter) "." counter(h2-counter) "." counter(h3-counter) "　";
+}
+
+[data-auto-numbering="true"] .markdown-body h4:not(.no-autonumber) {
+    counter-reset: h5-counter h6-counter;
+}
+[data-auto-numbering="true"] .markdown-body h4:not(.no-autonumber)::before {
+    counter-increment: h4-counter;
+    content: counter(h1-counter) "." counter(h2-counter) "." counter(h3-counter) "." counter(h4-counter) "　";
+}
+
+[data-auto-numbering="true"] .markdown-body h5:not(.no-autonumber) {
+    counter-reset: h6-counter;
+}
+[data-auto-numbering="true"] .markdown-body h5:not(.no-autonumber)::before {
+    counter-increment: h5-counter;
+    content: counter(h1-counter) "." counter(h2-counter) "." counter(h3-counter) "." counter(h4-counter) "." counter(h5-counter) "　";
+}
+
+[data-auto-numbering="true"] .markdown-body h6:not(.no-autonumber)::before {
+    counter-increment: h6-counter;
+    content: counter(h1-counter) "." counter(h2-counter) "." counter(h3-counter) "." counter(h4-counter) "." counter(h5-counter) "." counter(h6-counter) "　";
+}
+
+/* ================================================================
+   Content — Body
+   ================================================================ */
+.markdown-body {
+    text-align: justify;
+}
+
+.markdown-body p {
+    margin-bottom: 1.4em;
+    letter-spacing: 0.01em;
+}
+
+.markdown-body a {
+    color: var(--color-link);
+    text-decoration: none;
+}
+
+.markdown-body a:hover {
+    color: var(--color-link-hover);
+    text-decoration: underline;
+}
+
+/* Lists */
+.markdown-body ul,
+.markdown-body ol {
+    padding-left: 2em;
+    margin-bottom: 1.4em;
+}
+
+.markdown-body li {
+    margin-bottom: 0.5em;
+}
+
+.markdown-body li > ul,
+.markdown-body li > ol {
+    margin-top: 0.5em;
+    margin-bottom: 0;
+}
+
+/* ================================================================
+   Code
+   ================================================================ */
+.markdown-body code {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-code);
+    background-color: var(--color-code-bg);
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+.code-block-wrapper {
+    position: relative;
+    margin-bottom: 1.4em;
+}
+
+.code-block-wrapper pre {
+    margin-bottom: 0;
+}
+
+.markdown-body pre {
+    background-color: var(--color-code-bg);
+    border: 1px solid var(--color-sidebar-border);
+    border-radius: 8px;
+    padding: 18px;
+    margin-bottom: 1.4em;
+    overflow-x: auto;
+}
+
+.markdown-body pre code {
+    background-color: transparent;
+    padding: 0;
+    border-radius: 0;
+    font-size: var(--font-size-code);
+    line-height: 1.7;
+}
+
+.copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 4px 10px;
+    font-size: 0.8em;
+    font-family: var(--font-sans);
+    border: 1px solid var(--color-sidebar-border);
+    border-radius: 4px;
+    background-color: var(--color-copy-btn-bg);
+    color: var(--color-text-light);
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.copy-btn:hover {
+    background-color: var(--color-copy-btn-hover);
+}
+
+/* ================================================================
+   Tables
+   ================================================================ */
+.markdown-body table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1.4em;
+}
+
+.markdown-body th,
+.markdown-body td {
+    border: 1px solid var(--color-table-border);
+    padding: 10px 14px;
+    text-align: left;
+}
+
+.markdown-body th {
+    background-color: var(--color-table-stripe);
+    font-weight: 600;
+}
+
+.markdown-body tr:nth-child(even) {
+    background-color: var(--color-table-stripe);
+}
+
+.markdown-body thead th:first-child {
+    border-top-left-radius: 6px;
+}
+
+.markdown-body thead th:last-child {
+    border-top-right-radius: 6px;
+}
+
+/* ================================================================
+   Blockquotes
+   ================================================================ */
+.markdown-body blockquote {
+    border-left: 5px solid var(--color-blockquote-border);
+    background-color: var(--color-blockquote-bg);
+    padding: 14px 18px;
+    margin: 0 0 1.4em 0;
+    color: var(--color-text-light);
+    border-radius: 0 4px 4px 0;
+    font-style: normal;
+}
+
+.markdown-body blockquote p:last-child {
+    margin-bottom: 0;
+}
+
+/* ================================================================
+   Images
+   ================================================================ */
+.markdown-body img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 1.4em auto;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+}
+
+.markdown-body img:hover {
+    opacity: 0.9;
+}
+
+/* Image Lightbox */
+.lightbox-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    cursor: pointer;
+}
+
+.lightbox-overlay img {
+    max-width: 90vw;
+    max-height: 90vh;
+    object-fit: contain;
+    border-radius: 8px;
+    cursor: default;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+}
+
+/* ================================================================
+   Horizontal Rule
+   ================================================================ */
+.markdown-body hr {
+    border: none;
+    border-top: 1px solid var(--color-sidebar-border);
+    margin: 2.4em 0;
+}
+
+/* ================================================================
+   Floating Back-to-Top Button
+   ================================================================ */
+.back-to-top-btn {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 50%;
+    background-color: var(--color-back-to-top-bg);
+    color: var(--color-back-to-top-text);
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    z-index: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease,
+                background-color 0.2s ease;
+    box-shadow: 0 2px 8px var(--color-shadow);
+}
+
+.back-to-top-btn.visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.back-to-top-btn:hover {
+    background-color: var(--color-back-to-top-hover);
+}
+
+/* ================================================================
+   Scrollbar Styling
+   ================================================================ */
+.toc-body::-webkit-scrollbar,
+.content-area::-webkit-scrollbar {
+    width: 6px;
+}
+
+.toc-body::-webkit-scrollbar-thumb,
+.content-area::-webkit-scrollbar-thumb {
+    background-color: #cccccc;
+    border-radius: 3px;
+}
+
+.toc-body::-webkit-scrollbar-track,
+.content-area::-webkit-scrollbar-track {
+    background-color: transparent;
+}
+
+[data-theme="dark"] .toc-body::-webkit-scrollbar-thumb,
+[data-theme="dark"] .content-area::-webkit-scrollbar-thumb {
+    background-color: #555555;
+}
+</style>
+<style>
+/* ================================================================
+   MDViewer — Print Stylesheet
+   Hides all interactive UI elements.
+   Expands content to full page width.
+   Ensures all folded/collapsed content is visible.
+   Forces light theme for printing.
+   ================================================================ */
+
+@media print {
+    /* ============================================================
+       Hide all interactive UI
+       ============================================================ */
+
+    /* Toolbar */
+    .toolbar {
+        display: none !important;
+    }
+
+    /* TOC sidebar */
+    .toc-sidebar {
+        display: none !important;
+    }
+
+    /* TOC resize handle */
+    .toc-resizer {
+        display: none !important;
+    }
+
+    /* Floating back-to-top button */
+    .back-to-top-btn {
+        display: none !important;
+    }
+
+    /* Toggle arrows */
+    .toc-toggle {
+        display: none !important;
+    }
+
+    /* Heading toggle buttons */
+    .heading-toggle {
+        display: none !important;
+    }
+
+    /* Code copy buttons */
+    .copy-btn {
+        display: none !important;
+    }
+
+    /* Image lightbox */
+    .lightbox-overlay {
+        display: none !important;
+    }
+
+    /* ============================================================
+       Reset layout to single column
+       ============================================================ */
+
+    /* Full height reset */
+    html, body {
+        overflow: visible !important;
+        height: auto !important;
+    }
+
+    /* Grid to block */
+    .viewer-container {
+        display: block !important;
+        height: auto !important;
+    }
+
+    /* Content area full page */
+    .content-area {
+        overflow: visible !important;
+        padding: 0 !important;
+        height: auto !important;
+    }
+
+    .markdown-body {
+        max-width: 100% !important;
+    }
+
+    /* ============================================================
+       Show all folded content
+       ============================================================ */
+
+    /* Unfold TOC (though TOC is hidden, keep for safety) */
+    .toc-collapsed > .toc-list {
+        display: block !important;
+    }
+
+    /* ============================================================
+       Force light theme
+       ============================================================ */
+    [data-theme="dark"] {
+        --color-bg: #ffffff !important;
+        --color-text: #000000 !important;
+        --color-heading: #000000 !important;
+        --color-code-bg: #f4f4f4 !important;
+    }
+
+    body {
+        color: #000 !important;
+        background: #fff !important;
+    }
+
+    /* ============================================================
+       Page break optimization
+       ============================================================ */
+
+    /* Headings: avoid being last element on a page */
+    .markdown-body h1,
+    .markdown-body h2,
+    .markdown-body h3,
+    .markdown-body h4 {
+        page-break-after: avoid;
+    }
+
+    /* Headings: keep with following content */
+    .markdown-body h1,
+    .markdown-body h2,
+    .markdown-body h3 {
+        page-break-inside: avoid;
+    }
+
+    /* Code blocks: avoid splitting */
+    .markdown-body pre,
+    .code-block-wrapper {
+        page-break-inside: avoid;
+    }
+
+    /* Blockquotes: avoid splitting */
+    .markdown-body blockquote {
+        page-break-inside: avoid;
+    }
+
+    /* Tables: avoid splitting */
+    .markdown-body table {
+        page-break-inside: avoid;
+    }
+
+    /* Images: avoid splitting */
+    .markdown-body img {
+        page-break-inside: avoid;
+        max-width: 100% !important;
+    }
+
+    /* List items: try to keep together */
+    .markdown-body li {
+        page-break-inside: avoid;
+    }
+
+    /* ============================================================
+       Scrollbar
+       ============================================================ */
+    ::-webkit-scrollbar {
+        display: none;
+    }
+}
+</style>
+</head>
+<body>
+    <!-- ===== Toolbar ===== -->
+    <div class="toolbar" id="toolbar">
+        <div class="toolbar-left">
+            <span class="toolbar-title">demo</span>
+        </div>
+        <div class="toolbar-right">
+            <button id="btn-expand-all-content" title="展开全部正文" aria-label="展开全部正文">▼</button>
+            <button id="btn-collapse-all-content" title="折叠全部正文" aria-label="折叠全部正文">▲</button>
+            <span class="toolbar-separator"></span>
+            <button id="btn-expand-all-toc" title="展开全部目录" aria-label="展开全部目录">📂</button>
+            <button id="btn-collapse-all-toc" title="折叠全部目录" aria-label="折叠全部目录">📁</button>
+            <span class="toolbar-separator"></span>
+            <button id="btn-auto-numbering" title="自动编号" aria-label="自动编号">🔢</button>
+            <button id="btn-dark-mode" title="暗色模式" aria-label="暗色模式">🌙</button>
+            <span class="toolbar-separator"></span>
+            <button id="btn-print" title="打印" aria-label="打印">🖨️</button>
+        </div>
+    </div>
+
+    <!-- ===== Main Layout ===== -->
+    <div class="viewer-container">
+        <nav class="toc-sidebar" id="toc-sidebar">
+            <div class="toc-header">
+                <h2>目录</h2>
+            </div>
+            <div class="toc-body" id="toc-body">
+                <ul class="toc-list">
+<li class="toc-item toc-level-1"><a href="#mdviewer-demo">MDViewer Demo</a>
+<ul class="toc-list">
+<li class="toc-item toc-level-2"><a href="#项目简介">项目简介</a>
+<ul class="toc-list">
+<li class="toc-item toc-level-3"><a href="#核心目标">核心目标</a>
+</li>
+<li class="toc-item toc-level-3"><a href="#适用场景">适用场景</a>
+</li>
+</ul>
+</li>
+<li class="toc-item toc-level-2"><a href="#功能特性">功能特性</a>
+<ul class="toc-list">
+<li class="toc-item toc-level-3"><a href="#核心功能">核心功能</a>
+</li>
+<li class="toc-item toc-level-3"><a href="#非目标">非目标</a>
+</li>
+</ul>
+</li>
+<li class="toc-item toc-level-2"><a href="#安装">安装</a>
+</li>
+<li class="toc-item toc-level-2"><a href="#使用方法">使用方法</a>
+</li>
+<li class="toc-item toc-level-2"><a href="#目录结构">目录结构</a>
+</li>
+<li class="toc-item toc-level-2"><a href="#设计原则">设计原则</a>
+<ul class="toc-list">
+<li class="toc-item toc-level-3"><a href="#单一文件原则">单一文件原则</a>
+</li>
+<li class="toc-item toc-level-3"><a href="#职责分离">职责分离</a>
+<ul class="toc-list">
+<li class="toc-item toc-level-4"><a href="#python-层">Python 层</a>
+</li>
+<li class="toc-item toc-level-4"><a href="#浏览器层">浏览器层</a>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-item toc-level-2"><a href="#浏览器技术">浏览器技术</a>
+</li>
+<li class="toc-item toc-level-2"><a href="#版本计划">版本计划</a>
+<ul class="toc-list">
+<li class="toc-item toc-level-3"><a href="#1-phase-1-功能">1 Phase 1 功能</a>
+<ul class="toc-list">
+<li class="toc-item toc-level-4"><a href="#1-1-基本阅读">1.1 基本阅读</a>
+</li>
+<li class="toc-item toc-level-4"><a href="#1-2-目录导航">1.2 目录导航</a>
+</li>
+<li class="toc-item toc-level-4"><a href="#1-3-打印支持">1.3 打印支持</a>
+</li>
+</ul>
+</li>
+<li class="toc-item toc-level-3"><a href="#2-phase-2-功能">2 Phase 2 功能</a>
+<ul class="toc-list">
+<li class="toc-item toc-level-4"><a href="#2-1-toc-折叠">2.1 TOC 折叠</a>
+</li>
+<li class="toc-item toc-level-4"><a href="#2-2-正文折叠">2.2 正文折叠</a>
+</li>
+<li class="toc-item toc-level-4"><a href="#2-3-代码复制与图片放大">2.3 代码复制与图片放大</a>
+</li>
+</ul>
+</li>
+<li class="toc-item toc-level-3"><a href="#3-phase-3-功能">3 Phase 3 功能</a>
+<ul class="toc-list">
+<li class="toc-item toc-level-4"><a href="#3-1-工具栏">3.1 工具栏</a>
+</li>
+<li class="toc-item toc-level-4"><a href="#3-2-暗色模式">3.2 暗色模式</a>
+</li>
+<li class="toc-item toc-level-4"><a href="#3-3-自动编号">3.3 自动编号</a>
+</li>
+<li class="toc-item toc-level-4"><a href="#3-4-toc-宽度拖拽">3.4 TOC 宽度拖拽</a>
+</li>
+<li class="toc-item toc-level-4"><a href="#3-5-返回顶部">3.5 返回顶部</a>
+</li>
+</ul>
+</li>
+<li class="toc-item toc-level-3"><a href="#phase-2-新增功能详解">Phase 2 新增功能详解</a>
+<ul class="toc-list">
+<li class="toc-item toc-level-4"><a href="#toc-折叠">TOC 折叠</a>
+</li>
+<li class="toc-item toc-level-4"><a href="#正文标题折叠">正文标题折叠</a>
+</li>
+<li class="toc-item toc-level-4"><a href="#代码块复制">代码块复制</a>
+</li>
+<li class="toc-item toc-level-4"><a href="#图片点击放大">图片点击放大</a>
+</li>
+<li class="toc-item toc-level-4"><a href="#阅读位置恢复">阅读位置恢复</a>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+            </div>
+        </nav>
+
+        <!-- ===== TOC Resizer Handle ===== -->
+        <div class="toc-resizer" id="toc-resizer"></div>
+
+        <!-- ===== Content Area ===== -->
+        <main class="content-area" id="content-area">
+            <article class="markdown-body" id="markdown-body">
+                <h1 id="mdviewer-demo">MDViewer Demo</h1>
+<h2 id="项目简介">项目简介</h2>
+<p>MDViewer 是一个<strong>离线 Markdown 文档阅读器生成工具</strong>。它将 Markdown 文件转换为独立的 HTML 文档，专为阅读、导航和打印场景优化。</p>
+<h3 id="核心目标">核心目标</h3>
+<ul>
+<li>高质量的阅读体验</li>
+<li>完全离线可用</li>
+<li>单文件输出，零依赖</li>
+</ul>
+<h3 id="适用场景">适用场景</h3>
+<ul>
+<li>技术文档离线阅读</li>
+<li>内部知识库导出</li>
+<li>文档归档保存</li>
+</ul>
+<h2 id="功能特性">功能特性</h2>
+<h3 id="核心功能">核心功能</h3>
+<ul>
+<li>Markdown 转 HTML</li>
+<li>单文件输出，无外部依赖</li>
+<li>左侧目录导航</li>
+<li>点击目录跳转</li>
+<li>滚动同步高亮</li>
+<li>打印友好</li>
+<li>TOC 折叠与展开</li>
+<li>正文标题折叠</li>
+<li>代码块复制</li>
+<li>图片点击放大</li>
+<li>阅读位置记忆</li>
+</ul>
+<h3 id="非目标">非目标</h3>
+<ul>
+<li>Markdown 编辑器</li>
+<li>静态站点生成</li>
+<li>在线服务</li>
+</ul>
+<h2 id="安装">安装</h2>
+<div class="codehilite"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>-r<span class="w"> </span>requirements.txt
+</code></pre></div>
+
+<h2 id="使用方法">使用方法</h2>
+<div class="codehilite"><pre><span></span><code>python<span class="w"> </span>main.py<span class="w"> </span>demo.md
+</code></pre></div>
+
+<p>生成的 HTML 文件可直接在浏览器中打开。</p>
+<h2 id="目录结构">目录结构</h2>
+<div class="codehilite"><pre><span></span><code>MDViewer/
+├── main.py
+├── renderer.py
+├── toc.py
+├── config.py
+└── template/
+    ├── viewer.html
+    ├── viewer.css
+    ├── viewer.js
+    └── print.css
+</code></pre></div>
+
+<h2 id="设计原则">设计原则</h2>
+<blockquote>
+<p>一切设计都应提升阅读体验。
+不要添加仅对编辑有益的功能。</p>
+</blockquote>
+<h3 id="单一文件原则">单一文件原则</h3>
+<p>每个 Markdown 文件应生成<strong>恰好一个</strong> HTML 文件。生成的 HTML 必须是<strong>自包含的</strong>，不得依赖：</p>
+<ul>
+<li>外部 CSS</li>
+<li>外部 JavaScript</li>
+<li>CDN</li>
+<li>服务器</li>
+<li>网络连接</li>
+</ul>
+<h3 id="职责分离">职责分离</h3>
+<table>
+<thead>
+<tr>
+<th>层级</th>
+<th>职责</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Python</td>
+<td>读取、解析、生成 TOC、填充模板</td>
+</tr>
+<tr>
+<td>HTML</td>
+<td>文档结构</td>
+</tr>
+<tr>
+<td>CSS</td>
+<td>布局、排版、主题、打印</td>
+</tr>
+<tr>
+<td>JavaScript</td>
+<td>导航、滚动同步、折叠</td>
+</tr>
+</tbody>
+</table>
+<h4 id="python-层">Python 层</h4>
+<ul>
+<li>读取 Markdown 文件</li>
+<li>使用 <code>markdown</code> 库转换为 HTML</li>
+<li>提取标题生成 TOC</li>
+<li>填充模板并内嵌 CSS/JS</li>
+</ul>
+<h4 id="浏览器层">浏览器层</h4>
+<ul>
+<li>CSS Grid 双栏布局</li>
+<li>TOC 交互与折叠</li>
+<li>正文折叠与同步</li>
+<li>图片 Lightbox</li>
+<li>代码复制</li>
+</ul>
+<h2 id="浏览器技术">浏览器技术</h2>
+<p>使用原生浏览器 API：</p>
+<ul>
+<li><code>IntersectionObserver</code> — 实现 Scroll Spy</li>
+<li><code>scrollIntoView()</code> — 实现平滑跳转</li>
+<li><code>addEventListener()</code> — 事件处理</li>
+<li><code>navigator.clipboard</code> — 代码复制</li>
+<li><code>localStorage</code> — 阅读位置记忆</li>
+</ul>
+<p>不引入 React、Vue、jQuery 等第三方库。</p>
+<h2 id="版本计划">版本计划</h2>
+<ol>
+<li><strong>Phase 1</strong> — 基本阅读器：Markdown 渲染、TOC、ScrollSpy、打印</li>
+<li><strong>Phase 2</strong> — 阅读体验优化：折叠、图片放大、代码复制、位置恢复</li>
+<li><strong>Phase 3</strong> — 易用性改进：工具栏、暗色模式、自动编号、TOC拖拽</li>
+<li><strong>Phase 4</strong> — 多文档支持：批量生成、交叉导航</li>
+<li><strong>Phase 5</strong> — 桌面应用：GUI、拖放、EXE 打包</li>
+</ol>
+<h3 id="1-phase-1-功能">1 Phase 1 功能</h3>
+<h4 id="1-1-基本阅读">1.1 基本阅读</h4>
+<h4 id="1-2-目录导航">1.2 目录导航</h4>
+<h4 id="1-3-打印支持">1.3 打印支持</h4>
+<h3 id="2-phase-2-功能">2 Phase 2 功能</h3>
+<h4 id="2-1-toc-折叠">2.1 TOC 折叠</h4>
+<h4 id="2-2-正文折叠">2.2 正文折叠</h4>
+<h4 id="2-3-代码复制与图片放大">2.3 代码复制与图片放大</h4>
+<h3 id="3-phase-3-功能">3 Phase 3 功能</h3>
+<h4 id="3-1-工具栏">3.1 工具栏</h4>
+<p>顶部工具栏提供以下按钮：</p>
+<ul>
+<li>展开/折叠全部正文</li>
+<li>展开/折叠全部目录</li>
+<li>自动编号开关</li>
+<li>暗色模式切换</li>
+<li>打印</li>
+</ul>
+<h4 id="3-2-暗色模式">3.2 暗色模式</h4>
+<p>支持浅色和暗色两种主题，默认跟随系统设置。切换状态保存到 localStorage。</p>
+<h4 id="3-3-自动编号">3.3 自动编号</h4>
+<p>为标题自动添加层级编号（1、1.1、1.1.1 等）。</p>
+<p>如上方的 "1 Phase 1 功能" 和 "1.1 基本阅读" 已经包含手动编号，打开自动编号时<strong>不会重复编号</strong>。</p>
+<h4 id="3-4-toc-宽度拖拽">3.4 TOC 宽度拖拽</h4>
+<p>鼠标拖动左侧目录与正文之间的分隔线，可调整目录宽度。宽度保存到 localStorage。</p>
+<h4 id="3-5-返回顶部">3.5 返回顶部</h4>
+<p>工具栏提供返回顶部按钮，页面右下角有浮动按钮（滚动超过 300px 时自动显示）。</p>
+<h3 id="phase-2-新增功能详解">Phase 2 新增功能详解</h3>
+<h4 id="toc-折叠">TOC 折叠</h4>
+<p>点击目录中的箭头（▼/▶）可以折叠或展开子标题。</p>
+<ul>
+<li>仅影响目录显示</li>
+<li>与正文折叠状态保持同步</li>
+<li>打印时自动展开所有内容</li>
+</ul>
+<h4 id="正文标题折叠">正文标题折叠</h4>
+<p>每个标题前有一个折叠按钮，点击可以隐藏该标题下的所有内容，直到下一个同级或更高级标题。</p>
+<p>类似于 Microsoft Word 的标题折叠功能。</p>
+<h4 id="代码块复制">代码块复制</h4>
+<p>每个代码块右上角有一个"复制"按钮，点击即可将代码内容复制到剪贴板。</p>
+<h4 id="图片点击放大">图片点击放大</h4>
+<p>点击正文中的任意图片，将以 Lightbox 形式全屏显示。再次点击任意位置关闭。</p>
+<p>打印时图片保持正常尺寸。</p>
+<h4 id="阅读位置恢复">阅读位置恢复</h4>
+<p>关闭浏览器前自动记录当前滚动位置，再次打开时自动恢复。</p>
+<hr>
+<p><em>感谢使用 MDViewer！</em></p>
+            </article>
+        </main>
+    </div>
+
+    <!-- ===== Floating Back-to-Top Button ===== -->
+    <button class="back-to-top-btn" id="back-to-top-btn" title="返回顶部" aria-label="返回顶部">↑</button>
+<script>
+/* ================================================================
+   MDViewer — Viewer JavaScript
+   Phase 1: TOC click jump, Scroll Spy
+   Phase 2: TOC/content folding, fold sync, image lightbox,
+            code copy, reading position restore
+   Phase 3: Toolbar, dark mode, auto-numbering, TOC resize,
+            back-to-top floating button
+   Uses only native browser APIs. No third-party libraries.
+   ================================================================ */
+
+(function () {
+    "use strict";
+
+    // ============================================================
+    // DOM References
+    // ============================================================
+    var tocBody = document.getElementById("toc-body");
+    var contentArea = document.getElementById("content-area");
+    var markdownBody = document.getElementById("markdown-body");
+
+    // Sync guard — prevent circular triggering (Phase 2)
+    var _isSyncing = false;
+
+    // ============================================================
+    // Helpers
+    // ============================================================
+    function getHeadingLevel(el) {
+        var tag = el.tagName.toUpperCase();
+        if (tag.length === 2 && tag[0] === "H") {
+            return parseInt(tag[1], 10);
+        }
+        return 0;
+    }
+
+    function getContentHeadings() {
+        return markdownBody.querySelectorAll("h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]");
+    }
+
+    // ============================================================
+    // Phase 1 — Module 1: TOC Click → Scroll to heading
+    // ============================================================
+    function initTocClickJump() {
+        tocBody.addEventListener("click", function (event) {
+            if (event.target.classList.contains("toc-toggle")) return;
+
+            var link = event.target.closest("a");
+            if (!link) return;
+
+            var href = link.getAttribute("href");
+            if (!href || !href.startsWith("#")) return;
+
+            var targetId = href.substring(1);
+            var targetElement = document.getElementById(targetId);
+
+            if (targetElement) {
+                event.preventDefault();
+                targetElement.scrollIntoView({ behavior: "smooth" });
+            }
+        });
+    }
+
+    // ============================================================
+    // Phase 1 — Module 2: Scroll Spy
+    // ============================================================
+    function initScrollSpy() {
+        var tocLinks = tocBody.querySelectorAll(".toc-item a");
+
+        function activateTocLink(id) {
+            tocLinks.forEach(function (link) {
+                link.classList.remove("active");
+                if (link.getAttribute("href") === "#" + id) {
+                    link.classList.add("active");
+                }
+            });
+        }
+
+        var headingElements = getContentHeadings();
+
+        if (headingElements.length > 0 && "IntersectionObserver" in window) {
+            var observerOptions = {
+                root: contentArea,
+                rootMargin: "-10% 0px -70% 0px",
+                threshold: 0,
+            };
+
+            var observer = new IntersectionObserver(function (entries) {
+                entries.forEach(function (entry) {
+                    if (entry.isIntersecting) {
+                        activateTocLink(entry.target.id);
+                    }
+                });
+            }, observerOptions);
+
+            headingElements.forEach(function (heading) {
+                observer.observe(heading);
+            });
+        }
+    }
+
+    // ============================================================
+    // Phase 2 — Module 3: TOC Folding
+    // ============================================================
+    function initTocFold() {
+        var allTocItems = tocBody.querySelectorAll(".toc-item");
+
+        allTocItems.forEach(function (item) {
+            var childList = null;
+            for (var i = 0; i < item.children.length; i++) {
+                if (item.children[i].classList.contains("toc-list")) {
+                    childList = item.children[i];
+                    break;
+                }
+            }
+            if (!childList) return;
+
+            var link = item.querySelector(":scope > a");
+            if (!link) return;
+
+            if (link.querySelector(".toc-toggle")) return;
+
+            var toggle = document.createElement("span");
+            toggle.className = "toc-toggle";
+            toggle.textContent = "▼";
+            toggle.title = "折叠/展开";
+
+            link.insertBefore(toggle, link.firstChild);
+
+            toggle.addEventListener("click", function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                var li = this.closest(".toc-item");
+                var isCollapsing = !li.classList.contains("toc-collapsed");
+
+                if (isCollapsing) {
+                    li.classList.add("toc-collapsed");
+                    this.classList.add("collapsed");
+                    this.textContent = "▶";
+                } else {
+                    li.classList.remove("toc-collapsed");
+                    this.classList.remove("collapsed");
+                    this.textContent = "▼";
+                }
+
+                if (!_isSyncing) {
+                    _isSyncing = true;
+                    syncFoldFromToc(li, isCollapsing);
+                    _isSyncing = false;
+                }
+            });
+        });
+    }
+
+    function syncFoldFromToc(tocItem, isCollapsing) {
+        var link = tocItem.querySelector(":scope > a");
+        if (!link) return;
+
+        var href = link.getAttribute("href");
+        if (!href || !href.startsWith("#")) return;
+
+        var targetId = href.substring(1);
+        var heading = document.getElementById(targetId);
+        if (!heading) return;
+
+        var headingLevel = getHeadingLevel(heading);
+        if (headingLevel === 0) return;
+
+        if (isCollapsing) {
+            foldContentHeading(heading, headingLevel);
+        } else {
+            unfoldContentHeading(heading);
+        }
+    }
+
+    // ============================================================
+    // Phase 2 — Module 4: Content Heading Folding
+    // ============================================================
+    function initContentFold() {
+        var headings = getContentHeadings();
+
+        headings.forEach(function (heading) {
+            if (heading.querySelector(".heading-toggle")) return;
+
+            var toggle = document.createElement("button");
+            toggle.className = "heading-toggle";
+            toggle.textContent = "▼";
+            toggle.title = "折叠/展开此章节";
+            toggle.setAttribute("aria-label", "折叠/展开");
+
+            heading.insertBefore(toggle, heading.firstChild);
+
+            toggle.addEventListener("click", function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                var h = this.closest("h1, h2, h3, h4, h5, h6");
+                var hLevel = getHeadingLevel(h);
+                var isCollapsing = !this.classList.contains("collapsed");
+
+                if (isCollapsing) {
+                    this.classList.add("collapsed");
+                    this.textContent = "▶";
+                    foldContentHeading(h, hLevel);
+                } else {
+                    this.classList.remove("collapsed");
+                    this.textContent = "▼";
+                    unfoldContentHeading(h);
+                }
+
+                if (!_isSyncing) {
+                    _isSyncing = true;
+                    syncFoldFromContent(h, isCollapsing);
+                    _isSyncing = false;
+                }
+            });
+        });
+    }
+
+    function getContentUnder(heading, headingLevel) {
+        var elements = [];
+        var sibling = heading.nextElementSibling;
+
+        while (sibling) {
+            var sibLevel = getHeadingLevel(sibling);
+            if (sibLevel > 0 && sibLevel <= headingLevel) {
+                break;
+            }
+            elements.push(sibling);
+            sibling = sibling.nextElementSibling;
+        }
+
+        return elements;
+    }
+
+    function foldContentHeading(heading, headingLevel) {
+        var elements = heading._foldedElements;
+        if (!elements) {
+            elements = getContentUnder(heading, headingLevel);
+            heading._foldedElements = elements;
+        }
+
+        elements.forEach(function (el) {
+            el._originalDisplay = el.style.display;
+            el.style.display = "none";
+        });
+    }
+
+    function unfoldContentHeading(heading) {
+        var elements = heading._foldedElements;
+        if (!elements) return;
+
+        elements.forEach(function (el) {
+            if (el._originalDisplay !== undefined) {
+                el.style.display = el._originalDisplay;
+            } else {
+                el.style.display = "";
+            }
+        });
+    }
+
+    function syncFoldFromContent(heading, isCollapsing) {
+        if (!heading.id) return;
+
+        var tocLink = tocBody.querySelector('.toc-item a[href="#' + heading.id + '"]');
+        if (!tocLink) return;
+
+        var tocItem = tocLink.closest(".toc-item");
+        if (!tocItem) return;
+
+        var toggle = tocLink.querySelector(".toc-toggle");
+        if (!toggle) return;
+
+        if (isCollapsing) {
+            tocItem.classList.add("toc-collapsed");
+            toggle.classList.add("collapsed");
+            toggle.textContent = "▶";
+        } else {
+            tocItem.classList.remove("toc-collapsed");
+            toggle.classList.remove("collapsed");
+            toggle.textContent = "▼";
+        }
+    }
+
+    // ============================================================
+    // Phase 2 — Module 5: Image Lightbox
+    // ============================================================
+    function initImageLightbox() {
+        markdownBody.addEventListener("click", function (event) {
+            var img = event.target.closest("img");
+            if (!img) return;
+            if (img.closest(".lightbox-overlay")) return;
+
+            var overlay = document.createElement("div");
+            overlay.className = "lightbox-overlay";
+
+            var largeImg = document.createElement("img");
+            largeImg.src = img.src;
+            largeImg.alt = img.alt || "";
+
+            overlay.appendChild(largeImg);
+            document.body.appendChild(overlay);
+
+            overlay.addEventListener("click", function () {
+                if (overlay.parentNode) {
+                    overlay.parentNode.removeChild(overlay);
+                }
+            });
+
+            largeImg.addEventListener("click", function (e) {
+                e.stopPropagation();
+                if (overlay.parentNode) {
+                    overlay.parentNode.removeChild(overlay);
+                }
+            });
+        });
+    }
+
+    // ============================================================
+    // Phase 2 — Module 6: Code Copy Button
+    // ============================================================
+    function initCodeCopy() {
+        var preElements = markdownBody.querySelectorAll("pre");
+
+        preElements.forEach(function (pre) {
+            if (pre.parentElement.classList.contains("code-block-wrapper")) return;
+
+            var wrapper = document.createElement("div");
+            wrapper.className = "code-block-wrapper";
+            pre.parentNode.insertBefore(wrapper, pre);
+            wrapper.appendChild(pre);
+
+            var copyBtn = document.createElement("button");
+            copyBtn.className = "copy-btn";
+            copyBtn.textContent = "复制";
+            copyBtn.title = "复制代码";
+
+            copyBtn.addEventListener("click", function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                var code = pre.textContent || "";
+
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(code).then(function () {
+                        copyBtn.textContent = "已复制";
+                        setTimeout(function () { copyBtn.textContent = "复制"; }, 1500);
+                    }).catch(function () {
+                        fallbackCopy(code, copyBtn);
+                    });
+                } else {
+                    fallbackCopy(code, copyBtn);
+                }
+            });
+
+            wrapper.appendChild(copyBtn);
+        });
+
+        function fallbackCopy(text, btn) {
+            var textarea = document.createElement("textarea");
+            textarea.value = text;
+            textarea.style.position = "fixed";
+            textarea.style.left = "-9999px";
+            textarea.style.top = "-9999px";
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            try {
+                document.execCommand("copy");
+                btn.textContent = "已复制";
+                setTimeout(function () { btn.textContent = "复制"; }, 1500);
+            } catch (err) {
+                btn.textContent = "失败";
+                setTimeout(function () { btn.textContent = "复制"; }, 1500);
+            }
+            document.body.removeChild(textarea);
+        }
+    }
+
+    // ============================================================
+    // Phase 2 — Module 7: Reading Position Restore
+    // ============================================================
+    var scrollStorageKey = "mdviewer-scroll-" + (document.title || "document");
+
+    function saveScrollPosition() {
+        try {
+            var pos = contentArea.scrollTop;
+            localStorage.setItem(scrollStorageKey, pos.toString());
+        } catch (e) {}
+    }
+
+    function restoreScrollPosition() {
+        try {
+            var saved = localStorage.getItem(scrollStorageKey);
+            if (saved !== null) {
+                var pos = parseInt(saved, 10);
+                if (!isNaN(pos) && pos > 0) {
+                    requestAnimationFrame(function () {
+                        requestAnimationFrame(function () {
+                            contentArea.scrollTop = pos;
+                        });
+                    });
+                }
+            }
+        } catch (e) {}
+    }
+
+    function initPositionRestore() {
+        window.addEventListener("beforeunload", saveScrollPosition);
+        restoreScrollPosition();
+    }
+
+    // ============================================================
+    // Phase 3 — Module 8: Toolbar
+    // ============================================================
+
+    // Expand all content
+    function expandAllContent() {
+        var toggles = markdownBody.querySelectorAll(".heading-toggle.collapsed");
+        toggles.forEach(function (t) { t.click(); });
+    }
+
+    // Collapse all content
+    function collapseAllContent() {
+        var toggles = markdownBody.querySelectorAll(".heading-toggle:not(.collapsed)");
+        toggles.forEach(function (t) { t.click(); });
+    }
+
+    // Expand all TOC
+    function expandAllToc() {
+        var items = tocBody.querySelectorAll(".toc-item.toc-collapsed");
+        items.forEach(function (item) {
+            var toggle = item.querySelector(":scope > a .toc-toggle");
+            if (toggle) {
+                item.classList.remove("toc-collapsed");
+                toggle.classList.remove("collapsed");
+                toggle.textContent = "▼";
+            }
+        });
+    }
+
+    // Collapse all TOC
+    function collapseAllToc() {
+        var items = tocBody.querySelectorAll(".toc-item");
+        items.forEach(function (item) {
+            var toggle = item.querySelector(":scope > a .toc-toggle");
+            if (toggle && !item.classList.contains("toc-collapsed")) {
+                item.classList.add("toc-collapsed");
+                toggle.classList.add("collapsed");
+                toggle.textContent = "▶";
+            }
+        });
+    }
+
+    function initToolbar() {
+        var btnExpandContent = document.getElementById("btn-expand-all-content");
+        var btnCollapseContent = document.getElementById("btn-collapse-all-content");
+        var btnExpandToc = document.getElementById("btn-expand-all-toc");
+        var btnCollapseToc = document.getElementById("btn-collapse-all-toc");
+        var btnPrint = document.getElementById("btn-print");
+
+        if (btnExpandContent) {
+            btnExpandContent.addEventListener("click", expandAllContent);
+        }
+        if (btnCollapseContent) {
+            btnCollapseContent.addEventListener("click", collapseAllContent);
+        }
+        if (btnExpandToc) {
+            btnExpandToc.addEventListener("click", expandAllToc);
+        }
+        if (btnCollapseToc) {
+            btnCollapseToc.addEventListener("click", collapseAllToc);
+        }
+        if (btnPrint) {
+            btnPrint.addEventListener("click", function () {
+                window.print();
+            });
+        }
+    }
+
+    // ============================================================
+    // Phase 3 — Module 9: Dark Mode
+    // ============================================================
+    var themeStorageKey = "mdviewer-theme";
+
+    function applyTheme(mode) {
+        if (mode === "dark") {
+            document.documentElement.setAttribute("data-theme", "dark");
+        } else {
+            document.documentElement.removeAttribute("data-theme");
+        }
+        updateDarkModeButton(mode);
+    }
+
+    function updateDarkModeButton(mode) {
+        var btn = document.getElementById("btn-dark-mode");
+        if (!btn) return;
+        if (mode === "dark") {
+            btn.textContent = "☀️";
+            btn.title = "浅色模式";
+        } else {
+            btn.textContent = "🌙";
+            btn.title = "暗色模式";
+        }
+    }
+
+    function detectSystemTheme() {
+        if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+            return "dark";
+        }
+        return "light";
+    }
+
+    function initDarkMode() {
+        var btn = document.getElementById("btn-dark-mode");
+        if (!btn) return;
+
+        // Read saved preference, fall back to system
+        var saved = null;
+        try { saved = localStorage.getItem(themeStorageKey); } catch (e) {}
+        var mode = saved || detectSystemTheme();
+        applyTheme(mode);
+
+        btn.addEventListener("click", function () {
+            var current = document.documentElement.getAttribute("data-theme");
+            var newMode = current === "dark" ? "light" : "dark";
+            applyTheme(newMode);
+            try { localStorage.setItem(themeStorageKey, newMode); } catch (e) {}
+        });
+    }
+
+    // ============================================================
+    // Phase 3 — Module 10: Auto Numbering
+    // ============================================================
+    var numberingStorageKey = "mdviewer-autonumbering";
+
+    function markAlreadyNumberedHeadings() {
+        var headings = getContentHeadings();
+        headings.forEach(function (h) {
+            // Get the raw text content (excluding the toggle button)
+            var text = "";
+            for (var i = 0; i < h.childNodes.length; i++) {
+                if (h.childNodes[i].nodeType === 3) { // Text node
+                    text += h.childNodes[i].textContent;
+                } else if (h.childNodes[i].classList && h.childNodes[i].classList.contains("heading-toggle")) {
+                    continue; // Skip toggle button
+                } else {
+                    text += h.childNodes[i].textContent || "";
+                }
+            }
+            text = text.trim();
+
+            // Check if heading starts with a digit or numbered pattern
+            // Patterns: "1 ", "1.", "1.1 ", "1.1.", "一、", "第一章", etc.
+            if (/^\d+(\.\d+)*[\s\.、）\)　]/.test(text) || /^第[一二三四五六七八九十百千]+[章节]/.test(text)) {
+                h.classList.add("no-autonumber");
+            }
+        });
+    }
+
+    function applyAutoNumbering(enabled) {
+        if (enabled) {
+            document.documentElement.setAttribute("data-auto-numbering", "true");
+        } else {
+            document.documentElement.removeAttribute("data-auto-numbering");
+        }
+        updateNumberingButton(enabled);
+    }
+
+    function updateNumberingButton(enabled) {
+        var btn = document.getElementById("btn-auto-numbering");
+        if (!btn) return;
+        if (enabled) {
+            btn.classList.add("active");
+        } else {
+            btn.classList.remove("active");
+        }
+    }
+
+    function initAutoNumbering() {
+        var btn = document.getElementById("btn-auto-numbering");
+        if (!btn) return;
+
+        // Mark headings that already have manual numbering
+        markAlreadyNumberedHeadings();
+
+        // Read saved preference
+        var saved = null;
+        try { saved = localStorage.getItem(numberingStorageKey); } catch (e) {}
+        var enabled = saved === "true";
+        applyAutoNumbering(enabled);
+
+        btn.addEventListener("click", function () {
+            var current = document.documentElement.hasAttribute("data-auto-numbering");
+            var newEnabled = !current;
+            applyAutoNumbering(newEnabled);
+            try { localStorage.setItem(numberingStorageKey, newEnabled.toString()); } catch (e) {}
+        });
+    }
+
+    // ============================================================
+    // Phase 3 — Module 11: TOC Resize (drag handle)
+    // ============================================================
+    var tocWidthStorageKey = "mdviewer-toc-width";
+    var minWidth = 180;
+    var maxWidth = 500;
+
+    function initTocResize() {
+        var resizer = document.getElementById("toc-resizer");
+        if (!resizer) return;
+
+        // Restore saved width
+        var saved = null;
+        try { saved = localStorage.getItem(tocWidthStorageKey); } catch (e) {}
+        if (saved) {
+            var w = parseInt(saved, 10);
+            if (!isNaN(w) && w >= minWidth && w <= maxWidth) {
+                document.documentElement.style.setProperty("--sidebar-width", w + "px");
+            }
+        }
+
+        var startX, startWidth;
+
+        function onMouseDown(e) {
+            e.preventDefault();
+            startX = e.clientX;
+            startWidth = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sidebar-width").trim());
+            document.body.classList.add("resizing");
+            resizer.classList.add("active");
+            window.addEventListener("mousemove", onMouseMove);
+            window.addEventListener("mouseup", onMouseUp);
+        }
+
+        function onMouseMove(e) {
+            var dx = e.clientX - startX;
+            var newWidth = startWidth + dx;
+            newWidth = Math.max(minWidth, Math.min(maxWidth, newWidth));
+            document.documentElement.style.setProperty("--sidebar-width", newWidth + "px");
+        }
+
+        function onMouseUp() {
+            document.body.classList.remove("resizing");
+            resizer.classList.remove("active");
+            window.removeEventListener("mousemove", onMouseMove);
+            window.removeEventListener("mouseup", onMouseUp);
+
+            // Save width
+            var finalWidth = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sidebar-width").trim());
+            try { localStorage.setItem(tocWidthStorageKey, Math.round(finalWidth).toString()); } catch (e) {}
+        }
+
+        resizer.addEventListener("mousedown", onMouseDown);
+    }
+
+    // ============================================================
+    // Phase 3 — Module 12: Back to Top (floating button)
+    // ============================================================
+    function initBackToTop() {
+        var btn = document.getElementById("back-to-top-btn");
+        if (!btn) return;
+
+        // Scroll listener
+        contentArea.addEventListener("scroll", function () {
+            if (contentArea.scrollTop > 300) {
+                btn.classList.add("visible");
+            } else {
+                btn.classList.remove("visible");
+            }
+        });
+
+        // Click handler
+        btn.addEventListener("click", function () {
+            contentArea.scrollTo({ top: 0, behavior: "smooth" });
+        });
+    }
+
+    // ============================================================
+    // Initialization
+    // ============================================================
+    function init() {
+        // Phase 1
+        initTocClickJump();
+        initScrollSpy();
+
+        // Phase 2
+        initTocFold();
+        initContentFold();
+        initImageLightbox();
+        initCodeCopy();
+        initPositionRestore();
+
+        // Phase 3
+        initToolbar();
+        initDarkMode();
+        initAutoNumbering();
+        initTocResize();
+        initBackToTop();
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", init);
+    } else {
+        init();
+    }
+})();
+</script>
+</body>
+</html>

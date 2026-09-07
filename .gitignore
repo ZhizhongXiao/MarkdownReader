@@ -1,0 +1,36 @@
+# ===== Python =====
+# 字节码缓存
+__pycache__/
+*.py[cod]
+
+# 虚拟环境
+venv/
+.venv/
+
+# ===== 测试与代码检查缓存 =====
+.pytest_cache/
+.pytest-tmp-*/
+.ruff_cache/
+
+# ===== 构建与打包产物 =====
+output/
+dist/
+build/
+*.spec
+!packaging/MDViewer.spec
+packaging/.pyinstaller-build/
+packaging/node/node.exe
+
+# ===== Node / 前端依赖 =====
+node_renderer/node_modules/
+
+# ===== 示例生成的 HTML =====
+samples/demo.html
+
+# ===== IDE =====
+.vscode/
+.idea/
+
+# ===== 工具目录 =====
+.agents/
+.codex/

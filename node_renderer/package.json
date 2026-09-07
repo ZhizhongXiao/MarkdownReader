@@ -1,0 +1,16 @@
+{
+  "name": "mdviewer-node-renderer",
+  "version": "1.0.0",
+  "description": "Node.js Markdown renderer for MDViewer — reads Markdown from stdin, outputs HTML to stdout.",
+  "private": true,
+  "main": "render.js",
+  "dependencies": {
+    "katex": "^0.16.11",
+    "markdown-it": "^14.1.0",
+    "markdown-it-footnote": "^4.0.0",
+    "markdown-it-texmath": "^1.0.0"
+  },
+  "scripts": {
+    "test": "node -e \"console.log('renderer OK')\""
+  }
+}

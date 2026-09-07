@@ -1,0 +1,18 @@
+{
+  "build": {
+    "input": "C:/Users/X3692/OneDrive/CPA 笔记",
+    "template": "modern",
+    "output": "C:/Users/X3692/Downloads",
+    "markdown_engine": "node"
+  },
+  "document": {
+    "theme": "auto",
+    "numbering": false
+  },
+  "features": {
+    "copy_assets": true,
+    "build_index": false,
+    "auto_open": true,
+    "preserve_structure": true
+  }
+}

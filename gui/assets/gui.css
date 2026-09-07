@@ -1,0 +1,830 @@
+/* ============================================================
+   MDViewer GUI Stylesheet
+
+   01. Tokens and themes
+   02. Global reset and transitions
+   03. Application shell
+   04. Left-side form panels
+   05. Shared controls
+   06. Workspace tabs and pages
+   07. Static template preview
+
+   Notes:
+   - The GUI is independent from generated reader HTML.
+   - Preview styles are mockups only; real template output lives under templates/.
+   - Keep layout-sensitive left-column rules together to avoid accidental drift.
+   ============================================================ */
+
+/* ============================================================
+   01. Tokens and themes
+   ============================================================ */
+
+/* 01.1 Base design tokens: colors, spacing, radius, and control sizing. */
+:root {
+    --bg: #f0f4ff;
+    --panel: #ffffff;
+    --panel-alt: #f8fafc;
+    --border: #cbd5e1;
+    --border-soft: #e2e8f0;
+    --text: #0f172a;
+    --text-secondary: #334155;
+    --muted: #64748b;
+    --blue-deep: #1e40af;
+    --blue-bright: #3b82f6;
+    --gold: #eab308;
+    --gold-dark: #ca8a04;
+    --green: #15803d;
+    --red: #b91c1c;
+    --red-bg: #fef2f2;
+    --radius-sm: 8px;
+    --radius: 10px;
+    --radius-lg: 14px;
+    --gap: 14px;
+    --gap-sm: 12px;
+    --gap-xs: 6px;
+    --input-height: 40px;
+    --button-height: 40px;
+}
+
+/* 01.2 System dark mode: used unless the user explicitly chooses light mode. */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --bg: #020617;
+        --panel: #0f172a;
+        --panel-alt: #1e293b;
+        --border: #334155;
+        --border-soft: #1e293b;
+        --text: #f8fafc;
+        --text-secondary: #cbd5e1;
+        --muted: #64748b;
+        --blue-deep: #60a5fa;
+        --blue-bright: #3b82f6;
+        --gold: #facc15;
+        --gold-dark: #eab308;
+        --green: #22c55e;
+        --red: #ef4444;
+        --red-bg: #450a0a;
+    }
+}
+
+/* 01.3 Manual theme overrides written by gui.js on <html data-theme="...">. */
+[data-theme="dark"] {
+    --bg: #020617;
+    --panel: #0f172a;
+    --panel-alt: #1e293b;
+    --border: #334155;
+    --border-soft: #1e293b;
+    --text: #f8fafc;
+    --text-secondary: #cbd5e1;
+    --muted: #64748b;
+    --blue-deep: #60a5fa;
+    --blue-bright: #3b82f6;
+    --gold: #facc15;
+    --gold-dark: #eab308;
+    --green: #22c55e;
+    --red: #ef4444;
+    --red-bg: #450a0a;
+}
+[data-theme="light"] {
+    --bg: #f0f4ff;
+    --panel: #ffffff;
+    --panel-alt: #f8fafc;
+    --border: #cbd5e1;
+    --border-soft: #e2e8f0;
+    --text: #0f172a;
+    --text-secondary: #334155;
+    --muted: #64748b;
+    --blue-deep: #1e40af;
+    --blue-bright: #3b82f6;
+    --gold: #eab308;
+    --gold-dark: #ca8a04;
+    --green: #15803d;
+    --red: #b91c1c;
+    --red-bg: #fef2f2;
+}
+
+/* ============================================================
+   02. Global reset and transitions
+   ============================================================ */
+
+/* 02.1 Reset browser defaults used by the pywebview shell. */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+body,
+.app,
+.panel,
+.workspace-panel,
+.status-strip,
+.accordion,
+.accordion summary,
+.accordion summary .badge,
+.accordion-body,
+.log-area,
+.workspace-tabs,
+.workspace-tab,
+.conversion-page,
+.preview-page,
+.log-page,
+input[type="text"],
+select,
+button,
+.check-row label,
+.custom-select-btn,
+.custom-select-dropdown,
+.custom-select-dropdown .dropdown-item {
+    transition:
+        background-color .22s ease,
+        border-color .22s ease,
+        color .22s ease,
+        box-shadow .22s ease;
+}
+
+/* 02.2 Shared element defaults. */
+img, svg { display: block; max-width: 100%; }
+button, input, select, textarea { font: inherit; }
+a { color: inherit; text-decoration: none; }
+
+/* ============================================================
+   03. Application shell
+   ============================================================ */
+
+/* 03.1 Root viewport container. */
+.app {
+    width: 100vw; height: 100vh; padding: 20px;
+    display: flex; flex-direction: column; gap: var(--gap);
+    background: var(--bg); color: var(--text);
+}
+
+/* 03.2 Top brand bar and theme toggle. */
+.header {
+    background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%);
+    border: none; border-radius: var(--radius-lg);
+    padding: 14px 20px; flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(30, 64, 175, 0.15);
+    display: flex; align-items: center; justify-content: space-between;
+}
+.header h1 { font-size: 26px; line-height: 1.18; letter-spacing: 1px; color: #ffffff; font-weight: 900; }
+.header .version { font-size: 12px; color: rgba(255,255,255,0.65); }
+.header-right { display: flex; align-items: center; gap: 8px; }
+.theme-btn {
+    width: 36px; height: 32px; padding: 0; border: 1px solid rgba(255,255,255,0.3); border-radius: var(--radius-sm);
+    background: rgba(255,255,255,0.1); color: #fff; font-size: 17px; cursor: pointer; font-weight: 700;
+    font-family: "Segoe UI Symbol", "Arial Unicode MS", sans-serif;
+    line-height: 1;
+}
+.theme-btn:hover { background: rgba(255,255,255,0.2); }
+
+/* 03.3 Conversion status strip and primary actions. */
+.status-strip {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 10px 18px; flex-shrink: 0;
+    display: flex; flex-direction: column; gap: var(--gap-xs);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+}
+.status-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.status-left { display: flex; align-items: center; gap: 10px; }
+.badge {
+    font-size: 11px; padding: 3px 10px; border-radius: 999px; font-weight: 800;
+    letter-spacing: 0.3px; background: var(--gold); color: #0f172a;
+}
+#statusText { color: var(--text-secondary); font-size: 13px; font-weight: 800; }
+.status-actions { display: flex; gap: 8px; flex-shrink: 0; align-items: center; }
+.status-actions button { min-width: 104px; padding: 0 14px; }
+.status-actions .btn-run { min-width: 118px; }
+
+/* 03.4 Two-column work area: left settings and right preview/log workspace. */
+.main {
+    flex: 1 1 auto; min-height: 0;
+    display: flex; gap: var(--gap); align-items: stretch;
+}
+.left-wrapper {
+    flex: 0 0 400px; position: relative; min-height: 0; height: 100%;
+    overflow: hidden; z-index: 10;
+}
+.left-column {
+    height: 100%; min-height: 0; overflow-y: auto; overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-sm); padding-right: 2px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+.left-column::-webkit-scrollbar { display: none; }
+
+/* 03.5 Shared panel surfaces. */
+.panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 20px; min-width: 0; min-height: 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+.workspace-panel {
+    flex: 1 1 auto; width: 100%; height: 100%; padding: 0; overflow: hidden;
+    display: flex; flex-direction: column;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+/* ============================================================
+   04. Left-side form panels
+   ============================================================ */
+
+/* 04.1 Collapsible input/output/options sections. */
+.accordion {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05); flex-shrink: 0;
+}
+.accordion summary {
+    list-style: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 14px 18px; border-bottom: 1px solid var(--border);
+    font-weight: 900; color: var(--blue-deep); font-size: 14px;
+}
+.accordion[open] summary { border-bottom: 2px solid var(--blue-bright); }
+.accordion summary::-webkit-details-marker { display: none; }
+.accordion summary::after {
+    content: none;
+}
+.accordion summary .badge {
+    min-width: 78px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--blue-deep); color: #ffffff;
+    white-space: pre;
+}
+.accordion summary .badge::after {
+    content: "  \25BC";
+    font-size: 11px;
+    line-height: 1;
+}
+.accordion[open] summary .badge::after {
+    content: "  \25B2";
+}
+.accordion-body {
+    padding: 16px 18px; display: flex; flex-direction: column; gap: var(--gap-sm);
+    overflow: visible;
+}
+
+/* 04.2 Panels use natural content height; the left column scrolls if needed. */
+.left-column .accordion {
+    flex: 0 0 auto;
+}
+.accordion[open] .accordion-body { animation: accordion-open .18s ease; }
+@keyframes accordion-open { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ============================================================
+   05. Shared controls
+   ============================================================ */
+
+/* 05.1 Labels, text inputs, checkboxes, and native selects. */
+label {
+    display: block; color: var(--muted); font-size: 12px;
+    margin-bottom: 5px; font-weight: 700;
+}
+input[type="text"], select {
+    width: 100%; border: 1px solid var(--border); border-radius: var(--radius);
+    outline: none; background: var(--panel); color: var(--text);
+    padding: 0 12px; font-size: 13px; height: var(--input-height);
+}
+input[type="text"]:focus, select:focus {
+    border-color: var(--blue-bright);
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+}
+input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--blue-bright); cursor: pointer; }
+
+/* 05.2 Buttons and action variants. */
+button {
+    height: var(--button-height); border: 1px solid var(--border); border-radius: var(--radius);
+    cursor: pointer; color: var(--text); background: var(--panel);
+    font-weight: 800; font-size: 13px; white-space: nowrap;
+    transition:
+        background-color .22s ease,
+        border-color .22s ease,
+        color .22s ease,
+        box-shadow .22s ease;
+}
+button:hover { background: #f8fafc; border-color: var(--blue-bright); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.btn-primary {
+    background: var(--gold); color: #0f172a; border-color: var(--gold); font-weight: 900;
+}
+.btn-primary:hover { background: var(--gold-dark); border-color: var(--gold-dark); }
+.btn-blue { color: var(--blue-deep); background: var(--panel-alt); border: 1px solid var(--border); }
+
+/* 05.3 Form row helpers and option checkbox grid. */
+.path-row { display: flex; gap: var(--gap-sm); }
+.path-row input { flex: 1 1 auto; min-width: 0; }
+.path-row button { flex: 0 0 100px; }
+.input-picker-row { margin-top: 4px; }
+.input-picker-row button { flex: 1 1 0; min-width: 0; }
+.input-drop-hint {
+    margin: 0; color: var(--muted); font-size: 11px; line-height: 1.55;
+}
+.input-summary-row {
+    min-height: 34px; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 0 4px 0 10px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--panel-alt); color: var(--text-secondary); font-size: 12px; font-weight: 700;
+}
+.input-summary-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.input-summary-row button { flex: 0 0 auto; width: 54px; height: 26px; border: 0; background: transparent; color: var(--muted); }
+.input-summary-row button:hover { color: var(--red); background: var(--red-bg); }
+.check-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+.check-row label {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    min-height: 40px; padding: 0 10px; border: 1px solid var(--border);
+    border-radius: var(--radius-sm); background: var(--panel);
+    font-size: 13px; cursor: pointer; margin-bottom: 0; font-weight: 700;
+    white-space: nowrap;
+}
+.check-row label input { flex: 0 0 auto; margin: 0; }
+.check-row .check-wide { grid-column: 1 / -1; }
+
+/* 05.4 Log console used by the log tab and startup bridge. */
+.log-area {
+    flex: 1 1 auto; min-height: 0; border: 1px solid var(--border);
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    background: var(--panel); color: var(--text-secondary);
+    padding: 16px; font-family: Consolas, "Courier New", monospace;
+    font-size: 13px; line-height: 1.6; white-space: pre-wrap;
+    overflow: auto; outline: none;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+}
+.log-info { color: var(--text-secondary); }
+.log-warn { color: #e67e22; font-weight: 700; }
+.log-err {
+    color: var(--red); background: var(--red-bg);
+    font-weight: 900; padding: 0 4px; border-radius: 3px;
+}
+
+.hidden { display: none !important; }
+
+/* 05.5 Left column scroll affordances. */
+.scroll-indicator {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    width: 36px; height: 36px; border-radius: 50%;
+    background: var(--text); opacity: 0.5; border: none; outline: none;
+    color: var(--panel); font-size: 16px; line-height: 36px; text-align: center;
+    cursor: pointer; z-index: 100; transition: opacity .15s;
+    display: flex; align-items: center; justify-content: center;
+}
+.scroll-indicator:hover { opacity: 0.72; }
+.scroll-indicator-top { top: 4px; }
+.scroll-indicator-bottom { bottom: 4px; }
+
+/* 05.6 Custom template dropdown. The menu is portaled to <body> by gui.js. */
+.custom-select { position: relative; width: 100%; }
+.custom-select-btn {
+    width: 100%; height: var(--input-height); border: 1px solid var(--border);
+    border-radius: var(--radius); background: var(--panel); color: var(--text);
+    padding: 0 36px 0 12px; font-size: 13px; font-weight: 600;
+    text-align: left; cursor: pointer; position: relative;
+    display: flex; align-items: center; justify-content: space-between;
+}
+.custom-select-btn:hover { border-color: var(--blue-bright); }
+.custom-select-arrow {
+    font-size: 10px; color: var(--muted); transition: transform .2s;
+    position: absolute; right: 12px; pointer-events: none;
+}
+.custom-select-btn.open .custom-select-arrow { transform: rotate(180deg); }
+.custom-select-dropdown {
+    position: fixed;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: 0 8px 20px rgba(0,0,0,0.16);
+    z-index: 99999; max-height: 180px; overflow-y: auto;
+}
+.custom-select-dropdown .dropdown-item {
+    padding: 8px 14px; cursor: pointer; font-size: 13px; color: var(--text);
+    border-bottom: 1px solid var(--border-soft); transition: background .12s;
+}
+.custom-select-dropdown .dropdown-item:last-child { border-bottom: none; }
+.custom-select-dropdown .dropdown-item:hover { background: var(--panel-alt); }
+.custom-select-dropdown .dropdown-item.selected {
+    background: var(--blue-bright); color: #fff; font-weight: 700;
+}
+
+/* ============================================================
+   06. Workspace tabs and pages
+   ============================================================ */
+
+/* 06.1 Conversion/preview/log tab strip. */
+.workspace-tabs {
+    display: flex;
+    align-items: stretch;
+    gap: 4px;
+    width: 100%;
+    min-width: 0;
+    padding: 0 10px;
+    flex: 0 0 auto;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+}
+.workspace-tab {
+    flex: 0 0 auto;
+    height: 46px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 650;
+    position: relative;
+}
+.workspace-tab:hover {
+    background: var(--panel-alt);
+}
+.workspace-tab.active {
+    color: var(--blue-deep);
+}
+.workspace-tab-log {
+    margin-left: auto;
+    padding: 0 10px;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 600;
+}
+.workspace-tab-log.has-warning { color: var(--gold-dark); }
+.workspace-tab-log.has-error { color: var(--red); }
+.log-alert-icon {
+    margin-right: 4px;
+    font-weight: 900;
+}
+.log-issue-count {
+    display: inline-flex;
+    min-width: 18px;
+    height: 18px;
+    margin-left: 4px;
+    padding: 0 5px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: var(--text-secondary);
+    color: var(--panel);
+    font-size: 10px;
+    font-weight: 800;
+}
+.workspace-tab-log.has-warning .log-issue-count { background: var(--gold-dark); }
+.workspace-tab-log.has-error .log-issue-count { background: var(--red); }
+.tab-count {
+    display: inline-flex; min-width: 20px; height: 20px; padding: 0 6px; margin-left: 4px;
+    align-items: center; justify-content: center; border-radius: 999px;
+    background: var(--panel-alt); color: var(--muted); font-size: 11px;
+}
+.workspace-tab.active .tab-count { background: var(--blue-bright); color: #fff; }
+.workspace-tab.active::after {
+    content: "";
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: -1px;
+    height: 2px;
+    background: var(--blue-bright);
+    border-radius: 999px 999px 0 0;
+}
+
+/* 06.2 Workspace pages. Only the active tab page is flex-rendered. */
+.workspace-page {
+    display: none;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+}
+.workspace-page.active {
+    display: flex;
+}
+.preview-page {
+    background: var(--panel-alt);
+    overflow: auto;
+    padding: 18px;
+}
+.conversion-page {
+    background: var(--panel); flex-direction: column; min-width: 0;
+}
+.conversion-toolbar {
+    flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 14px;
+    padding: 12px 14px; border-bottom: 1px solid var(--border); background: var(--panel-alt);
+}
+.conversion-stats { display: flex; align-items: center; gap: 14px; color: var(--muted); font-size: 12px; white-space: nowrap; }
+.conversion-stats strong { color: var(--text); }
+.conversion-stats .stat-warning strong { color: #d97706; }
+.conversion-stats .stat-error strong { color: var(--red); }
+#conversion-filter { flex: 1 1 180px; width: auto; min-width: 0; height: 34px; }
+.conversion-messages { flex: 0 0 auto; max-height: 96px; overflow: auto; }
+.plan-warning,.plan-error { padding: 7px 14px; border-bottom: 1px solid var(--border-soft); font-size: 12px; font-weight: 700; }
+.plan-warning { color: #d97706; background: rgba(245,158,11,.08); }
+.plan-error { color: var(--red); background: var(--red-bg); }
+.conversion-table-wrap { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; position: relative; }
+.conversion-row {
+    display: grid; grid-template-columns: 38px minmax(0, 1fr) 34px;
+    column-gap: 10px; row-gap: 8px; align-items: start;
+    padding: 11px 14px; border-bottom: 1px solid var(--border-soft); font-size: 12px;
+    cursor: pointer; outline: none;
+}
+.conversion-row:hover,.conversion-row:focus-visible { background: var(--panel-alt); }
+.conversion-row:focus-visible { box-shadow: inset 3px 0 0 var(--blue-bright); }
+.conversion-row.is-expanded { background: var(--panel-alt); }
+.conversion-status {
+    grid-column: 1; grid-row: 1; padding-top: 2px;
+    font-size: 17px; font-weight: 900; text-align: center; color: var(--muted);
+}
+.status-converting .conversion-status { color: var(--blue-bright); }
+.status-success .conversion-status { color: var(--green); }
+.status-warning .conversion-status { color: #d97706; }
+.status-error .conversion-status,.status-conflict .conversion-status { color: var(--red); }
+.conversion-document {
+    grid-column: 2; grid-row: 1; display: flex; min-width: 0; flex-direction: column; gap: 4px;
+}
+.document-topline { display: flex; min-width: 0; align-items: center; gap: 8px; }
+.document-topline > strong { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conversion-document strong,.conversion-document small {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.conversion-document strong { color: var(--text); font-size: 12px; }
+.conversion-document small { color: var(--muted); font-size: 10px; }
+.conversion-meta { display: block; }
+.conversion-document .row-warning { color: #d97706; }
+.origin-badge {
+    flex: 0 0 auto; padding: 2px 7px; border-radius: 999px; background: var(--panel);
+    color: var(--text-secondary); border: 1px solid var(--border); font-size: 10px; font-weight: 800;
+}
+.origin-directory { color: var(--blue-deep); }
+.expand-hint { margin-left: auto; flex: 0 0 auto; color: var(--muted); font-size: 10px; font-weight: 700; }
+.conversion-remove {
+    grid-column: 3; grid-row: 1; width: 28px; height: 28px; justify-self: center; border: 0; background: transparent;
+    color: var(--muted); font-size: 18px;
+}
+.conversion-remove:hover { color: var(--red); background: var(--red-bg); border-color: transparent; }
+.conversion-details {
+    grid-column: 2 / 4; grid-row: 2; min-width: 0; padding: 10px 12px;
+    display: flex; flex-direction: column; gap: 7px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel);
+}
+.detail-line { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 8px; align-items: start; }
+.detail-line strong { color: var(--muted); font-size: 10px; }
+.detail-line span { color: var(--text-secondary); font-size: 10px; line-height: 1.5; word-break: break-all; }
+.detail-warning span { color: #d97706; font-weight: 700; }
+.conversion-empty {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 8px; padding: 24px; text-align: center;
+    color: var(--muted);
+}
+.conversion-empty strong { color: var(--text-secondary); font-size: 15px; }
+.conversion-empty span { max-width: 420px; font-size: 12px; line-height: 1.6; }
+.log-page {
+    background: var(--panel);
+}
+.log-page .log-area {
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 0;
+    border: 0;
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    box-shadow: none;
+}
+
+.drop-overlay {
+    position: fixed; inset: 0; z-index: 100000; display: flex; align-items: flex-start; justify-content: center;
+    padding: 18px; background: transparent; pointer-events: none;
+}
+.drop-overlay-card {
+    width: auto; min-height: 0; border: 1px solid rgba(255,255,255,.38); border-radius: 999px;
+    display: flex; align-items: center; justify-content: center; padding: 10px 20px;
+    background: rgba(30,64,175,.96); color: #fff; box-shadow: 0 8px 26px rgba(15,23,42,.26);
+}
+.drop-overlay-card strong { font-size: 13px; }
+
+/* ============================================================
+   07. Static template preview
+   ============================================================ */
+
+/* 07.1 Shared preview scaffold. Template-specific classes only alter the document area. */
+.template-preview {
+    min-width: 520px;
+    min-height: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+.preview-stage {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: #eef4ff;
+    overflow: hidden;
+    padding: 26px 26px 26px 36px;
+}
+.preview-shell {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: 150px minmax(0, 1fr);
+    gap: 0;
+    align-items: stretch;
+}
+.preview-sidebar {
+    height: 100%;
+    min-height: 0;
+    border: 1px solid rgba(148, 163, 184, .55);
+    border-radius: 0;
+    background: rgba(255, 255, 255, .72);
+    padding: 18px 14px;
+    overflow: hidden;
+}
+.preview-sidebar span {
+    display: block;
+    height: 10px;
+    margin-bottom: 16px;
+    border-radius: 999px;
+    background: rgba(100, 116, 139, .32);
+}
+.preview-sidebar span:nth-child(2) { width: 72%; margin-left: 14px; }
+.preview-sidebar span:nth-child(3) { width: 84%; }
+.preview-sidebar span:nth-child(4) { width: 58%; margin-left: 22px; }
+.preview-sidebar span:nth-child(5) { width: 78%; }
+.preview-content {
+    min-width: 0;
+    min-height: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: stretch;
+    overflow: hidden;
+}
+.preview-document {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, .82);
+    border: 1px solid rgba(148, 163, 184, .42);
+    padding: 38px 48px;
+    box-shadow: 0 12px 32px rgba(15, 23, 42, .08);
+}
+.preview-heading {
+    width: 58%;
+    height: 24px;
+    border-radius: 7px;
+    background: #0f172a;
+    margin-bottom: 18px;
+}
+.preview-subheading {
+    width: 38%;
+    height: 15px;
+    border-radius: 999px;
+    background: rgba(37, 99, 235, .45);
+    margin-bottom: 18px;
+}
+.preview-line {
+    height: 9px;
+    width: 74%;
+    border-radius: 999px;
+    background: rgba(51, 65, 85, .28);
+    margin-bottom: 11px;
+}
+.preview-line.long { width: 92%; }
+.preview-line.short { width: 56%; }
+.preview-line.tiny { width: 34%; }
+.preview-block {
+    height: 72px;
+    margin: 20px 0;
+    border-radius: 8px;
+    background: rgba(96, 165, 250, .18);
+    border: 1px solid rgba(59, 130, 246, .22);
+}
+.preview-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin: 16px 0 20px;
+}
+.preview-grid span {
+    height: 34px;
+    border-radius: 6px;
+    border: 1px solid rgba(148, 163, 184, .45);
+    background: rgba(248, 250, 252, .72);
+}
+
+/* 07.2 Modern preview: blue guide line and medium reading width. */
+.preview-modern .preview-stage {
+    background: linear-gradient(180deg, #eef4ff 0%, #f8fbff 100%);
+}
+.preview-modern .preview-content {
+    justify-content: center;
+    align-items: flex-start;
+    padding: 0 15%;
+}
+.preview-modern .preview-document {
+    width: 100%;
+    max-width: 900px;
+    border: 0;
+    border-left: 2px solid rgba(96, 165, 250, .72);
+    border-radius: 0;
+    box-shadow: none;
+    padding: 34px 0 72px 28px;
+    background: transparent;
+}
+
+/* 07.3 Office preview: centered A4-like white page. */
+.preview-office .preview-stage {
+    background: #e5e7eb;
+}
+.preview-office .preview-sidebar {
+    background: #f8fafc;
+}
+.preview-office .preview-content {
+    justify-content: center;
+    align-items: flex-start;
+}
+.preview-office .preview-document {
+    width: min(420px, 100%);
+    background: #fff;
+    border-radius: 2px;
+    border-color: #d1d5db;
+    padding: 46px 58px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, .12);
+}
+.preview-office .preview-heading {
+    height: 22px;
+    width: 64%;
+    border-radius: 0;
+    background: #111827;
+}
+.preview-office .preview-subheading,
+.preview-office .preview-line {
+    border-radius: 0;
+    background: rgba(17, 24, 39, .24);
+}
+.preview-office .preview-block {
+    background: #fff;
+    border: 1px solid #111827;
+    border-radius: 0;
+}
+.preview-office .preview-grid span {
+    border-color: #111827;
+    border-radius: 0;
+    background: #fff;
+}
+
+/* 07.4 VS Code preview: full editor-like surface with side padding. */
+.preview-vscode .preview-stage {
+    background: #334155;
+    border-color: #64748b;
+}
+.preview-vscode .preview-sidebar {
+    background: #475569;
+    border-color: #64748b;
+}
+.preview-vscode .preview-sidebar span {
+    background: rgba(226, 232, 240, .42);
+}
+.preview-vscode .preview-content {
+    justify-content: stretch;
+    align-items: flex-start;
+    padding: 0 10%;
+}
+.preview-vscode .preview-document {
+    width: 100%;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 28px 0 64px;
+}
+.preview-vscode .preview-heading {
+    background: #e7e7e7;
+    height: 22px;
+    border-radius: 0;
+    border-bottom: 2px solid #64748b;
+}
+.preview-vscode .preview-subheading {
+    background: #3794ff;
+}
+.preview-vscode .preview-line {
+    background: rgba(212, 212, 212, .32);
+}
+.preview-vscode .preview-block {
+    background: #1f2937;
+    border-color: #64748b;
+    border-radius: 6px;
+}
+.preview-vscode .preview-grid span {
+    background: #334155;
+    border-color: #64748b;
+}
