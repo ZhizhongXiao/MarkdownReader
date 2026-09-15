@@ -1,5 +1,5 @@
 ﻿/* ================================================================
-   MDViewer — Viewer JavaScript (shared across all templates)
+   MarkdownReader — Viewer JavaScript (shared across all templates)
    v4.0 — TOC panel toggle, fixed step-wise fold, auto-numbering fix
    ================================================================ */
 
@@ -13,7 +13,7 @@
 
     // Step-wise content fold state
     var currentExpandedLevel = 6;   // 0=nothing visible, ..., 6=all visible
-    var FOLD_STORAGE = "mdviewer-expandlevel";
+    var FOLD_STORAGE = "markdownreader-expandlevel";
 
     function getHeadingLevel(el) {
         var tag = el.tagName.toUpperCase();
@@ -114,7 +114,7 @@
     // ═══════════════════════════════════════════════════════════════
     // Module 3: Flat TOC folding
     // ═══════════════════════════════════════════════════════════════
-    var TOC_FOLD_STORAGE = "mdviewer-toc-collapsed-v2";
+    var TOC_FOLD_STORAGE = "markdownreader-toc-collapsed-v2";
     function initTocFold() {
         var saved = null;
         try { saved = JSON.parse(localStorage.getItem(TOC_FOLD_STORAGE) || "[]"); } catch (e) { saved = []; }
@@ -317,7 +317,7 @@
     // ═══════════════════════════════════════════════════════════════
     // Module 8: Reading Position Restore
     // ═══════════════════════════════════════════════════════════════
-    var scrollStorageKey = "mdviewer-scroll-" + (document.title || "document");
+    var scrollStorageKey = "markdownreader-scroll-" + (document.title || "document");
     function saveScrollPosition() { try { localStorage.setItem(scrollStorageKey, contentArea.scrollTop.toString()); } catch (e) {} }
     function restoreScrollPosition() {
         try { var saved = localStorage.getItem(scrollStorageKey); if (saved) { var pos = parseInt(saved, 10); if (pos > 0) { requestAnimationFrame(function () { requestAnimationFrame(function () { contentArea.scrollTop = pos; }); }); } } } catch (e) {}
@@ -375,7 +375,7 @@
     // ═══════════════════════════════════════════════════════════════
     // TOC panel toggle (sidebar collapse to narrow strip)
     // ═══════════════════════════════════════════════════════════════
-    var TOC_PANEL_STORAGE = "mdviewer-toc-panel-collapsed";
+    var TOC_PANEL_STORAGE = "markdownreader-toc-panel-collapsed";
     function syncTocPanelButton() {
         var sidebar = document.getElementById("toc-sidebar");
         var btn = document.getElementById("btn-toggle-toc-panel");
@@ -419,7 +419,7 @@
     // ═══════════════════════════════════════════════════════════════
     // Module 10: Dark Mode
     // ═══════════════════════════════════════════════════════════════
-    var themeStorageKey = "mdviewer-theme";
+    var themeStorageKey = "markdownreader-theme";
     function applyTheme(mode) {
         if (mode === "dark") document.documentElement.setAttribute("data-theme", "dark");
         else document.documentElement.removeAttribute("data-theme");
@@ -437,7 +437,7 @@
     // ═══════════════════════════════════════════════════════════════
     // Module 11: Auto Numbering
     // ═══════════════════════════════════════════════════════════════
-    var numberingStorageKey = "mdviewer-autonumbering";
+    var numberingStorageKey = "markdownreader-autonumbering";
     function markAlreadyNumberedHeadings() {
         getContentHeadings().forEach(function (h) {
             var text = "";
@@ -482,11 +482,11 @@
     // ═══════════════════════════════════════════════════════════════
     function initTocResize() {
         var resizer = document.getElementById("toc-resizer"); if (!resizer) return;
-        try { var saved = localStorage.getItem("mdviewer-toc-width"); if (saved) { var w = parseInt(saved, 10); if (w >= 180 && w <= 500) document.documentElement.style.setProperty("--sidebar-width", w + "px"); } } catch (e) {}
+        try { var saved = localStorage.getItem("markdownreader-toc-width"); if (saved) { var w = parseInt(saved, 10); if (w >= 180 && w <= 500) document.documentElement.style.setProperty("--sidebar-width", w + "px"); } } catch (e) {}
         var startX, startWidth;
         resizer.addEventListener("mousedown", function (e) { e.preventDefault(); startX = e.clientX; startWidth = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sidebar-width")); document.body.classList.add("resizing"); resizer.classList.add("active"); window.addEventListener("mousemove", onMove); window.addEventListener("mouseup", onUp); });
         function onMove(e) { var w = Math.max(180, Math.min(500, startWidth + e.clientX - startX)); document.documentElement.style.setProperty("--sidebar-width", w + "px"); }
-        function onUp() { document.body.classList.remove("resizing"); resizer.classList.remove("active"); window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); try { localStorage.setItem("mdviewer-toc-width", Math.round(parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sidebar-width"))).toString()); } catch (e) {} }
+        function onUp() { document.body.classList.remove("resizing"); resizer.classList.remove("active"); window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); try { localStorage.setItem("markdownreader-toc-width", Math.round(parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sidebar-width"))).toString()); } catch (e) {} }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -505,7 +505,7 @@
         cacheDom();
 
         if (!tocBody || !contentArea || !markdownBody) {
-            console.error("MDViewer init failed: required DOM nodes missing.");
+            console.error("MarkdownReader init failed: required DOM nodes missing.");
             return;
         }
 

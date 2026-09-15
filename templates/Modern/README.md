@@ -1,6 +1,6 @@
-# Modern 模板
+﻿# Modern 模板
 
-Modern 是 MDViewer 的通用阅读主题。
+Modern 是 MarkdownReader 的通用阅读主题。
 
 它适合日常 Markdown 阅读、学习笔记、轻量文档、长篇资料和非正式打印。
 视觉目标是舒适的现代阅读器，而不是代码编辑器、Office 文档或文档网站。

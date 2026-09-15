@@ -1,4 +1,4 @@
-"""MDViewer — Unified Markdown rendering entry point.
+"""MarkdownReader — Unified Markdown rendering entry point.
 
 Dispatches to the configured engine (python or node).
 

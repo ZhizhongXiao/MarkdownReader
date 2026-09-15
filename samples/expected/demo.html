@@ -7,7 +7,7 @@
     <!-- CSS and JS will be embedded by Python during generation -->
 <style>
 /* ================================================================
-   MDViewer — Viewer Stylesheet
+   MarkdownReader — Viewer Stylesheet
    Phase 1: CSS Grid layout, TOC, typography
    Phase 2: TOC/content folding, lightbox, code copy, typography+
    Phase 3: Toolbar, dark mode, auto-numbering, TOC resize,
@@ -723,7 +723,7 @@ body.resizing .content-area {
 </style>
 <style>
 /* ================================================================
-   MDViewer — Print Stylesheet
+   MarkdownReader — Print Stylesheet
    Hides all interactive UI elements.
    Expands content to full page width.
    Ensures all folded/collapsed content is visible.
@@ -909,7 +909,7 @@ body.resizing .content-area {
             </div>
             <div class="toc-body" id="toc-body">
                 <ul class="toc-list">
-<li class="toc-item toc-level-1"><a href="#mdviewer-demo">MDViewer Demo</a>
+<li class="toc-item toc-level-1"><a href="#markdownreader-demo">MarkdownReader Demo</a>
 <ul class="toc-list">
 <li class="toc-item toc-level-2"><a href="#项目简介">项目简介</a>
 <ul class="toc-list">
@@ -1013,9 +1013,9 @@ body.resizing .content-area {
         <!-- ===== Content Area ===== -->
         <main class="content-area" id="content-area">
             <article class="markdown-body" id="markdown-body">
-                <h1 id="mdviewer-demo">MDViewer Demo</h1>
+                <h1 id="markdownreader-demo">MarkdownReader Demo</h1>
 <h2 id="项目简介">项目简介</h2>
-<p>MDViewer 是一个<strong>离线 Markdown 文档阅读器生成工具</strong>。它将 Markdown 文件转换为独立的 HTML 文档，专为阅读、导航和打印场景优化。</p>
+<p>MarkdownReader 是一个<strong>离线 Markdown 文档阅读器生成工具</strong>。它将 Markdown 文件转换为独立的 HTML 文档，专为阅读、导航和打印场景优化。</p>
 <h3 id="核心目标">核心目标</h3>
 <ul>
 <li>高质量的阅读体验</li>
@@ -1059,7 +1059,7 @@ body.resizing .content-area {
 
 <p>生成的 HTML 文件可直接在浏览器中打开。</p>
 <h2 id="目录结构">目录结构</h2>
-<div class="codehilite"><pre><span></span><code>MDViewer/
+<div class="codehilite"><pre><span></span><code>MarkdownReader/
 ├── main.py
 ├── renderer.py
 ├── toc.py
@@ -1191,7 +1191,7 @@ body.resizing .content-area {
 <h4 id="阅读位置恢复">阅读位置恢复</h4>
 <p>关闭浏览器前自动记录当前滚动位置，再次打开时自动恢复。</p>
 <hr>
-<p><em>感谢使用 MDViewer！</em></p>
+<p><em>感谢使用 MarkdownReader！</em></p>
             </article>
         </main>
     </div>
@@ -1200,7 +1200,7 @@ body.resizing .content-area {
     <button class="back-to-top-btn" id="back-to-top-btn" title="返回顶部" aria-label="返回顶部">↑</button>
 <script>
 /* ================================================================
-   MDViewer — Viewer JavaScript
+   MarkdownReader — Viewer JavaScript
    Phase 1: TOC click jump, Scroll Spy
    Phase 2: TOC/content folding, fold sync, image lightbox,
             code copy, reading position restore
@@ -1580,7 +1580,7 @@ body.resizing .content-area {
     // ============================================================
     // Phase 2 — Module 7: Reading Position Restore
     // ============================================================
-    var scrollStorageKey = "mdviewer-scroll-" + (document.title || "document");
+    var scrollStorageKey = "markdownreader-scroll-" + (document.title || "document");
 
     function saveScrollPosition() {
         try {
@@ -1681,7 +1681,7 @@ body.resizing .content-area {
     // ============================================================
     // Phase 3 — Module 9: Dark Mode
     // ============================================================
-    var themeStorageKey = "mdviewer-theme";
+    var themeStorageKey = "markdownreader-theme";
 
     function applyTheme(mode) {
         if (mode === "dark") {
@@ -1732,7 +1732,7 @@ body.resizing .content-area {
     // ============================================================
     // Phase 3 — Module 10: Auto Numbering
     // ============================================================
-    var numberingStorageKey = "mdviewer-autonumbering";
+    var numberingStorageKey = "markdownreader-autonumbering";
 
     function markAlreadyNumberedHeadings() {
         var headings = getContentHeadings();
@@ -1801,7 +1801,7 @@ body.resizing .content-area {
     // ============================================================
     // Phase 3 — Module 11: TOC Resize (drag handle)
     // ============================================================
-    var tocWidthStorageKey = "mdviewer-toc-width";
+    var tocWidthStorageKey = "markdownreader-toc-width";
     var minWidth = 180;
     var maxWidth = 500;
 

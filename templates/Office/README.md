@@ -1,15 +1,11 @@
-# Office 模板
+﻿# Office 模板
 
 Office 是面向正式 Markdown 输出的类 Word 文档模板，适用于报告、论文、制度
 文件、审计与会计材料，以及经常打印或导出 PDF 的文档。
 
 ## 使用方式
 
-通过 MDViewer GUI 选择 `office` 模板。历史命令行调用形式为：
-
-```bash
-python main.py document.md --template office
-```
+运行 `python main.py` 启动 GUI，添加文档后选择 `office` 模板并开始转换。当前入口仅启动 GUI，不处理文档路径或 `--template` 命令行参数。
 
 模板继承共享的 `default`，因此复用阅读器布局、目录行为、折叠、图片放大、
 代码复制、表格包装和共享打印样式。

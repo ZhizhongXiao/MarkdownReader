@@ -18,7 +18,7 @@
 
 ## 当前项目状态
 
-MDViewer 当前处于个人正式版候选 / 内部发布候选阶段，已通过最终打包前标准回归。
+MarkdownReader 当前处于个人正式版候选 / 内部发布候选阶段，已通过最终打包前标准回归。
 
 本阶段优先：
 
@@ -103,7 +103,7 @@ MDViewer 当前处于个人正式版候选 / 内部发布候选阶段，已通�
 
 如果修改打包配置，确认：
 
-- `packaging/MDViewer.spec`
+- `packaging/MarkdownReader.spec`
 - `packaging/assets/`
 - `packaging/node/node.exe`
 

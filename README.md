@@ -1,11 +1,13 @@
-﻿# MDViewer
+﻿# MarkdownReader
 
-MDViewer 是一款离线 Markdown 转 HTML 阅读器生成工具。
+MarkdownReader 是一款离线 Markdown 转 HTML 阅读器生成工具。
+
+项目名称、应用窗口和构建产物统一使用 `MarkdownReader`；可执行文件为 `MarkdownReader.exe`，构建配置为 `packaging/MarkdownReader.spec`。 命名约定见 [项目命名说明](docs/NAMING.md)。
 
 它将一个或多个 Markdown 文件转换为适合阅读、导航和打印的独立 HTML 文档。
-生成结果包含所需的 CSS 与 JavaScript，无需服务器、CDN 或网络连接。
+生成结果内置阅读器 CSS、JavaScript 和公式样式、字体，无需服务器或 CDN。源文档引用的图片等外部资源不会自动复制或嵌入；离线阅读需自行保证资源可访问，网络图片仍需要网络连接。
 
-> 当前项目已完成最终打包前标准回归，适合作为个人正式版候选或内部发布候选使用，暂不作为公开开源项目发布。
+> 项目面向个人使用和内部发布。发布前仍需对本次构建完成回归与实机验证。
 
 ## 功能概览
 
@@ -16,7 +18,7 @@ MDViewer 是一款离线 Markdown 转 HTML 阅读器生成工具。
 - 图片点击放大
 - 代码复制
 - 超宽表格与长代码横向滚动
-- 行内公式与块级公式服务端渲染
+- 行内公式与块级公式由本地 Node.js 预渲染
 - Markdown 脚注和清单内跨文档链接重写
 - 明暗主题、自动编号与打印优化
 - 批量文档索引
@@ -24,38 +26,53 @@ MDViewer 是一款离线 Markdown 转 HTML 阅读器生成工具。
 
 ## 效果截图
 
-### GUI
+### GUI（浅色模式）
 
-![MDViewer GUI](docs/screenshots/gui_main.png)
+![MarkdownReader 主界面浅色模式](docs/screenshots/gui_main.png)
 
-### Modern
+左侧为输入源、输出设置和选项，右侧为“列表 / 预览 / 日志”页签；“预览”展示模板风格示意，不是当前 Markdown 的实时渲染。
 
-![Modern 模板效果](docs/screenshots/demo_modern.png)
+<details>
+<summary>查看 GUI 深色模式</summary>
 
-### Office
+![MarkdownReader 主界面深色模式](docs/screenshots/gui_dark.png)
 
-![Office 模板效果](docs/screenshots/demo_office.png)
+两张 GUI 截图均选择 Modern 模板，右侧为模板风格示意；GUI 明暗模式与阅读模板的明暗模式分别控制。
 
-### VS Code
+</details>
 
-![VS Code 模板效果](docs/screenshots/demo_vscode.png)
+### 阅读模板
+
+三套模板均支持明暗切换；以下使用同一份 [阅读示例](samples/demo.md)，展示 Modern、Office 的浅色模式和 VS Code 的深色模式。
+
+### Modern（浅色模式）
+
+![Modern 模板浅色模式](docs/screenshots/demo_modern.png)
+
+### Office（浅色模式）
+
+![Office 模板浅色模式](docs/screenshots/demo_office.png)
+
+### VS Code（深色模式）
+
+![VS Code 模板深色模式](docs/screenshots/demo_vscode.png)
 
 ## 普通用户
 
-普通用户建议直接使用打包后的 `MDViewer.exe`。
+普通用户建议直接使用打包后的 `MarkdownReader.exe`。
 
 基本流程：
 
-1. 打开 `MDViewer.exe`。
+1. 打开 `MarkdownReader.exe`。
 2. 单选/复选 Markdown 文件，选择文件夹，或从资源管理器拖入文件和文件夹。
 3. 选择输出目录。
 4. 选择模板：`modern`、`office` 或 `vscode`。
 5. 按“开始转换”。
-6. 在浏览器中阅读生成的 HTML。
+6. 在“列表”查看逐文件状态；完成后点击“打开 HTML”阅读，或点击“输出目录”查看文件。启用“自动打开”时会自动打开阅读入口，批量生成索引时优先打开索引。
 
 正式发布的 EXE 支持内置 Node.js。内置后，普通用户无需再安装 Python、Node.js 或 npm 依赖。
 
-配置会在点击“开始转换”后保存到 `MDViewer.exe` 同级目录的 `config.json`，下次启动时自动恢复。
+输入预检通过后，点击“开始转换”会将设置保存到 `MarkdownReader.exe` 同级目录的 `config.json`（源码运行时为项目根目录）。下次启动恢复设置；输入记录仅保存第一个输入来源的目录，不保存完整的多选文件清单。
 
 ## 开发者
 
@@ -88,6 +105,7 @@ python main.py
 运行自动化测试：
 
 ```powershell
+python -m pip install pytest
 python -m pytest -q
 ```
 
@@ -107,19 +125,19 @@ notes/demo.md
 输出目录/demo.html
 ```
 
-生成的 HTML 是单文件阅读页，内置样式、脚本、目录、正文和必要资源引用。
+生成的 HTML 内置样式、脚本、目录和正文。图片等外部资源引用保持原样；若输出位置改变，相对路径可能失效，需要手动安排资源位置。
 
 ### 多文件复选
 
 点击“添加文件”后，可在 Windows 文件窗口中使用 `Ctrl` 或 `Shift` 复选多个
 Markdown。也可以从资源管理器直接拖入文件或文件夹。所有实际参与转换的文档会先
-显示在右侧“转换清单”中；重复文件自动去重，输出文件冲突会在写入前阻止转换。
+显示在右侧“列表”页签中，可搜索文档并查看逐文件状态；重复文件自动去重，输出文件冲突会在写入前阻止转换。
 
 ### 文件夹批量转换
 
-选择一个文件夹时，程序会递归收集其中的 `.md` 文件。
+选择一个文件夹时，程序会递归收集其中的 `.md` 和 `.markdown` 文件（扩展名不区分大小写）。
 
-默认输出：
+未开启“保留目录结构”、且启用“生成索引”时输出：
 
 ```text
 输出目录/
@@ -140,7 +158,7 @@ Markdown。也可以从资源管理器直接拖入文件或文件夹。所有实
     索引-源文件夹名.html
 ```
 
-索引页用于集中跳转到各个生成文档。文档链接默认在新标签页打开，看完后关闭标签页即可回到索引。
+索引页用于集中跳转到各个生成文档。文档链接默认在新标签页打开，看完后关闭标签页即可回到索引。取消“生成索引”后不生成索引页；多文件或混合来源批量转换的索引名为 `index.html`，单个文件直接转换不生成索引。
 
 ### 脚注与跨文档链接
 
@@ -155,7 +173,7 @@ Markdown。也可以从资源管理器直接拖入文件或文件夹。所有实
 ```
 
 当目标 Markdown 同样位于本次转换清单中时，链接会按照实际输出位置改写为 `.html`。
-文档内 `#锚点`、网络链接和已经写成 `.html` 的旧链接保持不变。目标存在但没有加入
+文档内 `#锚点`、网络链接和已经写成 `.html` 的旧链接保持不变。目标没有加入
 转换清单时，程序保留原链接并在转换清单和日志中给出警告。
 
 ### 覆盖规则
@@ -190,13 +208,19 @@ Markdown。也可以从资源管理器直接拖入文件或文件夹。所有实
 
 ## 打包
 
-构建单文件 Windows EXE：
+完成 Python 和 npm 依赖安装后，先安装打包工具：
 
 ```powershell
-python -m PyInstaller --clean --noconfirm --workpath "packaging\.pyinstaller-build" --distpath "dist" packaging\MDViewer.spec
+python -m pip install pyinstaller Pillow
 ```
 
-该命令会把 PyInstaller 的中间构建缓存放在 `packaging/.pyinstaller-build/`，最终产物输出到 `dist/MDViewer.exe`。这样可以避开默认 `build/` 目录可能出现的权限占用问题，同时仍然把缓存和输出保留在项目文件夹中，便于检查和清理。
+在项目根目录构建单文件 Windows EXE：
+
+```powershell
+python -m PyInstaller --clean --noconfirm --workpath "packaging\.pyinstaller-build" --distpath "dist" packaging\MarkdownReader.spec
+```
+
+该命令会把 PyInstaller 的中间构建缓存放在 `packaging/.pyinstaller-build/`，最终产物输出到 `dist/MarkdownReader.exe`。这样可以避开默认 `build/` 目录可能出现的权限占用问题，同时仍然把缓存和输出保留在项目文件夹中，便于检查和清理。
 
 发布前如需确保没有旧产物残留，可以先删除 `dist/`，再重新执行上面的打包命令。`packaging/.pyinstaller-build/` 是构建缓存，打包完成后可以安全删除。
 
@@ -206,7 +230,7 @@ python -m PyInstaller --clean --noconfirm --workpath "packaging\.pyinstaller-bui
 packaging/node/node.exe
 ```
 
-打包后的 EXE 会优先使用内置 Node；如果未内置，则回退到系统 `PATH` 中的 `node`。当前项目已按该结构放入并验证过 `packaging/node/node.exe`。
+打包后的 EXE 会优先使用内置 Node；如果未内置，则回退到系统 `PATH` 中的 `node`。本地构建已准备 `packaging/node/node.exe`；此文件被 Git 忽略，重新检出源码后需自行准备，不能仅凭打包成功认定已内置 Node。
 
 详细说明见 [packaging/README.md](packaging/README.md)。
 
@@ -281,7 +305,8 @@ packaging/node/node.exe
 - Node 渲染器仍是必要组成部分；EXE 发布时应内置 Node.js，或要求用户本机安装 Node.js。
 - 打印分页无法做到与 Microsoft Word 100% 一致。
 - Markdown 原始 HTML 的复杂样式由浏览器自行解释，不保证所有网页级布局都适合打印。
-- 当前未提供完整 pytest 自动化套件；后续维护阶段建议补回。
+- 已有 pytest 测试，覆盖转换清单、渲染链接、批量转换和 GUI 结构约定；渲染测试需要 Node.js 和 npm 依赖，不能替代 GUI、打印和 EXE 实机验证。
+- 图片等外部资源不会自动复制或嵌入，分享 HTML 时需一并安排这些资源。
 
 ## 项目结构
 
@@ -290,14 +315,14 @@ core/                 Python 调度、配置、目录和文档生成层
 gui/                  pywebview 桌面界面
 node_renderer/        Node Markdown 渲染器
 templates/default/    共享基础阅读器模板
-templates/modern/     Modern 阅读主题
-templates/office/     Office 正式文档主题
-templates/vscode/     VS Code 预览主题
+templates/Modern/     Modern 阅读主题
+templates/Office/     Office 正式文档主题
+templates/Vscode/     VS Code 预览主题
 templates/viewer.js   共用浏览器交互逻辑
 templates/print.css   共用打印样式
 packaging/            PyInstaller 配置与程序图标
 docs/                 设计、架构、路线图和截图
-tests/                自动化测试预留目录
+tests/                转换清单、渲染链接、批量转换与 GUI 约定测试
 samples/              Markdown 测试样例
 ```
 

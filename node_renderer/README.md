@@ -1,6 +1,6 @@
-# MDViewer Node 渲染器
+﻿# MarkdownReader Node 渲染器
 
-MDViewer 使用的 Node.js Markdown 渲染服务。
+MarkdownReader 使用的 Node.js Markdown 渲染服务。npm 包标识统一为全小写 `markdownreader-node-renderer`，与 `package.json` 和 `package-lock.json` 保持一致。
 
 ## 依赖
 

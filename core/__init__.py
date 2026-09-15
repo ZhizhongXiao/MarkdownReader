@@ -1,1 +1,1 @@
-# MDViewer core modules
+# MarkdownReader core modules

@@ -1,4 +1,4 @@
-"""MDViewer logging configuration.
+"""MarkdownReader logging configuration.
 
 Uses Python's built-in logging module. Controlled by the --verbose flag.
 """

@@ -1,6 +1,6 @@
-# Default 基础模板
+﻿# Default 基础模板
 
-`default` 是 MDViewer 的共享基础模板，提供：
+`default` 是 MarkdownReader 的共享基础模板，提供：
 
 - 阅读器共用布局
 - 通用主题变量

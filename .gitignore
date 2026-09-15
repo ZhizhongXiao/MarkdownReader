@@ -17,7 +17,7 @@ output/
 dist/
 build/
 *.spec
-!packaging/MDViewer.spec
+!packaging/MarkdownReader.spec
 packaging/.pyinstaller-build/
 packaging/node/node.exe
 

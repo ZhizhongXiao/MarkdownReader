@@ -1,7 +1,7 @@
 {
-  "name": "mdviewer-node-renderer",
+  "name": "markdownreader-node-renderer",
   "version": "1.0.0",
-  "description": "Node.js Markdown renderer for MDViewer — reads Markdown from stdin, outputs HTML to stdout.",
+  "description": "Node.js Markdown renderer for MarkdownReader — reads Markdown from stdin, outputs HTML to stdout.",
   "private": true,
   "main": "render.js",
   "dependencies": {

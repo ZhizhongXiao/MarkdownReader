@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * MDViewer — Node.js Markdown renderer.
+ * MarkdownReader — Node.js Markdown renderer.
  *
  * Reads JSON from stdin:
  *   {"markdown": "...", "options": {"html": true, "math": true}}

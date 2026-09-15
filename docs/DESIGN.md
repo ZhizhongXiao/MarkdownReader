@@ -1,4 +1,4 @@
-# MDViewer 设计文档
+# MarkdownReader 设计文档
 
 版本：1.0 发布候选
 
@@ -6,7 +6,7 @@
 
 ## 1. 项目定位
 
-MDViewer 是一个离线 Markdown 文档阅读器生成工具。
+MarkdownReader 是一个离线 Markdown 文档阅读器生成工具。
 
 它将一个或多个 Markdown 文件转换为独立 HTML，用于：
 
@@ -17,7 +17,7 @@ MDViewer 是一个离线 Markdown 文档阅读器生成工具。
 
 生成的 HTML 是项目的核心交付结果。GUI、CLI 和打包程序都只是围绕“生成可离线阅读的 HTML”提供入口。
 
-MDViewer 不是：
+MarkdownReader 不是：
 
 - Markdown 编辑器
 - 实时预览编辑器

@@ -1,4 +1,4 @@
-# MDViewer 架构文档
+# MarkdownReader 架构文档
 
 版本：1.0 发布候选
 
@@ -6,7 +6,7 @@
 
 ## 1. 总览
 
-MDViewer 由四层组成：
+MarkdownReader 由四层组成：
 
 ```text
 GUI / CLI
@@ -139,9 +139,9 @@ templates/print.css
 个性化模板：
 
 ```text
-templates/modern/theme.css
-templates/office/theme.css
-templates/vscode/theme.css
+templates/Modern/theme.css
+templates/Office/theme.css
+templates/Vscode/theme.css
 ```
 
 索引模板：
@@ -209,9 +209,9 @@ config.json
 打包文件：
 
 ```text
-packaging/MDViewer.spec
-packaging/assets/MDViewer.ico
-packaging/assets/MDViewer_splash.png
+packaging/MarkdownReader.spec
+packaging/assets/MarkdownReader.ico
+packaging/assets/MarkdownReader_splash.png
 ```
 
 PyInstaller 打包内容：

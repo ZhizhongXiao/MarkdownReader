@@ -1,4 +1,10 @@
-# MDViewer 更新日志
+﻿# MarkdownReader 更新日志
+
+## [未发布] - 2026-09-15
+
+- 应用、窗口标题及构建产物统一命名为 `MarkdownReader`。
+- 重命名 spec、图标和启动图资源，更新 npm 包名及文档引用。
+- WebView2 使用 `MarkdownReader/WebView2` 缓存目录；阅读页存储键统一为 `markdownreader-*`，未发布阶段不保留旧名称兼容。
 
 ---
 
@@ -99,8 +105,8 @@
 
 - 增加模板继承系统，子模板通过 CSS 层叠覆盖基础模板变量。
 - 新增 `templates/default/` 作为完整共享基础模板。
-- 新增 `templates/office/` 正式文档主题。
-- 新增 `templates/vscode/` 技术阅读主题。
+- 新增 `templates/Office/` 正式文档主题。
+- 新增 `templates/Vscode/` 技术阅读主题。
 - 将 `viewer.js` 移至 `templates/` 根目录，供全部模板共享。
 - 将 `print.css` 移至 `templates/` 根目录，供全部模板共享。
 - 每个模板通过 `metadata.json` 声明名称、作者、版本、说明和父模板。

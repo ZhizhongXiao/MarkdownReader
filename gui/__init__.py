@@ -1,1 +1,1 @@
-"""MDViewer GUI package."""
+"""MarkdownReader GUI package."""

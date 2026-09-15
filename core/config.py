@@ -1,4 +1,4 @@
-"""MDViewer configuration management.
+"""MarkdownReader configuration management.
 
 Handles loading config.json, merging with CLI overrides, and providing
 template paths with inheritance chain resolution.

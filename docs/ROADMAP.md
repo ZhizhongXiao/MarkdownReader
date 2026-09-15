@@ -1,4 +1,4 @@
-# MDViewer 路线图
+# MarkdownReader 路线图
 
 版本：1.0 发布候选
 
@@ -11,13 +11,13 @@
 建议版本标记：
 
 ```text
-MDViewer 1.0.0-rc
+MarkdownReader 1.0.0-rc
 ```
 
 完成最终 EXE 重新打包、干净目录试跑和版本/许可证确认后，可升为：
 
 ```text
-MDViewer 1.0.0
+MarkdownReader 1.0.0
 ```
 
 ---
@@ -108,7 +108,7 @@ MDViewer 1.0.0
 
 ### 阶段 8：项目整理
 
-- 项目名称统一为 MDViewer
+- 项目名称统一为 MarkdownReader
 - 配置迁移为 `config.json`
 - 文档汉化
 - README 更新
@@ -129,7 +129,7 @@ MDViewer 1.0.0
 ### 必做
 
 - 重新打包 EXE。
-- 在干净目录中只放 `MDViewer.exe` 试跑。
+- 在干净目录中只放 `MarkdownReader.exe` 试跑。
 - 确认 `config.json` 写入 EXE 同级目录。
 - 确认单文件转换、批量转换、索引页、三套模板均正常。
 - 明确正式版本号和许可证或保留全部权利声明。

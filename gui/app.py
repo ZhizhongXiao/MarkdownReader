@@ -1,4 +1,4 @@
-"""MDViewer GUI entry point — pywebview window with log bridging."""
+"""MarkdownReader GUI entry point — pywebview window with log bridging."""
 
 import importlib
 import json
@@ -81,7 +81,7 @@ def get_webview_storage_path() -> str:
     base = os.environ.get("LOCALAPPDATA")
     if not base:
         base = os.path.join(os.path.expanduser("~"), "AppData", "Local")
-    return os.path.join(base, "MDViewer", "WebView2")
+    return os.path.join(base, "MarkdownReader", "WebView2")
 
 
 def close_splash():
@@ -102,7 +102,7 @@ def load_gui_document() -> str:
     js_path = os.path.join(assets_dir, "gui.js")
     required = (html_path, css_path, js_path)
     if not all(os.path.isfile(path) for path in required):
-        return "<html><body><h1>MDViewer</h1><p>HTML asset not found.</p></body></html>"
+        return "<html><body><h1>MarkdownReader</h1><p>HTML asset not found.</p></body></html>"
 
     with open(html_path, "r", encoding="utf-8") as handle:
         document = handle.read()
@@ -152,9 +152,9 @@ def main():
         "hidden": True,
     }
     kwargs["html"] = html_content
-    window = webview.create_window("MDViewer — Markdown to HTML", **kwargs)
+    window = webview.create_window("MarkdownReader — Markdown to HTML", **kwargs)
     if window is None:
-        raise RuntimeError("无法创建 MDViewer 窗口。")
+        raise RuntimeError("无法创建 MarkdownReader 窗口。")
     api.attach_window(window)
 
     # Attach log bridge
@@ -215,7 +215,7 @@ def main():
 
     window.events.loaded += reveal_window
 
-    _logger.info("MDViewer 已启动，请选择 Markdown 文件后开始转换。")
+    _logger.info("MarkdownReader 已启动，请选择 Markdown 文件后开始转换。")
 
     try:
         webview.start(

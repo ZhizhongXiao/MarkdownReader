@@ -1,4 +1,4 @@
-/* MDViewer — Shared Print Stylesheet */
+/* MarkdownReader — Shared Print Stylesheet */
 @media print {
     .toolbar,.toc-sidebar,.toc-resizer,.back-to-top-btn,.toc-toggle,.heading-toggle,.copy-btn,.lightbox-overlay{display:none!important}
     html,body{overflow:visible!important;height:auto!important}

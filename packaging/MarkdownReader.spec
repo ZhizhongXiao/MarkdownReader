@@ -23,8 +23,8 @@ add_tree(datas, project_root / "node_renderer", "node_renderer")
 # building if the release should run without user-installed Node.js.
 add_tree(datas, packaging_dir / "node", "node")
 
-icon_file = assets_dir / "MDViewer.ico"
-splash_file = assets_dir / "MDViewer_splash.png"
+icon_file = assets_dir / "MarkdownReader.ico"
+splash_file = assets_dir / "MarkdownReader_splash.png"
 
 
 a = Analysis(
@@ -61,7 +61,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name="MDViewer",
+    name="MarkdownReader",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
