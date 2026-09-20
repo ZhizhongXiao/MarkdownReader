@@ -1,6 +1,7 @@
 """MarkdownReader logging configuration.
 
-Uses Python's built-in logging module. Controlled by the --verbose flag.
+Uses Python's built-in logging module. Verbosity is decided by the caller
+through setup_logging(); no command-line switch is involved.
 """
 
 import logging

@@ -55,16 +55,12 @@ _DEFAULTS: dict = {
     "input": "",
     "template": "modern",
     "output": "output",
-    "theme": "auto",
     "numbering": False,
-    "copy_assets": True,
     "build_index": True,
     "auto_open": True,
     "overwrite": False,
     "preserve_structure": False,
     "title": None,
-    "verbose": False,
-    "markdown_engine": "node",
 }
 
 _TEMPLATE_ALIASES: dict[str, str] = {
@@ -106,15 +102,11 @@ def _parse_json(filepath: str) -> dict:
         ("build", "input"): "input",
         ("build", "template"): "template",
         ("build", "output"): "output",
-        ("build", "markdown_engine"): "markdown_engine",
-        ("document", "theme"): "theme",
         ("document", "numbering"): "numbering",
-        ("features", "copy_assets"): "copy_assets",
         ("features", "build_index"): "build_index",
         ("features", "auto_open"): "auto_open",
         ("features", "overwrite"): "overwrite",
         ("features", "preserve_structure"): "preserve_structure",
-        ("features", "verbose"): "verbose",
     }
     for (section, key), flat_key in section_map.items():
         if isinstance(data.get(section), dict) and key in data[section]:
@@ -249,22 +241,3 @@ def get_shared_viewer_js_path() -> str:
 def get_shared_print_css_path() -> str:
     """Get path to the shared print.css."""
     return _SHARED_PRINT_CSS
-
-
-def get_template_paths(template_name: str = "modern") -> dict:
-    """Get paths to all template files resolved through inheritance.
-
-    Returns dict with keys: html, css, js, print_css, theme_chain.
-    """
-    chain = resolve_template_chain(template_name)
-
-    html_path = resolve_template_file(template_name, "viewer.html")
-    css_path = resolve_template_file(template_name, "viewer.css")
-
-    return {
-        "html": html_path,
-        "css": css_path,
-        "js": _SHARED_VIEWER_JS,
-        "print_css": _SHARED_PRINT_CSS,
-        "chain": chain,
-    }

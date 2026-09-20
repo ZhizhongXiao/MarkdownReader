@@ -543,7 +543,6 @@ async function runConvert() {
             template,
             true,
             buildIndex,
-            true,
             autoOpen,
             preserveStructure
         );

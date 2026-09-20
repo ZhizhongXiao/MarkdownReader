@@ -57,9 +57,7 @@ main.py               GUI 启动入口
 core/config.py          配置、路径、模板继承解析
 core/converter.py       单文件和批量转换流程
 core/conversion_plan.py 转换前输入展开、输出路径和冲突预检
-core/renderer.py        渲染入口
 core/renderer_node.py   Node 渲染桥接
-core/renderer_python.py Python 渲染器（遗留，非产品主路径；产品固定使用 Node）
 core/toc.py             TOC HTML 生成（标题由 Node 渲染器提供）
 core/index_builder.py   批量索引页生成
 core/fm.py              Front Matter 解析

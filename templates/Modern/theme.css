@@ -3,15 +3,12 @@
 :root {
     --toolbar-height: 40px;
     --sidebar-width: 280px;
-    --sidebar-min-width: 180px;
-    --sidebar-max-width: 500px;
     --content-max-width: 860px;
     --font-size-base: 16px;
     --font-size-code: 0.9em;
     --line-height-base: 1.8;
 
     --color-bg: #f5f7fb;
-    --color-surface: #ffffff;
     --color-sidebar-bg: #ffffff;
     --color-sidebar-border: #d7dee8;
     --color-toolbar-bg: #fbfcfe;
@@ -44,7 +41,6 @@
     --toc-indent: 1em;
     --toggle-size: 16px;
     --toc-toggle-width: 20px;
-    --toc-number-width: 2.5em;
 
     --reader-ui-font: "Source Han Sans SC";
     --reader-ui-font-size: 16px;
@@ -53,7 +49,6 @@
 
 [data-theme="dark"] {
     --color-bg: #020617;
-    --color-surface: #0f172a;
     --color-sidebar-bg: #0f172a;
     --color-sidebar-border: #334155;
     --color-toolbar-bg: #1e293b;

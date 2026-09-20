@@ -90,11 +90,6 @@ class BridgeApi:
         root.destroy()
         return list(paths) if paths else []
 
-    def select_input_file(self) -> str:
-        """Backward-compatible single-file wrapper."""
-        paths = self.select_input_files()
-        return paths[0] if paths else ""
-
     def select_input_directory(self) -> str:
         """Open a folder dialog to select a directory of .md files."""
         from tkinter import Tk
@@ -171,10 +166,6 @@ class BridgeApi:
         """Return full merged configuration."""
         return load_config()
 
-    def set_config(self, key: str, value) -> None:
-        """Update a single config key and persist to config.json."""
-        self.set_configs({key: value})
-
     def set_configs(self, overrides: dict) -> None:
         """Update multiple config keys and persist to config.json."""
         cfg = load_config()
@@ -195,14 +186,11 @@ class BridgeApi:
                 "input": cfg.get("input", ""),
                 "template": cfg.get("template", "modern"),
                 "output": cfg.get("output", "output"),
-                "markdown_engine": cfg.get("markdown_engine", "node"),
             },
             "document": {
-                "theme": cfg.get("theme", "auto"),
                 "numbering": bool(cfg.get("numbering", False)),
             },
             "features": {
-                "copy_assets": bool(cfg.get("copy_assets", True)),
                 "build_index": bool(cfg.get("build_index", True)),
                 "auto_open": bool(cfg.get("auto_open", True)),
                 "preserve_structure": bool(cfg.get("preserve_structure", False)),
@@ -222,7 +210,6 @@ class BridgeApi:
         template: str = "modern",
         overwrite: bool = False,
         build_index: bool = True,
-        verbose: bool = False,
         auto_open: bool = False,
         preserve_structure: bool = False,
     ) -> dict:
@@ -234,7 +221,6 @@ class BridgeApi:
             template: Template name.
             overwrite: Overwrite existing files.
             build_index: Generate index.html.
-            verbose: Detailed logging.
             auto_open: Open HTML in browser after generation.
             preserve_structure: Recreate source subdirectories under a
                 source-name-HTML output directory.
@@ -259,7 +245,6 @@ class BridgeApi:
             "output": output_dir,
             "overwrite": overwrite,
             "build_index": build_index,
-            "verbose": verbose,
             "preserve_structure": preserve_structure,
         }
 

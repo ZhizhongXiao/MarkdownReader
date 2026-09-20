@@ -23,7 +23,6 @@
     --font-mono: monospace;
 
     --color-bg: var(--office-app-bg);
-    --color-surface: var(--office-page-bg);
     --color-sidebar-bg: #f8f8f8;
     --color-sidebar-border: var(--office-border);
     --color-toolbar-bg: #ffffff;
@@ -66,7 +65,6 @@
     --office-hr-border: #555555;
 
     --color-bg: var(--office-app-bg);
-    --color-surface: var(--office-page-bg);
     --color-sidebar-bg: #1b1b1b;
     --color-sidebar-border: var(--office-border);
     --color-toolbar-bg: #1f1f1f;

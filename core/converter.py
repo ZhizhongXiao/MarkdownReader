@@ -24,11 +24,10 @@ from core.conversion_plan import (
 )
 from core.fm import parse_front_matter
 from core.index_builder import DEFAULT_INDEX_FILENAME, build_index
-from core.renderer import render_markdown  # unified entry (python/node)
+from core.renderer_node import render_markdown_node
 from core.toc import generate_toc_html
 
 _logger = logging.getLogger(__name__)
-_DOCUMENT_RENDER_ENGINE = "node"
 
 
 def _theme_body_class(template_name: str) -> str:
@@ -75,12 +74,6 @@ def process_single(
         The output path on success, or None on failure.
     """
     template_name = normalize_template_name(cfg.get("template", "modern"))
-    configured_engine = cfg.get("markdown_engine", _DOCUMENT_RENDER_ENGINE)
-    if configured_engine != _DOCUMENT_RENDER_ENGINE:
-        _logger.warning(
-            "已忽略 markdown_engine=%s；Markdown 正文统一由 Node 渲染。",
-            configured_engine,
-        )
 
     # 1. Read Markdown
     try:
@@ -101,9 +94,8 @@ def process_single(
     )
 
     # 4. Render Markdown → HTML body
-    render_result = render_markdown(
+    render_result = render_markdown_node(
         body_md,
-        engine=_DOCUMENT_RENDER_ENGINE,
         context=link_context,
     )
     if not isinstance(render_result, dict):

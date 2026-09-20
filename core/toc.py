@@ -1,99 +1,12 @@
 """TOC (Table of Contents) generator.
 
-Extracts headings from Markdown source text and generates a nested
-HTML list suitable for use as a navigation sidebar.
+Builds the navigation sidebar HTML from the heading list supplied by the
+Node renderer.
 
 v5.1 — Flat TOC with CSS Grid layout, number splitting, CSS triangles.
 """
 
 import re
-import unicodedata
-
-# Counter for fallback IDs (shared with renderer.py via config)
-_fallback_counter = 0
-
-
-def reset_fallback_counter():
-    """Reset the fallback ID counter. Call before each document processing."""
-    global _fallback_counter
-    _fallback_counter = 0
-
-
-def slugify_unicode(text: str, separator: str = "-") -> str:
-    """Convert heading text to a URL-friendly slug, preserving Unicode."""
-
-    text = unicodedata.normalize("NFC", text)
-    text = text.lower()
-    text = re.sub(r"\s+", separator, text)
-    result = []
-    for ch in text:
-        cat = unicodedata.category(ch)
-        if cat.startswith("L") or cat.startswith("N") or cat.startswith("M"):
-            result.append(ch)
-        elif ch == separator:
-            result.append(ch)
-        else:
-            result.append(separator)
-    text = "".join(result)
-    text = re.sub(r"{}+".format(re.escape(separator)), separator, text)
-    text = text.strip(separator)
-    return text
-
-
-def extract_headings(md_text: str) -> list[dict]:
-    """Extract all ATX headings from Markdown text."""
-    global _fallback_counter
-    reset_fallback_counter()
-
-    headings = []
-    heading_pattern = re.compile(r"^ {0,3}(#{1,6})\s+(.+)$")
-    fence_open_pattern = re.compile(r"^ {0,3}(`{3,}|~{3,})")
-    used_anchors: set[str] = set()
-    in_fence = False
-    fence_char = ""
-    fence_len = 0
-
-    def unique(name: str) -> str:
-        base = name
-        counter = 1
-        while name in used_anchors:
-            counter += 1
-            name = f"{base}{counter}"
-        used_anchors.add(name)
-        return name
-
-    for line in md_text.splitlines():
-        if in_fence:
-            if re.match(rf"^ {{0,3}}{re.escape(fence_char)}{{{fence_len},}}\s*$", line):
-                in_fence = False
-                fence_char = ""
-                fence_len = 0
-            continue
-
-        fence_match = fence_open_pattern.match(line)
-        if fence_match:
-            marker = fence_match.group(1)
-            in_fence = True
-            fence_char = marker[0]
-            fence_len = len(marker)
-            continue
-
-        match = heading_pattern.match(line)
-        if not match:
-            continue
-
-        hashes = match.group(1)
-        text = match.group(2).strip()
-        text = re.sub(r"\s+#+\s*$", "", text)
-        level = len(hashes)
-        anchor = slugify_unicode(text, separator="-")
-        if not anchor:
-            _fallback_counter += 1
-            anchor = f"_{_fallback_counter}"
-        anchor = unique(anchor)
-        headings.append({"level": level, "text": text, "anchor": anchor})
-
-    return headings
 
 
 # ─────────────────────────────────────────────────────────────────

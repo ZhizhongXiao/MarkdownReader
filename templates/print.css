@@ -5,7 +5,6 @@
     .viewer-container{display:block!important;height:auto!important}
     .content-area{overflow:visible!important;padding:0!important;height:auto!important}
     .markdown-body{max-width:100%!important}
-    .toc-collapsed>.toc-list{display:block!important}
     [data-theme="dark"]{--color-bg:#ffffff!important;--color-text:#000!important;--color-heading:#000!important;--color-code-bg:#f4f4f4!important}
     body{color:#000!important;background:#fff!important}
     .markdown-body h1,.markdown-body h2,.markdown-body h3,.markdown-body h4,.markdown-body h5,.markdown-body h6{break-after:avoid-page;page-break-after:avoid;break-inside:avoid-page;page-break-inside:avoid}

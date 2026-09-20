@@ -13,7 +13,6 @@
     --font-mono: "Source Han Sans SC";
 
     --color-bg: #f3f3f3;
-    --color-surface: #ffffff;
     --color-sidebar-bg: #f8f8f8;
     --color-sidebar-border: #d0d7de;
     --color-toolbar-bg: #f3f3f3;
@@ -41,13 +40,11 @@
 
     --toc-indent: 1em;
     --toc-toggle-width: 20px;
-    --toc-number-width: 2.5em;
     --toggle-size: 16px;
 }
 
 [data-theme="dark"] {
     --color-bg: #1e1e1e;
-    --color-surface: #1e1e1e;
     --color-sidebar-bg: #252526;
     --color-sidebar-border: #3c3c3c;
     --color-toolbar-bg: #2d2d2d;
