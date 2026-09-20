@@ -9,7 +9,7 @@
 MarkdownReader 由四层组成：
 
 ```text
-GUI / CLI
+pywebview GUI
     ↓
 Python 核心调度层
     ↓
@@ -37,11 +37,15 @@ templates/            阅读器模板和索引模板
 packaging/            PyInstaller 打包配置与图标资源
 samples/              Markdown 示例和参考输出
 docs/                 设计、架构、路线图、更新日志和截图
+tests/                pytest 自动化测试
 config.json           GUI 保存的运行配置
 main.py               GUI 启动入口
 ```
 
-`tests/` 是自动化测试预留目录。当前发布前验证以静态检查、标准回归脚本和打包后手动试跑为主。
+`tests/` 包含当前 pytest 自动化测试，覆盖转换计划、跨文档链接与脚注渲染、
+批量转换集成以及 GUI 资源/契约。渲染相关测试需要本机 Node.js 与
+`node_renderer/node_modules`。自动化测试目前不覆盖 GUI 运行时交互、
+浏览器打印和打包后 EXE 的完整实机行为。
 
 ---
 
@@ -55,8 +59,8 @@ core/converter.py       单文件和批量转换流程
 core/conversion_plan.py 转换前输入展开、输出路径和冲突预检
 core/renderer.py        渲染入口
 core/renderer_node.py   Node 渲染桥接
-core/renderer_python.py Python 备用渲染器
-core/toc.py             标题提取和 TOC HTML
+core/renderer_python.py Python 渲染器（遗留，非产品主路径；产品固定使用 Node）
+core/toc.py             TOC HTML 生成（标题由 Node 渲染器提供）
 core/index_builder.py   批量索引页生成
 core/fm.py              Front Matter 解析
 core/logger.py          日志配置
@@ -152,7 +156,8 @@ templates/index/theme.css
 templates/index/index.js
 ```
 
-模板继承由 `metadata.json` 声明。子模板不复制 `viewer.js`，只覆盖 CSS。
+模板继承由 `metadata.json` 声明。基础与子模板的 `theme.css` 按继承链顺序加载，
+子模板通过 CSS 层叠覆盖基础变量和规则；`viewer.js` 为所有模板共享，不在子模板中复制。
 
 ---
 
@@ -176,7 +181,7 @@ templates/viewer.js
 - 图片放大
 - 代码复制
 - 表格和代码块滚动包装
-- 打印前状态处理
+- 打印触发（`window.print()`）；打印版式由 `print.css` 的 `@media print` 提供
 
 JavaScript 不解析 Markdown。
 
@@ -246,7 +251,7 @@ config.json
 优先级：
 
 ```text
-CLI / GUI overrides > config.json > 默认值
+运行时 overrides > config.json > 默认值
 ```
 
 ---
