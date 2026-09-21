@@ -14,6 +14,7 @@ tests never re-implement number splitting or inline rendering to derive an
 expected value.
 """
 
+import base64
 import re
 import sys
 from pathlib import Path
@@ -28,6 +29,21 @@ import core.converter as converter  # noqa: E402
 from core.renderer_node import render_markdown_node  # noqa: E402
 
 CONFIG = {"template": "modern", "numbering": False, "overwrite": True}
+
+# Minimal 1x1 PNG so Markdown image fixtures resolve to a real file.
+_MINIMAL_PNG = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg=="
+)
+
+
+def _image_context(tmp_path: Path) -> dict:
+    """Write the image fixture next to the source file and return the render context."""
+    (tmp_path / "x.png").write_bytes(_MINIMAL_PNG)
+    return {
+        "source_path": str(tmp_path / "heading.md"),
+        "output_path": str(tmp_path / "heading.html"),
+        "document_map": {},
+    }
 
 # Heading inline source, expected .toc-number, expected .toc-title HTML.
 TOC_EXPECTATIONS = [
@@ -74,7 +90,9 @@ def _convert(tmp_path: Path, markdown: str) -> str:
     source = tmp_path / "heading.md"
     source.write_text("# " + markdown + "\n", encoding="utf-8")
     output = tmp_path / "heading.html"
-    result = converter.process_single(str(source), str(output), CONFIG)
+    result = converter.process_single(
+        str(source), str(output), CONFIG, link_context=_image_context(tmp_path)
+    )
     if result is None:
         raise RuntimeError("conversion produced no output for " + markdown)
     return output.read_text(encoding="utf-8")
@@ -88,8 +106,10 @@ def _toc_field(html: str, field: str) -> str:
 
 
 @pytest.mark.parametrize("markdown", HEADING_SOURCES, ids=HEADING_SOURCES)
-def test_heading_metadata_is_well_formed(markdown: str):
-    headings = render_markdown_node("# " + markdown + "\n")["headings"]
+def test_heading_metadata_is_well_formed(markdown: str, tmp_path: Path):
+    headings = render_markdown_node(
+        "# " + markdown + "\n", context=_image_context(tmp_path)
+    )["headings"]
 
     assert len(headings) == 1
     assert headings[0]["level"] == 1
@@ -97,8 +117,10 @@ def test_heading_metadata_is_well_formed(markdown: str):
 
 
 @pytest.mark.parametrize("markdown", HEADING_SOURCES, ids=HEADING_SOURCES)
-def test_heading_text_keeps_the_raw_inline_source(markdown: str):
-    headings = render_markdown_node("# " + markdown + "\n")["headings"]
+def test_heading_text_keeps_the_raw_inline_source(markdown: str, tmp_path: Path):
+    headings = render_markdown_node(
+        "# " + markdown + "\n", context=_image_context(tmp_path)
+    )["headings"]
 
     assert headings[0]["text"] == markdown
 
@@ -113,8 +135,8 @@ def _body_heading_html(html: str) -> list:
     return re.findall("<h1[^>]*>(.*?)</h1>", html, re.S)
 
 
-def test_heading_metadata_exposes_inline_html():
-    rendered = render_markdown_node(_multi_heading_document())
+def test_heading_metadata_exposes_inline_html(tmp_path: Path):
+    rendered = render_markdown_node(_multi_heading_document(), context=_image_context(tmp_path))
     headings = rendered["headings"]
     body = _body_heading_html(rendered["html"])
 
@@ -124,8 +146,10 @@ def test_heading_metadata_exposes_inline_html():
         assert heading["inline_html"] == expected
 
 
-def test_heading_metadata_exposes_toc_inline_html():
-    headings = render_markdown_node(_multi_heading_document())["headings"]
+def test_heading_metadata_exposes_toc_inline_html(tmp_path: Path):
+    headings = render_markdown_node(
+        _multi_heading_document(), context=_image_context(tmp_path)
+    )["headings"]
 
     assert len(headings) == len(TOC_INLINE_HTML_EXPECTATIONS)
     for heading, (_, expected) in zip(headings, TOC_INLINE_HTML_EXPECTATIONS):
