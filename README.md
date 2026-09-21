@@ -330,7 +330,7 @@ templates/viewer.js   共用浏览器交互逻辑
 templates/print.css   共用打印样式
 packaging/            PyInstaller 配置与程序图标
 docs/                 设计、架构、路线图和截图
-tests/                转换清单、渲染链接、批量转换与 GUI 约定测试
+tests/                转换清单、渲染链接、批量转换、demo 生成、转换边界与 GUI 约定测试
 samples/              Markdown 测试样例
 ```
 

@@ -44,9 +44,9 @@ main.py               GUI 启动入口
 ```
 
 `tests/` 包含当前 pytest 自动化测试，覆盖转换计划、跨文档链接与脚注渲染、
-批量转换集成、demo 生成结构以及 GUI 资源/契约。渲染相关测试需要本机 Node.js 与
+批量转换集成、demo 生成结构、转换边界契约以及 GUI 资源/契约。渲染相关测试需要本机 Node.js 与
 `node_renderer/node_modules`。自动化测试目前不覆盖 GUI 运行时交互、
-浏览器打印和打包后 EXE 的完整实机行为。
+浏览器打印和打包后 EXE 的完整实机行为。转换边界测试中标记 `xfail(strict=True)` 的用例是已登记但尚未修复的缺陷。
 
 ---
 
