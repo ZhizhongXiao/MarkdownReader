@@ -29,41 +29,24 @@ from core.renderer_node import render_markdown_node  # noqa: E402
 
 CONFIG = {"template": "modern", "numbering": False, "overwrite": True}
 
-# Heading inline source, expected .toc-number, expected .toc-title HTML, and
-# the known defect reason (empty once the contract holds).
+# Heading inline source, expected .toc-number, expected .toc-title HTML.
 TOC_EXPECTATIONS = [
-    ("a < b", "", "a &lt; b", "known: plain text is re-interpreted as HTML"),
-    ("a & b", "", "a &amp; b", "known: plain text is re-interpreted as HTML"),
-    ("*emphasis*", "", "<em>emphasis</em>", ""),
-    ("**strong**", "", "<strong>strong</strong>", "known: the TOC re-renders inline Markdown"),
-    ("`code`", "", "<code>code</code>", ""),
-    ("a <b>x</b> y", "", "a <b>x</b> y", ""),
-    ("[link](https://example.com)", "", "link", "known: heading links are not downgraded"),
-    ("![alt](x.png)", "", "alt", "known: heading images keep their Markdown source"),
-    ("![](x.png)", "", "", "known: heading images keep their Markdown source"),
-    ("1.2 Plain", "1.2", "Plain", ""),
-    ("1.2 *emphasis*", "1.2", "<em>emphasis</em>", ""),
-    (
-        "**1.2** unusual",
-        "",
-        "<strong>1.2</strong> unusual",
-        "known: the TOC re-renders inline Markdown",
-    ),
-    (
-        '<a href="https://example.com">link</a>',
-        "",
-        "link",
-        "known: raw HTML anchors are not downgraded",
-    ),
-    (
-        '<img src="x.png" alt="alt">',
-        "",
-        "alt",
-        "known: raw HTML images keep their markup",
-    ),
-]
+    ("a < b", "", "a &lt; b"),
+    ("a & b", "", "a &amp; b"),
+    ("*emphasis*", "", "<em>emphasis</em>"),
+    ("**strong**", "", "<strong>strong</strong>"),
+    ("`code`", "", "<code>code</code>"),
+    ("a <b>x</b> y", "", "a <b>x</b> y"),
+    ("[link](https://example.com)", "", "link"),
+    ("![alt](x.png)", "", "alt"),
+    ("![](x.png)", "", ""),
+    ("1.2 Plain", "1.2", "Plain"),
+    ("1.2 *emphasis*", "1.2", "<em>emphasis</em>"),
+    ("**1.2** unusual", "", "<strong>1.2</strong> unusual"),
+    ('<a href="https://example.com">link</a>', "", "link"),
+    ('<img src="x.png" alt="alt">', "", "alt"),]
 
-HEADING_SOURCES = [markdown for markdown, _, _, _ in TOC_EXPECTATIONS]
+HEADING_SOURCES = [markdown for markdown, _, _ in TOC_EXPECTATIONS]
 
 # Expected toc_inline_html per heading inline source: the full TOC-safe
 # inline HTML before number splitting. Markdown and raw HTML links become their
@@ -84,17 +67,6 @@ TOC_INLINE_HTML_EXPECTATIONS = [
     ('<a href="https://example.com">link</a>', "link"),
     ('<img src="x.png" alt="alt">', "alt"),
 ]
-
-
-def _toc_params():
-    """Parametrize the TOC cases, marking each known defect separately."""
-    params = []
-    for markdown, number, title, defect in TOC_EXPECTATIONS:
-        marks = ()
-        if defect:
-            marks = (pytest.mark.xfail(strict=True, raises=AssertionError, reason=defect),)
-        params.append(pytest.param(markdown, number, title, marks=marks, id=markdown))
-    return params
 
 
 def _convert(tmp_path: Path, markdown: str) -> str:
@@ -160,7 +132,10 @@ def test_heading_metadata_exposes_toc_inline_html():
         assert heading["toc_inline_html"] == expected
 
 
-@pytest.mark.parametrize("markdown, expected_number, expected_title", _toc_params())
+@pytest.mark.parametrize(
+    "markdown, expected_number, expected_title",
+    TOC_EXPECTATIONS,
+)
 def test_toc_row_follows_the_heading_contract(
     tmp_path: Path, markdown: str, expected_number: str, expected_title: str
 ):

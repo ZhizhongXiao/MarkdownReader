@@ -1,7 +1,8 @@
 """TOC (Table of Contents) generator.
 
 Builds the navigation sidebar HTML from the heading list supplied by the
-Node renderer.
+Node renderer. Heading text is the TOC-safe inline HTML Node already rendered;
+this module only splits the leading number and assembles the DOM.
 
 v5.1 — Flat TOC with CSS Grid layout, number splitting, CSS triangles.
 """
@@ -13,8 +14,14 @@ import re
 # Phase 5.1 — Flat TOC generator
 # ─────────────────────────────────────────────────────────────────
 
-def _split_number(text: str) -> tuple[str, str]:
-    """Split heading number from title text for TOC display only."""
+def _split_number_parts(text: str) -> tuple[str, str, str]:
+    """Split heading number from title text for TOC display only.
+
+    Returns:
+        A tuple of (number, title, raw_prefix) where raw_prefix is the exact
+        text consumed before the title. A heading without a leading number
+        returns (empty, text, empty).
+    """
     patterns = [
         r"^(\d+(?:[.．]\d+)+)(?:[.．、])?[\s　]+(.+)$",
         r"^(\d+(?:[.．]\d+)+)(?![.．\d])[\s　]*(\S.*)$",
@@ -28,16 +35,14 @@ def _split_number(text: str) -> tuple[str, str]:
     for pattern in patterns:
         m = re.match(pattern, text)
         if m:
-            return m.group(1), m.group(2).strip()
-    return "", text
+            return m.group(1), m.group(2).strip(), text[: m.start(2)]
+    return "", text, ""
 
 
-def _render_toc_text(text: str) -> str:
-    """Render inline Markdown in TOC text (em, code only)."""
-    text = re.sub(r"`([^`]+)`", r"<code>\1</code>", text)
-    text = re.sub(r"\*([^*]+)\*", r"<em>\1</em>", text)
-    text = re.sub(r"_([^_]+)_", r"<em>\1</em>", text)
-    return text
+def _split_number(text: str) -> tuple[str, str]:
+    """Backward-compatible wrapper around _split_number_parts."""
+    number, title, _ = _split_number_parts(text)
+    return number, title
 
 
 def _has_children(headings: list[dict], index: int) -> bool:
@@ -69,10 +74,14 @@ def generate_toc_html(headings: list[dict]) -> str:
         level = h["level"]
         anchor = h["anchor"]
         raw_text = h["text"]
-        number, title = _split_number(raw_text)
+        toc_html = h["toc_inline_html"]
+        number, _title, raw_prefix = _split_number_parts(raw_text)
         has_children = _has_children(headings, i)
 
-        rendered_title = _render_toc_text(title)
+        if raw_prefix and toc_html.startswith(raw_prefix):
+            rendered_title = toc_html[len(raw_prefix):]
+        else:
+            rendered_title = toc_html
         if number:
             number_html = f'<span class="toc-number">{number}</span>'
         else:
