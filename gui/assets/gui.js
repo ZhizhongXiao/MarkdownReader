@@ -10,6 +10,8 @@ var _planWarnings = [];
 var _planErrors = [];
 var _planRevision = 0;
 var _apiReady = false;
+// The log keeps its history, so the history needs a bound.
+var LOG_CAPACITY = 500;
 var _conversionRunning = false;
 var _expandedItems = {};
 var _logIssueCount = 0;
@@ -64,7 +66,9 @@ function updateLogAttention() {
     count.classList.toggle("hidden", !hasIssues);
     icon.textContent = _logIssueLevel === "error" ? "×" : "!";
     count.textContent = _logIssueCount;
-    tab.setAttribute("aria-label", hasIssues ? "日志，" + _logIssueCount + " 个问题" : "日志");
+    // The badge counts this round only, so the label must say so: the log
+    // itself keeps its history and is therefore larger than this number.
+    tab.setAttribute("aria-label", hasIssues ? "日志，本轮 " + _logIssueCount + " 个问题" : "日志");
 }
 
 // The lock is state, not just disabled controls: dropping files or calling a
@@ -101,6 +105,9 @@ function log(level, msg) {
     div.className = cls;
     div.textContent = msg;
     area.appendChild(div);
+    while (LOG_CAPACITY < area.children.length) {
+        area.removeChild(area.firstChild);
+    }
     area.scrollTop = area.scrollHeight;
     if (level === "WARNING" || level === "ERROR") {
         _logIssueCount += 1;
@@ -525,9 +532,12 @@ function renderConversionList() {
         return item.status === "pending" || item.status === "converting";
     }).length;
     var warnings = _conversionItems.filter(function(item) { return item.status === "warning"; }).length;
+    // The error stat counts documents. Plan messages are a different kind of
+    // thing and already have their own place in the conversion tab, so adding
+    // them here would make one number mean two units.
     var errors = _conversionItems.filter(function(item) {
         return item.status === "error" || item.status === "conflict";
-    }).length + _planErrors.length;
+    }).length;
     document.getElementById("stat-total").textContent = _conversionItems.length;
     document.getElementById("stat-pending").textContent = pending;
     document.getElementById("stat-warning").textContent = warnings;

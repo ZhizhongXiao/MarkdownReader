@@ -54,7 +54,13 @@ export class GuiSession {
     const entry = this.pendingOf(name)[index || 0];
     if (!entry) throw new Error("gui harness: no pending " + name + " call to resolve");
     entry.settled = true;
-    entry.deferred.resolve(value);
+    // A real bridge serialises its reply, so the page never receives the very
+    // object a test holds. Copying here keeps fixture objects immutable across
+    // contracts - otherwise one contract status update leaks into the next.
+    const reply = value === null || value === undefined
+      ? value
+      : JSON.parse(JSON.stringify(value));
+    entry.deferred.resolve(reply);
     await this.flush(3);
   }
 
@@ -90,6 +96,20 @@ export class GuiSession {
   }
 
   logLines() { const area = this.list("log-area"); return area ? area.children.length : -1; }
+
+  // Log lines that are actually issues, counted from the DOM so a contract
+  // never has to read the GUI internals.
+  logIssues() {
+    const area = this.list("log-area");
+    if (!area) return -1;
+    let count = 0;
+    for (let i = 0; i < area.children.length; i += 1) {
+      // The level is a class on the line, the message is its text.
+      const cls = area.children[i].classList;
+      if (cls.contains("log-warn") || cls.contains("log-err")) count += 1;
+    }
+    return count;
+  }
 
   status() { return { badge: this.text("statusBadge"), text: this.text("statusText") }; }
 

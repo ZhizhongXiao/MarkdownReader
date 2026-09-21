@@ -259,11 +259,13 @@ contract("GU5 run snapshot: convert receives the confirmed plan, not live inputs
   } finally { session.close(); }
 });
 
-contract("GU6 log badge: the badge count matches the meaning it claims", "xfail", async () => {
+contract("GU6 log badge: history survives and the badge states its own scope", "pass", async () => {
   const session = await bootGui();
   try {
-    session.window.log("WARNING", "earlier warning");
-    session.window.addInputs(["C:\\docs\\a.md"]);
+    const first = PLAN_ONE.items[0].source_path;
+    session.window.log("WARNING", "an earlier warning");
+
+    session.window.addInputs([first]);
     await session.flush(3);
     await session.resolve("prepare_conversion", PLAN_ONE);
     session.window.runConvert();
@@ -278,21 +280,29 @@ contract("GU6 log badge: the badge count matches the meaning it claims", "xfail"
     await session.flush(5);
 
     const area = session.list("log-area");
-    let issueLines = 0;
-    for (let i = 0; i < area.children.length; i += 1) {
-      const line = area.children[i].textContent || "";
-      if (line.indexOf("WARNING") !== -1 || line.indexOf("ERROR") !== -1) issueLines += 1;
-    }
-    const badge = session.text("log-issue-count");
+    const issueLines = session.logIssues();
+    const badge = Number(session.text("log-issue-count"));
     const label = session.list("tab-log").getAttribute("aria-label") || "";
-    if (label.indexOf("个问题") !== -1) {
-      assert.equal(badge, String(issueLines),
-        "a badge that claims problem count must equal the problems in the log");
+
+    assert.ok(issueLines !== 0, "the run must have logged an issue");
+    assert.ok(area.children.length !== 1, "the earlier warning must still be in the log");
+    assert.equal(badge, 1, "the badge counts this round, not the retained history");
+    // Policy B keeps the history, so the badge is allowed to be a per-round
+    // count - but only if its label says so. Otherwise it must match the log.
+    const scoped = /本轮|新问题|未读/.test(label);
+    if (!scoped) {
+      assert.equal(badge, issueLines,
+        "an unscoped problem count must equal the problems in the log");
     }
+
+    for (let i = 0; i < 1200; i += 1) session.window.log("INFO", "filler " + i);
+    await session.flush(3);
+    assert.ok(area.children.length < 1200,
+      "retained history needs a capacity cap, otherwise the log DOM grows forever");
   } finally { session.close(); }
 });
 
-contract("GU7 stats: the error stat counts documents only", "xfail", async () => {
+contract("GU7 stats: the error stat counts documents only", "pass", async () => {
   const session = await bootGui();
   try {
     session.window.addInputs(["C:\\docs\\a.md"]);
@@ -302,7 +312,8 @@ contract("GU7 stats: the error stat counts documents only", "xfail", async () =>
     }));
     await session.flush(3);
 
-    assert.equal(session.text("stat-error"), "0",
-      "plan messages are not failed documents");
+    const observed = session.text("stat-error");
+    assert.equal(observed, "0",
+      "plan messages are not failed documents, but the stat read " + observed);
   } finally { session.close(); }
 });
