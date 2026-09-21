@@ -69,11 +69,6 @@ def test_front_matter_is_read_when_the_file_starts_with_a_bom(tmp_path: Path):
     assert _document_title(html) == "MetaTitle"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="known: title is not HTML-escaped",
-)
 def test_document_title_is_html_escaped(tmp_path: Path):
     html = _convert(
         tmp_path,

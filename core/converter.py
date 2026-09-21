@@ -6,6 +6,7 @@ collect_markdown_files, process_single, process_batch.
 
 import logging
 import os
+from html import escape
 
 from core.config import (
     PLACEHOLDER_CONTENT,
@@ -185,7 +186,7 @@ def process_single(
         template_html = template_html.replace("</body>", "\n".join(body_fragments) + "\n</body>", 1)
 
     # 10. Fill placeholders
-    template_html = template_html.replace(PLACEHOLDER_TITLE, title)
+    template_html = template_html.replace(PLACEHOLDER_TITLE, escape(str(title), quote=False))
     template_html = template_html.replace(PLACEHOLDER_CONTENT, html_body)
     template_html = template_html.replace(PLACEHOLDER_TOC, toc_html)
 
