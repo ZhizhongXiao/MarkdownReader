@@ -44,9 +44,9 @@ main.py               GUI 启动入口
 ```
 
 `tests/` 包含当前 pytest 自动化测试，覆盖转换计划、跨文档链接与脚注渲染、
-批量转换集成、demo 生成结构、转换边界契约、TOC 标题契约以及 GUI 资源/契约。渲染相关测试需要本机 Node.js 与
+批量转换集成、demo 生成结构、转换边界契约、TOC 标题契约、图片内嵌契约以及 GUI 资源/契约。渲染相关测试需要本机 Node.js 与
 `node_renderer/node_modules`。自动化测试目前不覆盖 GUI 运行时交互、
-浏览器打印和打包后 EXE 的完整实机行为。转换边界测试中标记 `xfail(strict=True)` 的用例是已登记但尚未修复的缺陷。
+浏览器打印和打包后 EXE 的完整实机行为。测试不长期保留已知缺陷：契约修复后即摘除对应的 `xfail` 标记。
 
 ---
 
@@ -109,6 +109,7 @@ Node 负责：
 - 按 Python 提供的转换清单重写跨文档 Markdown 链接
 - 行内公式和块级公式渲染
 - KaTeX CSS 资源内联
+- 将可解析的本地 Markdown 图片内嵌为 data URI；网络图片、未知 scheme 与 raw HTML 资源保持源行为
 - 输出 HTML 片段、标题信息和渲染资源
 
 Python 通过子进程调用 Node：

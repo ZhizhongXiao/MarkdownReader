@@ -70,6 +70,9 @@ def process_single(
         input_path: Path to the .md source file.
         output_path: Where to write the .html output.
         cfg: Configuration dict (from load_config).
+        link_context: Rendering context from the conversion plan. When
+            omitted, the source and output paths are derived from this call so
+            relative resources still resolve.
 
     Returns:
         The output path on success, or None on failure. When the output already
@@ -104,9 +107,13 @@ def process_single(
     )
 
     # 4. Render Markdown → HTML body
+    render_context = dict(link_context or {})
+    render_context.setdefault("source_path", input_path)
+    render_context.setdefault("output_path", output_path)
+
     render_result = render_markdown_node(
         body_md,
-        context=link_context,
+        context=render_context,
     )
     if not isinstance(render_result, dict):
         _logger.error("Node 渲染器返回了无效结果。")

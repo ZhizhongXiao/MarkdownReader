@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+import core.converter as converter  # noqa: E402
 from core.renderer_node import render_markdown_node  # noqa: E402
 
 # Minimal 1x1 PNG written to tmp_path so local image references resolve.
@@ -173,3 +174,16 @@ def test_file_image_keeps_the_markdown_it_default(tmp_path: Path):
     result = _render("![x](file:///C:/a.png)", tmp_path)
 
     assert "<img" not in result["html"]
+
+
+def test_process_single_embeds_relative_images_without_link_context(tmp_path: Path):
+    """The core converter resolves images from the paths it already knows."""
+    (tmp_path / "pic.png").write_bytes(_MINIMAL_PNG)
+    source = tmp_path / "doc.md"
+    source.write_text("![a](pic.png)\n", encoding="utf-8")
+    output = tmp_path / "out.html"
+
+    result = converter.process_single(str(source), str(output), {"template": "modern"})
+
+    assert result == str(output)
+    assert _embedded(_img_src(output.read_text(encoding="utf-8")))
