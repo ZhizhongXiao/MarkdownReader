@@ -40,9 +40,9 @@ CONFIG = {"template": "modern", "numbering": True, "overwrite": True}
 
 # Locked counts. They make a vanished or renamed contract a failure instead of
 # a silent reduction of coverage.
-EXPECTED_PASS = 9
-EXPECTED_XFAIL = 10
-EXPECTED_CONTRACTS = 19
+EXPECTED_PASS = 12
+EXPECTED_XFAIL = 8
+EXPECTED_CONTRACTS = 20
 
 # One document that deliberately exercises, per contract family:
 #   * five heading levels, for the fold baseline and level contracts (F/M/N/P)

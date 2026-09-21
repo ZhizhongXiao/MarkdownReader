@@ -321,7 +321,7 @@ contract("D1 same title, different pathname: positions never leak", "xfail", asy
 });
 
 // ── S2 (V7): reading position is saved while reading, not only on unload. ───
-contract("S2 scrolling is persisted without waiting for unload", "xfail", async () => {
+contract("S2 scrolling is persisted without waiting for unload", "pass", async () => {
   const session = await boot();
   try {
     session.scrollTo(120);
@@ -337,7 +337,7 @@ contract("S2 scrolling is persisted without waiting for unload", "xfail", async 
 });
 
 // ── S2b (V7): pagehide is the hard-stop fallback. ───────────────────────────
-contract("S2b pagehide forces a save", "xfail", async () => {
+contract("S2b pagehide forces a save", "pass", async () => {
   const session = await boot();
   try {
     session.scrollTo(320);
@@ -348,6 +348,54 @@ contract("S2b pagehide forces a save", "xfail", async () => {
     );
   } finally {
     session.close();
+  }
+});
+
+// ── S2c (V7): saving must tell the reader apart from the restore itself. ────
+// Two halves on purpose. Half 1 overlaps S2, but without it this contract would
+// be vacuous before V7 exists (there is no scroll listener at all yet, so
+// "nothing was written during the restore" would trivially hold). Half 2 is the
+// one that rejects the naive implementation: `scroll -> throttled save` would
+// persist the mid-restore position, and a page closed mid-animation would
+// overwrite a correct position with that wrong one.
+contract("S2c the restore animation is never persisted as reading progress", "pass", async () => {
+  const fresh = await boot();
+  try {
+    fresh.scrollTo(420);
+    await fresh.sleep(400);
+    assert.ok(
+      JSON.stringify(fresh.storage()).includes("420"),
+      "a user scroll must still be persisted while reading",
+    );
+  } finally {
+    fresh.close();
+  }
+
+  const restoring = await boot({ seed: { [LEGACY_FOLD_KEY]: "3", [SCROLL_KEY]: "500" } });
+  try {
+    await restoring.frames(3);
+    const settled = JSON.stringify(restoring.storage());
+
+    // A mid-animation position, deliberately different from the saved 500.
+    restoring.area.scrollTop = 180;
+    restoring.area.dispatchEvent(new restoring.window.Event("scroll"));
+    await restoring.sleep(500);
+    assert.equal(
+      JSON.stringify(restoring.storage()),
+      settled,
+      "progress produced by the programmatic restore must not be persisted",
+    );
+
+    // Once the restore window is over, ordinary reading progress is saved again.
+    restoring.area.dispatchEvent(new restoring.window.Event("scrollend"));
+    restoring.scrollTo(640);
+    await restoring.sleep(400);
+    assert.ok(
+      JSON.stringify(restoring.storage()).includes("640"),
+      "after the restore window closes, a user scroll must be persisted again",
+    );
+  } finally {
+    restoring.close();
   }
 });
 
