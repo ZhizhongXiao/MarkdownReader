@@ -141,11 +141,6 @@ def _body_heading_html(html: str) -> list:
     return re.findall("<h1[^>]*>(.*?)</h1>", html, re.S)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=KeyError,
-    reason="known: heading metadata does not expose inline_html yet",
-)
 def test_heading_metadata_exposes_inline_html():
     rendered = render_markdown_node(_multi_heading_document())
     headings = rendered["headings"]
@@ -157,11 +152,6 @@ def test_heading_metadata_exposes_inline_html():
         assert heading["inline_html"] == expected
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=KeyError,
-    reason="known: heading metadata does not expose toc_inline_html yet",
-)
 def test_heading_metadata_exposes_toc_inline_html():
     headings = render_markdown_node(_multi_heading_document())["headings"]
 

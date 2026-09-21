@@ -65,3 +65,15 @@ def test_internal_and_external_links_are_not_rewritten(tmp_path: Path):
     assert "%E7%AC%AC20%E7%AB%A0.html" in result["html"]
     assert result["warnings"] == []
 
+def test_heading_link_warning_is_reported_once(tmp_path: Path):
+    """A heading link warns once, not once per internal render pass."""
+    source = tmp_path / "第24章.md"
+    source.write_text("", encoding="utf-8")
+    source_output = tmp_path / "html" / "第24章.html"
+
+    result = render_markdown_node(
+        "# 参见[未选择章节](./missing.md)",
+        context=_context(source, source_output, {source: source_output}),
+    )
+
+    assert sum("未加入转换清单" in warning for warning in result["warnings"]) == 1

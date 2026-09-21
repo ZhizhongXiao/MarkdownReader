@@ -53,7 +53,7 @@ function render(input) {
     typographer: false,
   });
 
-  installHeadingIds(md, headings);
+  installHeadingIds(md, headings, warnings);
 
   try {
     md.use(require("markdown-it-footnote"));
@@ -185,7 +185,65 @@ function normalizeFsPath(value) {
   return normalized;
 }
 
-function installHeadingIds(md, headings) {
+// Narrow, quote-aware handling for raw inline HTML: only <a>, </a> and <img>
+// are downgraded; every other raw tag is passed through unchanged.
+const RAW_TAG_RE = /<\/?([a-zA-Z][a-zA-Z0-9]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>/g;
+const RAW_ALT_RE = /\balt\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i;
+
+function rawTagAlt(attributes) {
+  const match = RAW_ALT_RE.exec(attributes);
+  if (!match) {
+    return "";
+  }
+  if (match[1] !== undefined) {
+    return match[1];
+  }
+  if (match[2] !== undefined) {
+    return match[2];
+  }
+  return match[3];
+}
+
+function downgradeRawInline(html) {
+  return String(html).replace(RAW_TAG_RE, function (tag, name, attributes) {
+    const lower = name.toLowerCase();
+    if (lower === "a") {
+      return "";
+    }
+    if (lower === "img") {
+      return rawTagAlt(attributes);
+    }
+    return tag;
+  });
+}
+
+// Render the same inline tokens as the body, but usable inside a TOC link:
+// link tags are dropped and images become their alt text.
+function renderTocInline(md, self, tokens, options, env) {
+  let result = "";
+  for (let i = 0; i < tokens.length; i += 1) {
+    const token = tokens[i];
+    if (token.type === "link_open" || token.type === "link_close") {
+      continue;
+    }
+    if (token.type === "image") {
+      const alt = self.renderInlineAsText(token.children || [], options, env);
+      result += md.utils.escapeHtml(alt);
+      continue;
+    }
+    if (token.type === "html_inline") {
+      result += downgradeRawInline(token.content);
+      continue;
+    }
+    const rule = self.rules[token.type];
+    result += rule
+      ? rule(tokens, i, options, env, self)
+      : self.renderToken(tokens, i, options, env, self);
+  }
+  return result;
+}
+
+function installHeadingIds(md, headings, warnings) {
   const usedAnchors = new Set();
   let fallbackCounter = 0;
 
@@ -216,10 +274,29 @@ function installHeadingIds(md, headings) {
     anchor = unique(anchor);
 
     token.attrSet("id", anchor);
+
+    let inlineHtml = "";
+    if (inlineToken && inlineToken.type === "inline") {
+      const warningsBefore = warnings.length;
+      try {
+        inlineHtml = self.renderInline(inlineToken.children, options, env);
+      } finally {
+        // The metadata render is an additional observation and does not own
+        // warnings: the body render reports them once.
+        warnings.length = warningsBefore;
+      }
+    }
+    const tocInlineHtml =
+      inlineToken && inlineToken.type === "inline"
+        ? renderTocInline(md, self, inlineToken.children, options, env)
+        : "";
+
     headings.push({
       level: Number(token.tag.slice(1)),
       text: rawText,
       anchor: anchor,
+      inline_html: inlineHtml,
+      toc_inline_html: tocInlineHtml,
     });
 
     return self.renderToken(tokens, idx, options);
