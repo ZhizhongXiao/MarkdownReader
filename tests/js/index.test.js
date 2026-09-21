@@ -187,7 +187,7 @@ contract("IX1 copy feedback: a copy that did not happen is not reported as succe
 //
 // Out of scope on purpose: dataset.search, location.pathname, malformed URIs,
 // clipboard permission UX and the copy handler's own group lookup.
-contract("IX2 robustness: a missing node degrades its own feature only", "xfail", async () => {
+contract("IX2 robustness: a missing node degrades its own feature only", "pass", async () => {
   // V1: the search box is gone. The toggle and a copy path which is known to
   // succeed must both keep working: a missing search box may only kill search.
   const noSearch = await boot({

@@ -64,7 +64,9 @@
             document.querySelectorAll(".toggle-btn").forEach(function (button) {
                 button.addEventListener("click", function () {
                     var group = button.closest(".folder-group");
+                    if (!group) return;
                     var list = group.querySelector(":scope > .document-list");
+                    if (!list) return;
                     var expanded = button.getAttribute("aria-expanded") === "true";
                     button.setAttribute("aria-expanded", String(!expanded));
                     button.textContent = expanded ? "▶" : "▼";
@@ -82,34 +84,40 @@
 
             var search = document.getElementById("document-search");
             var noResults = document.getElementById("no-results");
-            search.addEventListener("input", function () {
-                var query = search.value.trim().toLocaleLowerCase();
-                var visibleCount = 0;
+            // This page is a generated artifact, so a missing node may only cost its own
+            // feature: the block below is skipped, never the whole script.
+            if (search) {
+                search.addEventListener("input", function () {
+                    var query = search.value.trim().toLocaleLowerCase();
+                    var visibleCount = 0;
 
-                document.querySelectorAll(".folder-group").forEach(function (group) {
-                    var groupCount = 0;
-                    group.querySelectorAll(".document-row").forEach(function (row) {
+                    document.querySelectorAll(".folder-group").forEach(function (group) {
+                        var groupCount = 0;
+                        group.querySelectorAll(".document-row").forEach(function (row) {
+                            var matches = !query || row.dataset.search.includes(query);
+                            row.hidden = !matches;
+                            if (matches) groupCount += 1;
+                        });
+                        group.hidden = groupCount === 0;
+                        visibleCount += groupCount;
+                        if (query && groupCount > 0) {
+                            var list = group.querySelector(":scope > .document-list");
+                            var toggle = group.querySelector(":scope > .folder-header .toggle-btn");
+                            if (list) list.hidden = false;
+                            if (toggle) {
+                                toggle.textContent = "▼";
+                                toggle.setAttribute("aria-expanded", "true");
+                            }
+                        }
+                    });
+
+                    document.querySelectorAll(".root-list .document-row").forEach(function (row) {
                         var matches = !query || row.dataset.search.includes(query);
                         row.hidden = !matches;
-                        if (matches) groupCount += 1;
+                        if (matches) visibleCount += 1;
                     });
-                    group.hidden = groupCount === 0;
-                    visibleCount += groupCount;
-                    if (query && groupCount > 0) {
-                        var list = group.querySelector(":scope > .document-list");
-                        var toggle = group.querySelector(":scope > .folder-header .toggle-btn");
-                        list.hidden = false;
-                        toggle.textContent = "▼";
-                        toggle.setAttribute("aria-expanded", "true");
-                    }
-                });
 
-                document.querySelectorAll(".root-list .document-row").forEach(function (row) {
-                    var matches = !query || row.dataset.search.includes(query);
-                    row.hidden = !matches;
-                    if (matches) visibleCount += 1;
+                    if (noResults) noResults.hidden = visibleCount !== 0;
                 });
-
-                noResults.hidden = visibleCount !== 0;
-            });
+            }
         }());
