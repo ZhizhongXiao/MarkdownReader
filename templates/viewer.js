@@ -71,57 +71,49 @@
             if (!href || !href.startsWith("#")) return;
             var targetId = href.substring(1);
             var targetElement = document.getElementById(targetId);
-            if (targetElement) {
-                event.preventDefault();
-                targetElement.scrollIntoView({ behavior: "smooth" });
-            }
+            if (!targetElement) return;
+            event.preventDefault();
+            // Explicit navigation may unfold whatever hides its target; that is
+            // a deliberate intent and is recorded as an explicit override.
+            expandContentAncestorsForNavigation(targetElement);
+            targetElement.scrollIntoView({ behavior: "smooth" });
         });
     }
 
     // ═══════════════════════════════════════════════════════════════
     // Module 2: Scroll Spy — Flat TOC
     // ═══════════════════════════════════════════════════════════════
-    function autoExpandParents(row) {
-        // Walk backwards to find parent-level rows and ensure they are expanded
-        var currentLevel = parseInt(row.getAttribute("data-level"), 10);
-        var prev = row.previousElementSibling;
-        while (prev) {
-            var plevel = parseInt(prev.getAttribute("data-level"), 10);
-            if (plevel < currentLevel) {
-                // This is a parent — ensure expanded and not hiding children
-                prev.classList.add("is-expanded");
-                prev.classList.remove("is-collapsed");
-                // Show its immediate children
-                unfoldImmediateChildren(prev);
-                currentLevel = plevel;
-            }
-            prev = prev.previousElementSibling;
-        }
-    }
-
-    function unfoldImmediateChildren(parentRow) {
-        var parentLevel = parseInt(parentRow.getAttribute("data-level"), 10);
-        var sibling = parentRow.nextElementSibling;
-        while (sibling) {
-            var sLevel = parseInt(sibling.getAttribute("data-level"), 10);
-            if (sLevel <= parentLevel) break;
-            if (sLevel === parentLevel + 1) {
-                sibling.classList.remove("is-hidden-by-collapse");
-            }
-            sibling = sibling.nextElementSibling;
-        }
-    }
-
     function initScrollSpy() {
         var allRows = tocBody.querySelectorAll(".toc-row");
+        // Passive observation must not change what the user folded: this only
+        // projects the active marker. When the target sits inside a branch the
+        // user collapsed, the marker moves to the nearest VISIBLE ancestor, so
+        // the reading position stays visible without touching any fold state.
+        function nearestVisibleAncestorRow(row) {
+            var level = parseInt(row.getAttribute("data-level"), 10);
+            var node = row.previousElementSibling;
+            while (node) {
+                var nodeLevel = parseInt(node.getAttribute("data-level"), 10);
+                if (nodeLevel < level) {
+                    if (!node.classList.contains("is-hidden-by-collapse")) return node;
+                    level = nodeLevel;
+                }
+                node = node.previousElementSibling;
+            }
+            return null;
+        }
+
         function activateTocRow(id) {
             allRows.forEach(function (row) { row.classList.remove("active"); });
             var target = tocBody.querySelector('.toc-row[data-id="' + id + '"]');
-            if (target) {
-                target.classList.add("active");
-                autoExpandParents(target);
-                target.scrollIntoView({ block: "nearest", behavior: "smooth" });
+            if (!target) return;
+            var marked = target;
+            if (target.classList.contains("is-hidden-by-collapse")) {
+                marked = nearestVisibleAncestorRow(target);
+                if (!marked) return;
             }
+            marked.classList.add("active");
+            marked.scrollIntoView({ block: "nearest", behavior: "smooth" });
         }
         var headingElements = getContentHeadings();
         if (headingElements.length > 0 && "IntersectionObserver" in window) {
@@ -252,6 +244,42 @@
         if (collapsed === baselineCollapsed) delete documentState.content.overrides[heading.id];
         else documentState.content.overrides[heading.id] = collapsed ? "collapsed" : "expanded";
         applyContentFoldState();
+    }
+
+    // Content ancestors of a heading, outermost first, using the flat sibling
+    // layout the fold model already relies on.
+    function getContentAncestors(target) {
+        var ancestors = [];
+        var level = getHeadingLevel(target);
+        var node = target.previousElementSibling;
+        while (node && level > 1) {
+            var nodeLevel = getHeadingLevel(node);
+            if (nodeLevel > 0 && nodeLevel < level) {
+                ancestors.unshift(node);
+                level = nodeLevel;
+            }
+            node = node.previousElementSibling;
+        }
+        return ancestors;
+    }
+
+    // Explicit navigation (a TOC click) may unfold the collapsed ancestors that
+    // hide its target. This deliberately does NOT go through the manual setter:
+    // that one prunes an override matching the current baseline, which would
+    // discard the navigation intent and let a later level change hide the
+    // target again. The batch is written with one reconcile and one save, so the
+    // existing clear-and-rebuild cost is not multiplied per ancestor.
+    function expandContentAncestorsForNavigation(target) {
+        var changed = false;
+        getContentAncestors(target).forEach(function (ancestor) {
+            if (!ancestor.id) return;
+            if (!isContentHeadingCollapsed(ancestor)) return;
+            documentState.content.overrides[ancestor.id] = "expanded";
+            changed = true;
+        });
+        if (!changed) return;
+        applyContentFoldState();
+        saveDocumentState();
     }
 
     function setContentHeadingToggle(heading, collapsed) {

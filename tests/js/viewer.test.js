@@ -400,7 +400,7 @@ contract("S2c the restore animation is never persisted as reading progress", "pa
 });
 
 // ── T1 (V3): a passive observer must never change user TOC folds. ───────────
-contract("T1 the scroll spy never changes user-collapsed TOC branches", "xfail", async () => {
+contract("T1 the scroll spy never changes user-collapsed TOC branches", "pass", async () => {
   const session = await boot();
   try {
     const branch = h(session, "1.1 甲组");
@@ -423,16 +423,25 @@ contract("T1 the scroll spy never changes user-collapsed TOC branches", "xfail",
 });
 
 // ── T2 (V3): the active marker must not hijack a collapsed branch. ──────────
-contract("T2 the active heading is indicated without expanding its branch", "xfail", async () => {
+// Two assertions on purpose, so a half-implementation cannot satisfy this by
+// marking both rows: the hidden row must NOT be active, and its nearest visible
+// ancestor must be.
+contract("T2 the active heading is indicated without expanding its branch", "pass", async () => {
   const session = await boot();
   try {
     const branch = h(session, "1.1 甲组");
+    const hiddenTarget = h(session, "一、乙组");
     session.clickTocToggle(branch.id);
-    session.fireSpy(h(session, "一、乙组").id);
-    const row = session.tocRow(branch.id);
+    session.fireSpy(hiddenTarget.id);
+
+    assert.equal(
+      session.tocRow(hiddenTarget.id).classList.contains("active"),
+      false,
+      "a hidden TOC row must not carry the visible active marker",
+    );
     assert.ok(
-      row.classList.contains("active") || row.classList.contains("contains-active"),
-      "the nearest visible ancestor of the active heading must be marked",
+      session.tocRow(branch.id).classList.contains("active"),
+      "the nearest visible ancestor must carry the active marker instead",
     );
     assert.deepEqual(session.tocCollapsedIds(), [branch.id],
       "and that branch must stay collapsed");
@@ -442,7 +451,7 @@ contract("T2 the active heading is indicated without expanding its branch", "xfa
 });
 
 // ── N1 (V4): explicit navigation may unfold whatever blocks the jump. ───────
-contract("N1 TOC navigation unfolds a target hidden by the content fold", "xfail", async () => {
+contract("N1 TOC navigation unfolds a target hidden by the content fold", "pass", async () => {
   const session = await boot({ seed: { [LEGACY_FOLD_KEY]: "2" } });
   try {
     session.clickHeadingToggle(h(session, "1.1 甲组"));
@@ -462,7 +471,7 @@ contract("N1 TOC navigation unfolds a target hidden by the content fold", "xfail
 });
 
 // ── N2 (V4): the unfolding that navigation caused must be persisted. ────────
-contract("N2 navigation-induced unfolding is persisted as an override", "xfail", async () => {
+contract("N2 navigation-induced unfolding is persisted as an override", "pass", async () => {
   const session = await boot({ seed: { [LEGACY_FOLD_KEY]: "2" } });
   let storage;
   let branchId;
