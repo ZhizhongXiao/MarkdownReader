@@ -35,7 +35,8 @@ gui/                  pywebview 桌面 GUI
 node_renderer/        Node Markdown 渲染服务
 templates/            阅读器模板和索引模板
 packaging/            PyInstaller 打包配置与图标资源
-samples/              Markdown 示例和参考输出
+samples/              Markdown 示例（输出本地生成，不纳入版本控制）
+tools/                本地辅助脚本（不参与打包）
 docs/                 设计、架构、路线图、更新日志和截图
 tests/                pytest 自动化测试
 config.json           GUI 保存的运行配置
@@ -43,7 +44,7 @@ main.py               GUI 启动入口
 ```
 
 `tests/` 包含当前 pytest 自动化测试，覆盖转换计划、跨文档链接与脚注渲染、
-批量转换集成以及 GUI 资源/契约。渲染相关测试需要本机 Node.js 与
+批量转换集成、demo 生成结构以及 GUI 资源/契约。渲染相关测试需要本机 Node.js 与
 `node_renderer/node_modules`。自动化测试目前不覆盖 GUI 运行时交互、
 浏览器打印和打包后 EXE 的完整实机行为。
 

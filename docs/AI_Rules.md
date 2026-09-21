@@ -97,7 +97,11 @@ MarkdownReader 当前处于个人正式版候选 / 内部发布候选阶段，�
 - `core/index_builder.py`
 - `node_renderer/render.js`
 
-如果修改模板，至少生成一次 `samples/demo.md` 检查输出。
+如果修改模板，至少运行：
+
+python tools/generate_demo.py
+
+然后人工查看生成的 `samples/demo.html`（该文件不纳入版本控制）。
 
 如果修改 GUI，优先确认 `main.py` 启动和 GUI 资源路径。
 
