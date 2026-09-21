@@ -13,7 +13,6 @@
 
 const fs = require("fs");
 const path = require("path");
-const { fileURLToPath } = require("url");
 
 // ── Read stdin ──────────────────────────────────────────────────
 let raw = "";
@@ -144,24 +143,6 @@ function resolveImageSource(src, sourcePath, cache, warnings) {
   let localPath = "";
   if (WINDOWS_ABSOLUTE_RE.test(raw)) {
     localPath = raw;
-  } else if (/^file:/i.test(raw)) {
-    let parsed;
-    try {
-      parsed = new URL(raw);
-    } catch (e) {
-      warnings.push("图片引用无法解析，保留原引用：" + raw);
-      return "";
-    }
-    if (parsed.hostname && parsed.hostname !== "localhost") {
-      warnings.push("图片引用指向远程主机，保留原引用：" + raw);
-      return "";
-    }
-    try {
-      localPath = fileURLToPath(parsed);
-    } catch (e) {
-      warnings.push("图片引用无法解析，保留原引用：" + raw);
-      return "";
-    }
   } else if (URI_SCHEME_RE.test(raw)) {
     return "";
   } else {
@@ -205,18 +186,6 @@ function installImageResolver(md, context, warnings) {
   const sourcePath = context.source_path || "";
   const cache = new Map();
   const original = md.renderer.rules.image;
-
-  // markdown-it rejects file: targets by default, but a local file URI is still
-  // a local document image. Allow that scheme only, and keep the rest of the
-  // built-in policy (javascript:, vbscript: and non-image data: stay blocked).
-  // Note: this applies to link targets as well as images.
-  const originalValidateLink = md.validateLink;
-  md.validateLink = function (url) {
-    if (/^file:/i.test(String(url).trim())) {
-      return true;
-    }
-    return originalValidateLink(url);
-  };
 
   md.renderer.rules.image = function (tokens, idx, options, env, self) {
     const token = tokens[idx];

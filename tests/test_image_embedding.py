@@ -91,14 +91,6 @@ def test_image_path_with_spaces_and_unicode_is_embedded(tmp_path: Path):
     assert _embedded(_img_src(result["html"]))
 
 
-def test_local_file_uri_is_embedded(tmp_path: Path):
-    image = tmp_path / "pic.png"
-    image.write_bytes(_MINIMAL_PNG)
-
-    result = _render("![a](" + image.as_uri() + ")", tmp_path)
-
-    assert _embedded(_img_src(result["html"]))
-
 
 def test_existing_data_uri_is_left_untouched(tmp_path: Path):
     uri = _PNG_PREFIX + _PNG_BASE64
@@ -145,12 +137,6 @@ def test_missing_local_image_keeps_src_and_warns(tmp_path: Path):
     assert result["warnings"]
 
 
-def test_host_style_file_uri_keeps_src_and_warns(tmp_path: Path):
-    result = _render("![a](file://host/share/pic.png)", tmp_path)
-
-    assert _img_src(result["html"]) == "file://host/share/pic.png"
-    assert result["warnings"]
-
 
 def test_remote_image_is_left_untouched(tmp_path: Path):
     sources = [
@@ -173,3 +159,17 @@ def test_source_image_file_is_not_modified(tmp_path: Path):
     _render("![a](pic.png)", tmp_path)
 
     assert image.read_bytes() == before
+
+
+def test_image_resolver_does_not_enable_file_links(tmp_path: Path):
+    """Stage 5 must not change the ordinary link policy for images."""
+    result = _render("[x](file:///C:/secret.txt)", tmp_path)
+
+    assert "href=""file:""" not in result["html"]
+
+
+def test_file_image_keeps_the_markdown_it_default(tmp_path: Path):
+    """A file URI image is left to markdown-it and is not specially handled."""
+    result = _render("![x](file:///C:/a.png)", tmp_path)
+
+    assert "<img" not in result["html"]
