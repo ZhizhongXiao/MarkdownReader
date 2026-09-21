@@ -19,22 +19,35 @@
                 input.style.position = "fixed";
                 input.style.opacity = "0";
                 document.body.appendChild(input);
-                input.select();
-                document.execCommand("copy");
-                input.remove();
+                var copied = false;
+                try {
+                    input.select();
+                    // execCommand reports whether the copy happened. Treating a
+                    // refusal as success is what made a failed copy look done.
+                    copied = document.execCommand("copy") === true;
+                } finally {
+                    input.remove();
+                }
+                return copied;
             }
 
             function copyPath(button, path) {
-                var operation;
+                var attempt;
                 if (navigator.clipboard && navigator.clipboard.writeText) {
-                    operation = navigator.clipboard.writeText(path).catch(function () {
-                        fallbackCopy(path);
+                    attempt = navigator.clipboard.writeText(path).catch(function () {
+                        if (!fallbackCopy(path)) {
+                            throw new Error("复制失败");
+                        }
                     });
                 } else {
-                    fallbackCopy(path);
-                    operation = Promise.resolve();
+                    attempt = fallbackCopy(path)
+                        ? Promise.resolve()
+                        : Promise.reject(new Error("复制失败"));
                 }
-                operation.then(function () {
+                // The success feedback belongs to a copy that really happened,
+                // and the rejection is handled here so a failure cannot turn into
+                // an unhandled rejection either.
+                attempt.then(function () {
                     button.textContent = "✓";
                     button.classList.add("copied");
                     button.title = "已复制";
@@ -43,6 +56,8 @@
                         button.classList.remove("copied");
                         button.title = "复制绝对路径";
                     }, 1200);
+                }, function () {
+                    // Failure stays failure: the button keeps its normal state.
                 });
             }
 

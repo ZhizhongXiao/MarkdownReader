@@ -130,7 +130,7 @@ contract("IX0 liveness: the real generated index page is alive", "pass", async (
 //                                    that it did
 // C deliberately does not demand a particular failure UI. The only rule is that
 // failure must not impersonate success.
-contract("IX1 copy feedback: a copy that did not happen is not reported as success", "xfail", async () => {
+contract("IX1 copy feedback: a copy that did not happen is not reported as success", "pass", async () => {
   // A: the primary path.
   const granted = await boot({ clipboard: "resolve", execCommand: true });
   try {
