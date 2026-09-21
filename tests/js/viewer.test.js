@@ -14,20 +14,26 @@
 // cannot be observed here. Those contracts assert ordering instead: the fold
 // state must be complete on the DOM before the scroll position is written.
 
-import test, { after } from "node:test";
+import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
   boot,
   docStateOf,
-  HIDDEN_CLASS,
   LEGACY_FOLD_KEY,
-  LEGACY_TOC_KEY,
   DOC_STATE_PREFIX,
 } from "./harness.mjs";
 
-const counts = { pass: 0, xfail: 0, xpass: 0, unexpected: 0 };
-
+// Reporting contract: one synchronous line per contract, emitted while that
+// test is still running.
+//
+// A summary emitted from an `after()` hook or a process.on("exit") handler is
+// tempting but fragile in two ways: an ESM named import of `after` is resolved
+// at module load, so it hard-fails on any Node version that does not export it
+// (a `typeof` guard cannot run), and an exit handler cannot be relied on to
+// flush stdout into a pipe. Per-test output is already the path the Python
+// caller observes, and that caller counts the lines itself, so a truncated or
+// crashed run becomes an explicit failure instead of a smaller green suite.
 function contract(name, expectation, body) {
   test(name, async (t) => {
     let failure = null;
@@ -36,26 +42,24 @@ function contract(name, expectation, body) {
     } catch (error) {
       failure = error;
     }
-    if (expectation === "xfail") {
-      if (!failure) {
-        counts.xpass += 1;
-        throw new Error('XPASS: contract now holds - flip its marker to "pass"');
-      }
-      counts.xfail += 1;
+
+    const status = expectation === "xfail"
+      ? (failure ? "xfail" : "xpass")
+      : (failure ? "fail" : "pass");
+
+    console.log("CONTRACT " + status + " " + name);
+    if (status === "xfail") {
       t.diagnostic("xfail (expected): " + String(failure.message || failure).split("\n")[0]);
       return;
     }
-    if (failure) {
-      counts.unexpected += 1;
+    if (status === "xpass") {
+      throw new Error('XPASS: contract now holds - flip its marker to "pass"');
+    }
+    if (status === "fail") {
       throw failure;
     }
-    counts.pass += 1;
   });
 }
-
-after(() => {
-  console.log("JS_CONTRACTS " + JSON.stringify(counts));
-});
 
 // Both fixtures are named README.md, so both documents share a title while
 // living at different pathnames: the precondition for the D1 contract.
@@ -150,13 +154,20 @@ contract("F1 manual fold survives a reload", "xfail", async () => {
 contract("F2 manual collapse survives a level change", "xfail", async () => {
   const session = await boot({ seed: { [LEGACY_FOLD_KEY]: "3" } });
   try {
+    // The discriminator must be the override's OWN effect, not a document
+    // total: a level change legitimately changes how much the baseline hides,
+    // so a global count cannot distinguish "the override was kept" from "the
+    // baseline moved". This child stays hidden only while the manual collapse
+    // survives, so it isolates the override.
+    const child = h(session, "甲一子项");
     session.clickHeadingToggle(h(session, "1.1.1 甲一"));
-    const hidden = session.hiddenCount();
-    assert.ok(hidden > 0, "precondition: the manual collapse hid something");
+    assert.equal(session.isHidden(child), true, "precondition: the manual collapse hid the child");
+
     session.clickToolbar(ADVANCE);
+
     assert.equal(
-      session.hiddenCount(),
-      hidden,
+      session.isHidden(child),
+      true,
       "the level buttons must not discard a manual collapse",
     );
   } finally {

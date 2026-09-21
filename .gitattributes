@@ -1,2 +1,7 @@
 # config.json is rewritten by the GUI on Windows with CRLF newlines.
 config.json text eol=crlf
+
+# npm rewrites this lock file with CRLF newlines on Windows. The attribute keeps
+# LF in the repository while tolerating the worktree copy, the same way
+# config.json is handled above.
+tests/js/package-lock.json text eol=lf

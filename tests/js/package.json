@@ -8,6 +8,6 @@
     "test": "node --test viewer.test.js"
   },
   "devDependencies": {
-    "jsdom": "^30.1.0"
+    "jsdom": "26.1.0"
   }
 }

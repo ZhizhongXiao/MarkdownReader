@@ -17,6 +17,8 @@ gui/assets, templates and node_renderer. When that layer is not installed the
 module skips with an explicit reason instead of failing.
 """
 
+from collections import Counter
+
 import json
 import os
 import re
@@ -41,6 +43,7 @@ CONFIG = {"template": "modern", "numbering": True, "overwrite": True}
 # a silent reduction of coverage.
 EXPECTED_PASS = 2
 EXPECTED_XFAIL = 17
+EXPECTED_CONTRACTS = 19
 
 # One document that deliberately exercises, per contract family:
 #   * five heading levels, for the fold baseline and level contracts (F/M/N/P)
@@ -158,16 +161,29 @@ def test_viewer_state_contracts(viewer_fixtures: dict):
         errors="replace",
     )
     output = (completed.stdout or "") + (completed.stderr or "")
-    summary = re.search(r"JS_CONTRACTS (\{.*\})", output)
-    assert summary, "the viewer contract runner reported no summary:\n" + output
 
-    counts = json.loads(summary.group(1))
-    print("JS_CONTRACTS " + json.dumps(counts, sort_keys=True))
+    # The runner emits one synchronous line per contract; count them here rather
+    # than trusting a summary printed at process exit. A truncated or crashed
+    # run then shows up as a missing record instead of a smaller green suite,
+    # and no reliance on stdout flushing inside an exit handler is needed. The
+    # pattern is deliberately not anchored to the start of a line: the Node test
+    # runner may prefix forwarded output.
+    statuses = re.findall(r"CONTRACT (pass|xfail|xpass|fail) (.*)", output)
+    assert len(statuses) == EXPECTED_CONTRACTS, (
+        "expected " + str(EXPECTED_CONTRACTS) + " contract records but saw "
+        + str(len(statuses)) + ":\n" + output
+    )
+
+    counts = Counter(status for status, _name in statuses)
+    print("JS_CONTRACTS " + json.dumps({
+        name: counts[name] for name in ("pass", "xfail", "xpass", "fail")
+    }))
+    print("JS_CONTRACT_RECORDS " + str(len(statuses)) + " of " + str(EXPECTED_CONTRACTS))
     assert counts["xpass"] == 0, (
         "a contract marked xfail now holds: flip its marker to \"pass\" in "
         "tests/js/viewer.test.js:\n" + output
     )
-    assert counts["unexpected"] == 0, "a contract marked pass failed:\n" + output
+    assert counts["fail"] == 0, "a contract marked pass failed:\n" + output
     assert counts["pass"] == EXPECTED_PASS, output
     assert counts["xfail"] == EXPECTED_XFAIL, output
     assert completed.returncode == 0, output
