@@ -168,3 +168,16 @@ def test_toc_row_follows_the_heading_contract(
 
     assert _toc_field(html, "toc-number") == expected_number
     assert _toc_field(html, "toc-title") == expected_title
+
+def test_raw_html_image_alt_stays_text_in_toc_metadata():
+    """A raw alt attribute source must stay text, entities included."""
+    cases = [
+        ('<img src="x.png" alt="<b>x</b>">', "&lt;b>x&lt;/b>"),
+        ('<img src="x.png" alt="a &amp; b">', "a &amp; b"),
+        ('<img src="x.png" alt="a & b">', "a & b"),
+    ]
+    for raw, expected in cases:
+        markdown = "# " + raw + "\n"
+        heading = render_markdown_node(markdown)["headings"][0]
+
+        assert heading["toc_inline_html"] == expected

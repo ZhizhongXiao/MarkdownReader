@@ -204,6 +204,12 @@ function rawTagAlt(attributes) {
   return match[3];
 }
 
+// The alt attribute is raw attribute source: escape a literal less-than so it
+// cannot start a tag, while leaving existing character references untouched.
+function rawAltAsText(attributes) {
+  return rawTagAlt(attributes).replace(/</g, "&lt;");
+}
+
 function downgradeRawInline(html) {
   return String(html).replace(RAW_TAG_RE, function (tag, name, attributes) {
     const lower = name.toLowerCase();
@@ -211,7 +217,7 @@ function downgradeRawInline(html) {
       return "";
     }
     if (lower === "img") {
-      return rawTagAlt(attributes);
+      return rawAltAsText(attributes);
     }
     return tag;
   });
