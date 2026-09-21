@@ -1,0 +1,2 @@
+# config.json is rewritten by the GUI on Windows with CRLF newlines.
+config.json text eol=crlf
