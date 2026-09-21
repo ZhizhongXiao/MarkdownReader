@@ -11,6 +11,6 @@
     "markdown-it-texmath": "^1.0.0"
   },
   "scripts": {
-    "test": "node -e \"console.log('renderer OK')\""
+    "test": "node --check render.js"
   }
 }

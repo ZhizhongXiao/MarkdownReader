@@ -1,0 +1,13 @@
+{
+  "name": "markdownreader-viewer-tests",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Test-only jsdom harness for the viewer state contracts (Stage 6). Not shipped: packaging/MarkdownReader.spec bundles only gui/assets, templates and node_renderer.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test viewer.test.js"
+  },
+  "devDependencies": {
+    "jsdom": "^30.1.0"
+  }
+}

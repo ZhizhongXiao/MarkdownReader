@@ -45,7 +45,7 @@ main.py               GUI 启动入口
 
 `tests/` 包含当前 pytest 自动化测试，覆盖转换计划、跨文档链接与脚注渲染、
 批量转换集成、demo 生成结构、转换边界契约、TOC 标题契约、图片内嵌契约以及 GUI 资源/契约。渲染相关测试需要本机 Node.js 与
-`node_renderer/node_modules`。自动化测试目前不覆盖 GUI 运行时交互、
+`node_renderer/node_modules`。viewer 状态契约另有独立测试层：`tests/js/`（jsdom + Node 内置 test runner，由 `tests/test_viewer_state_contract.py` 调用）。该层只用于测试、不进打包，未安装 jsdom 时对应模块显式 skip 而非静默通过。自动化测试目前不覆盖 GUI 运行时交互、
 浏览器打印和打包后 EXE 的完整实机行为。测试不长期保留已知缺陷：契约修复后即摘除对应的 `xfail` 标记。
 
 ---

@@ -23,6 +23,8 @@ packaging/node/node.exe
 
 # ===== Node / 前端依赖 =====
 node_renderer/node_modules/
+# 测试专用的 jsdom 测试层（不进打包：spec 只收集 gui/assets、templates、node_renderer）
+tests/js/node_modules/
 
 # ===== 示例生成的 HTML =====
 samples/demo.html
