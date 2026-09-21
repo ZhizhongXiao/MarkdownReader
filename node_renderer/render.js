@@ -13,6 +13,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { fileURLToPath } = require("url");
 
 // ── Read stdin ──────────────────────────────────────────────────
 let raw = "";
@@ -80,6 +81,8 @@ function render(input) {
     // Continue without math support
   }
 
+  installImageResolver(md, context, warnings);
+
   // Render Markdown → HTML
   const html = md.render(markdown);
 
@@ -103,6 +106,132 @@ function render(input) {
     },
   };
 }
+
+// ── Document images ─────────────────────────────────────────────
+// Standard Markdown images that resolve to local files are embedded as data
+// URIs. Everything else keeps the source document semantics: remote and unknown
+// schemes stay untouched, and an unreadable local file keeps its original
+// reference plus a warning instead of failing the document.
+
+const IMAGE_MIME = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".svg": "image/svg+xml",
+  ".bmp": "image/bmp",
+};
+
+// A drive letter path such as C:/docs/pic.png also matches the generic scheme
+// pattern, so Windows absolute paths have to be recognised first.
+const WINDOWS_ABSOLUTE_RE = /^[a-zA-Z]:[\\/]/;
+const URI_SCHEME_RE = /^[a-zA-Z][a-zA-Z0-9+.-]*:/;
+
+function isRemoteSource(src) {
+  return /^(https?:)?\/\//i.test(src);
+}
+
+function resolveImageSource(src, sourcePath, cache, warnings) {
+  const raw = String(src || "");
+  if (!raw) {
+    return "";
+  }
+  if (/^data:/i.test(raw) || /^https?:/i.test(raw) || isRemoteSource(raw)) {
+    return "";
+  }
+
+  let localPath = "";
+  if (WINDOWS_ABSOLUTE_RE.test(raw)) {
+    localPath = raw;
+  } else if (/^file:/i.test(raw)) {
+    let parsed;
+    try {
+      parsed = new URL(raw);
+    } catch (e) {
+      warnings.push("图片引用无法解析，保留原引用：" + raw);
+      return "";
+    }
+    if (parsed.hostname && parsed.hostname !== "localhost") {
+      warnings.push("图片引用指向远程主机，保留原引用：" + raw);
+      return "";
+    }
+    try {
+      localPath = fileURLToPath(parsed);
+    } catch (e) {
+      warnings.push("图片引用无法解析，保留原引用：" + raw);
+      return "";
+    }
+  } else if (URI_SCHEME_RE.test(raw)) {
+    return "";
+  } else {
+    localPath = raw;
+  }
+
+  let decoded = localPath;
+  try {
+    decoded = decodeURI(localPath);
+  } catch (e) {
+    decoded = localPath;
+  }
+
+  const absolute = path.isAbsolute(decoded)
+    ? path.normalize(decoded)
+    : path.resolve(path.dirname(sourcePath), decoded);
+
+  if (cache.has(absolute)) {
+    return cache.get(absolute);
+  }
+
+  let bytes;
+  try {
+    if (!fs.statSync(absolute).isFile()) {
+      throw new Error("not a file");
+    }
+    bytes = fs.readFileSync(absolute);
+  } catch (e) {
+    // Failures are deliberately not cached: every render pass reports them.
+    warnings.push("图片无法内嵌，保留原引用：" + raw);
+    return "";
+  }
+
+  const mime = IMAGE_MIME[path.extname(absolute).toLowerCase()] || "application/octet-stream";
+  const uri = "data:" + mime + ";base64," + bytes.toString("base64");
+  cache.set(absolute, uri);
+  return uri;
+}
+
+function installImageResolver(md, context, warnings) {
+  const sourcePath = context.source_path || "";
+  const cache = new Map();
+  const original = md.renderer.rules.image;
+
+  // markdown-it rejects file: targets by default, but a local file URI is still
+  // a local document image. Allow that scheme only, and keep the rest of the
+  // built-in policy (javascript:, vbscript: and non-image data: stay blocked).
+  // Note: this applies to link targets as well as images.
+  const originalValidateLink = md.validateLink;
+  md.validateLink = function (url) {
+    if (/^file:/i.test(String(url).trim())) {
+      return true;
+    }
+    return originalValidateLink(url);
+  };
+
+  md.renderer.rules.image = function (tokens, idx, options, env, self) {
+    const token = tokens[idx];
+    const srcIndex = token.attrIndex("src");
+    if (srcIndex >= 0) {
+      const rewritten = resolveImageSource(token.attrs[srcIndex][1], sourcePath, cache, warnings);
+      if (rewritten) {
+        token.attrs[srcIndex][1] = rewritten;
+      }
+    }
+    return original ? original(tokens, idx, options, env, self)
+                    : self.renderToken(tokens, idx, options);
+  };
+}
+
 
 function installDocumentLinkResolver(md, context, warnings) {
   const sourcePath = context.source_path || "";

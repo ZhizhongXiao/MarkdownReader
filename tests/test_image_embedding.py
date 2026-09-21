@@ -66,7 +66,6 @@ def _embedded(src: str) -> bool:
         return False
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="known: local Markdown images are not embedded yet")
 def test_relative_local_image_is_embedded(tmp_path: Path):
     (tmp_path / "pic.png").write_bytes(_MINIMAL_PNG)
 
@@ -75,7 +74,6 @@ def test_relative_local_image_is_embedded(tmp_path: Path):
     assert _embedded(_img_src(result["html"]))
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="known: local Markdown images are not embedded yet")
 def test_absolute_local_image_is_embedded(tmp_path: Path):
     image = tmp_path / "pic.png"
     image.write_bytes(_MINIMAL_PNG)
@@ -85,7 +83,6 @@ def test_absolute_local_image_is_embedded(tmp_path: Path):
     assert _embedded(_img_src(result["html"]))
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="known: local Markdown images are not embedded yet")
 def test_image_path_with_spaces_and_unicode_is_embedded(tmp_path: Path):
     (tmp_path / "图片 one.png").write_bytes(_MINIMAL_PNG)
 
@@ -94,7 +91,6 @@ def test_image_path_with_spaces_and_unicode_is_embedded(tmp_path: Path):
     assert _embedded(_img_src(result["html"]))
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="known: local file URIs are not embedded yet")
 def test_local_file_uri_is_embedded(tmp_path: Path):
     image = tmp_path / "pic.png"
     image.write_bytes(_MINIMAL_PNG)
@@ -114,7 +110,6 @@ def test_existing_data_uri_is_left_untouched(tmp_path: Path):
     assert _payload(src) == _MINIMAL_PNG
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="known: local Markdown images are not embedded yet")
 def test_image_inside_a_link_is_embedded_but_the_link_is_kept(tmp_path: Path):
     (tmp_path / "pic.png").write_bytes(_MINIMAL_PNG)
 
@@ -124,7 +119,6 @@ def test_image_inside_a_link_is_embedded_but_the_link_is_kept(tmp_path: Path):
     assert 'href="https://example.com"' in html
     assert _embedded(_img_src(html))
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="known: local Markdown images are not embedded yet")
 def test_repeated_references_are_all_embedded(tmp_path: Path):
     (tmp_path / "pic.png").write_bytes(_MINIMAL_PNG)
 
@@ -144,7 +138,6 @@ def test_toc_heading_keeps_alt_text_for_an_image(tmp_path: Path):
     assert "data:" not in headings[0]["toc_inline_html"]
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="known: missing images do not warn yet")
 def test_missing_local_image_keeps_src_and_warns(tmp_path: Path):
     result = _render("![a](missing.png)", tmp_path)
 
@@ -152,7 +145,6 @@ def test_missing_local_image_keeps_src_and_warns(tmp_path: Path):
     assert result["warnings"]
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="known: host file URIs do not warn yet")
 def test_host_style_file_uri_keeps_src_and_warns(tmp_path: Path):
     result = _render("![a](file://host/share/pic.png)", tmp_path)
 
