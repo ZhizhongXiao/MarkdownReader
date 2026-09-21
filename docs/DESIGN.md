@@ -15,7 +15,7 @@ MarkdownReader 是一个离线 Markdown 文档阅读器生成工具。
 - 打印或导出 PDF
 - 多文件资料索引
 
-生成的 HTML 是项目的核心交付结果。GUI、CLI 和打包程序都只是围绕“生成可离线阅读的 HTML”提供入口。
+生成的 HTML 是项目的核心交付结果。GUI 与打包后的程序都只是围绕“生成可离线阅读的 HTML”提供入口。
 
 MarkdownReader 不是：
 

@@ -239,7 +239,7 @@ class BridgeApi:
         if not output_dir:
             output_dir = load_config().get("output", "output")
 
-        # Build CLI overrides
+        # Build runtime overrides
         overrides = {
             "template": normalize_template_name(template),
             "output": output_dir,
@@ -249,7 +249,7 @@ class BridgeApi:
         }
 
         try:
-            cfg = load_config(cli_overrides=overrides)
+            cfg = load_config(runtime_overrides=overrides)
             plan = build_conversion_plan(paths, output_dir, preserve_structure)
             if plan.get("errors"):
                 return {

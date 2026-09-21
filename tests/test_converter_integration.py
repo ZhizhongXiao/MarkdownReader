@@ -20,7 +20,7 @@ def test_batch_conversion_writes_footnotes_and_cross_document_html_links(tmp_pat
 
     plan = build_conversion_plan([str(chapter_20), str(chapter_24)], str(output))
     config = load_config(
-        cli_overrides={"template": "modern", "build_index": False, "auto_open": False}
+        runtime_overrides={"template": "modern", "build_index": False, "auto_open": False}
     )
     results = process_batch(
         [str(chapter_20), str(chapter_24)],

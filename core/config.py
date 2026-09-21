@@ -1,6 +1,6 @@
 """MarkdownReader configuration management.
 
-Handles loading config.json, merging with CLI overrides, and providing
+Handles loading config.json, merging with runtime overrides, and providing
 template paths with inheritance chain resolution.
 """
 
@@ -122,17 +122,17 @@ def _parse_json(filepath: str) -> dict:
 
 def load_config(
     config_path: str | None = None,
-    cli_overrides: dict | None = None,
+    runtime_overrides: dict | None = None,
 ) -> dict:
-    """Load configuration with priority: CLI > config.json > defaults."""
+    """Load configuration with priority: runtime overrides > config.json > defaults."""
     cfg = dict(_DEFAULTS)
     path = _find_config(config_path)
     if path:
         _logger.debug("正在加载配置：%s", path)
         file_cfg = _parse_json(path)
         cfg.update(file_cfg)
-    if cli_overrides:
-        for key, value in cli_overrides.items():
+    if runtime_overrides:
+        for key, value in runtime_overrides.items():
             if value is not None:
                 cfg[key] = value
     cfg["template"] = normalize_template_name(cfg.get("template"))
