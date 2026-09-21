@@ -22,7 +22,8 @@ def parse_front_matter(md_text: str) -> tuple[dict, str]:
     """Parse YAML front matter from the beginning of a Markdown string.
 
     Front matter is a block delimited by --- at the very start of the file
-    and a closing --- on its own line.
+    and a closing --- on its own line. A single leading UTF-8 BOM is
+    ignored, because files saved by Windows editors often carry one.
 
     Args:
         md_text: Raw Markdown text (may or may not have front matter).
@@ -31,6 +32,9 @@ def parse_front_matter(md_text: str) -> tuple[dict, str]:
         A tuple of (metadata_dict, remaining_markdown).
         If no front matter is found, returns ({}, md_text).
     """
+    if md_text.startswith("\ufeff"):
+        md_text = md_text[1:]
+
     if not md_text.startswith("---"):
         return {}, md_text
 

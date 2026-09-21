@@ -57,11 +57,6 @@ def _body_heading_title(html: str) -> str:
     return html[content_start : html.index("</h1>", content_start)]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="known: UTF-8 BOM defeats front matter detection",
-)
 def test_front_matter_is_read_when_the_file_starts_with_a_bom(tmp_path: Path):
     html = _convert(
         tmp_path,
