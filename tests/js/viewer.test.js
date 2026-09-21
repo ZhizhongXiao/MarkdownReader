@@ -121,7 +121,7 @@ contract("S1 ordering: the fold state is complete before the position is restore
 });
 
 // ── F1 (V8): a manual fold must survive a reload. ───────────────────────────
-contract("F1 manual fold survives a reload", "xfail", async () => {
+contract("F1 manual fold survives a reload", "pass", async () => {
   const first = await boot({ seed: { [LEGACY_FOLD_KEY]: "2" } });
   let hiddenAfterToggle;
   let storage;
@@ -150,25 +150,36 @@ contract("F1 manual fold survives a reload", "xfail", async () => {
   }
 });
 
-// ── F2 (V1): a manual collapse must survive a level change. ─────────────────
-contract("F2 manual collapse survives a level change", "xfail", async () => {
-  const session = await boot({ seed: { [LEGACY_FOLD_KEY]: "3" } });
+// ── F2 (V1): a manual collapse must survive a level round trip. ─────────────
+contract("F2 manual collapse survives a level round trip", "pass", async () => {
+  const session = await boot({ seed: { [LEGACY_FOLD_KEY]: "4" } });
   try {
-    // The discriminator must be the override's OWN effect, not a document
-    // total: a level change legitimately changes how much the baseline hides,
-    // so a global count cannot distinguish "the override was kept" from "the
-    // baseline moved". This child stays hidden only while the manual collapse
-    // survives, so it isolates the override.
-    const child = h(session, "甲一子项");
-    session.clickHeadingToggle(h(session, "1.1.1 甲一"));
-    assert.equal(session.isHidden(child), true, "precondition: the manual collapse hid the child");
+    // The discriminator is one specific descendant, never a document total: a
+    // level change legitimately changes how much the baseline hides, so a count
+    // cannot separate "the override was kept" from "the baseline moved".
+    //
+    // At level 4 the only baseline-collapsed heading is the h5, which has no
+    // children, so nothing is hidden to begin with. Collapsing the h4 hides its
+    // h5 child: that is the override's own, unmasked effect.
+    const parent = h(session, "乙一子项");
+    const child = h(session, "乙一深项");
+    assert.equal(session.isHidden(child), false, "precondition: level 4 leaves the h5 visible");
 
+    session.clickHeadingToggle(parent);
+    assert.equal(session.isHidden(child), true, "precondition: the manual collapse hid the h5");
+
+    // 4 -> 3 makes the baseline catch up with the manual decision, which is
+    // exactly the moment a naive "drop anything equal to the baseline" prune
+    // would throw the user's decision away.
+    session.clickToolbar(COLLAPSE);
+    // 3 -> 4 moves the baseline away again, so only a kept override can still
+    // hide the h5.
     session.clickToolbar(ADVANCE);
 
     assert.equal(
       session.isHidden(child),
       true,
-      "the level buttons must not discard a manual collapse",
+      "a level round trip must not discard a manual collapse",
     );
   } finally {
     session.close();
@@ -176,19 +187,25 @@ contract("F2 manual collapse survives a level change", "xfail", async () => {
 });
 
 // ── F3 (V1): a manual expand must survive a level round trip. ───────────────
-contract("F3 manual expand survives a level round trip", "xfail", async () => {
+contract("F3 manual expand survives a level round trip", "pass", async () => {
   const session = await boot({ seed: { [LEGACY_FOLD_KEY]: "3" } });
   try {
-    const deepest = h(session, "乙一深项");
-    assert.equal(session.isHidden(deepest), true, "precondition: level 3 hides the h5");
-    session.clickHeadingToggle(h(session, "乙一子项"));
-    assert.equal(session.isHidden(deepest), false, "precondition: the manual expand revealed the h5");
-    session.clickToolbar(COLLAPSE);
+    const parent = h(session, "乙一子项");
+    const child = h(session, "乙一深项");
+    assert.equal(session.isHidden(child), true, "precondition: level 3 hides the h5");
+
+    session.clickHeadingToggle(parent);
+    assert.equal(session.isHidden(child), false, "precondition: the manual expand revealed the h5");
+
+    // 3 -> 4 makes the baseline catch up with the manual decision.
     session.clickToolbar(ADVANCE);
+    // 4 -> 3 moves it away again; only a kept override keeps the h5 visible.
+    session.clickToolbar(COLLAPSE);
+
     assert.equal(
-      session.isHidden(deepest),
+      session.isHidden(child),
       false,
-      "the level buttons must not discard a manual expand",
+      "a level round trip must not discard a manual expand",
     );
   } finally {
     session.close();
@@ -196,7 +213,7 @@ contract("F3 manual expand survives a level round trip", "xfail", async () => {
 });
 
 // ── F4: an override equal to the baseline is not worth storing. ─────────────
-contract("F4 redundant overrides are pruned", "xfail", async () => {
+contract("F4 redundant overrides are pruned", "pass", async () => {
   const session = await boot({ seed: { [LEGACY_FOLD_KEY]: "3" } });
   try {
     const heading = h(session, "丙一子项");
@@ -211,7 +228,7 @@ contract("F4 redundant overrides are pruned", "xfail", async () => {
 });
 
 // ── F5: state that references headings which no longer exist must be inert. ─
-contract("F5 removed headings never break the stored state", "xfail", async () => {
+contract("F5 removed headings never break the stored state", "pass", async () => {
   const stale = {
     version: 2,
     content: { level: 2, overrides: { "ghost-heading": "collapsed" } },
@@ -234,7 +251,7 @@ contract("F5 removed headings never break the stored state", "xfail", async () =
 });
 
 // ── M1: the legacy level value migrates into the v2 document state. ─────────
-contract("M1 legacy level migrates into the v2 document state", "xfail", async () => {
+contract("M1 legacy level migrates into the v2 document state", "pass", async () => {
   const session = await boot({ seed: { [LEGACY_FOLD_KEY]: "3" } });
   try {
     assert.equal(session.hiddenCount(), 1, "the legacy value must keep driving the baseline");
@@ -248,8 +265,8 @@ contract("M1 legacy level migrates into the v2 document state", "xfail", async (
 });
 
 // ── M2: V9 — a corrupt legacy value must not mean "expand everything". ──────
-contract("M2 legacy level clamps on migration (-1 to 0, 7 to 6, NaN to 6)", "xfail", async () => {
-  const cases = [["-1", 0], ["7", 6], ["not-a-number", 6]];
+contract("M2 damaged legacy levels are restored, never guessed", "pass", async () => {
+  const cases = [["-1", 0], ["7", 6], ["not-a-number", 6], ["3abc", 6]];
   for (const [raw, expected] of cases) {
     const session = await boot({ seed: { [LEGACY_FOLD_KEY]: raw } });
     try {

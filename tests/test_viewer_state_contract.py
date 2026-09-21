@@ -17,14 +17,13 @@ gui/assets, templates and node_renderer. When that layer is not installed the
 module skips with an explicit reason instead of failing.
 """
 
-from collections import Counter
-
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -41,8 +40,8 @@ CONFIG = {"template": "modern", "numbering": True, "overwrite": True}
 
 # Locked counts. They make a vanished or renamed contract a failure instead of
 # a silent reduction of coverage.
-EXPECTED_PASS = 2
-EXPECTED_XFAIL = 17
+EXPECTED_PASS = 9
+EXPECTED_XFAIL = 10
 EXPECTED_CONTRACTS = 19
 
 # One document that deliberately exercises, per contract family:
@@ -99,7 +98,7 @@ def _js_harness_reason() -> str:
     if not (JS_DIR / "viewer.test.js").is_file():
         return "tests/js/viewer.test.js is missing."
     if not (JS_DIR / "node_modules" / "jsdom").is_dir():
-        return "jsdom is not installed; run: cd tests/js && npm install"
+        return "jsdom is not installed; run: cd tests/js && npm ci"
     return ""
 
 

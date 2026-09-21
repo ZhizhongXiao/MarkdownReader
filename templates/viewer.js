@@ -11,8 +11,31 @@
     var contentArea = null;
     var markdownBody = null;
 
-    // Step-wise content fold state
-    var currentExpandedLevel = 6;   // 0=nothing visible, ..., 6=all visible
+    // ── Document state (v2) ──────────────────────────────────────────────
+    // One canonical state per document, keyed by its path rather than its
+    // title: two documents called README must never share reading state.
+    //
+    //   content.level      baseline: headings deeper than this are collapsed
+    //   content.overrides  explicit user decisions, stored as the DIFFERENCE
+    //                      from the baseline as it was at the moment of the
+    //                      click
+    //
+    // Effective state of one heading:
+    //   override present -> the override
+    //   otherwise        -> getHeadingLevel(heading) > content.level
+    //
+    // Level changes only ever move the baseline; they never touch overrides,
+    // not even when an override happens to agree with the new baseline.
+    var DOC_STATE_PREFIX = "markdownreader-doc-state-v2:";
+    var DOCUMENT_STATE_KEY = DOC_STATE_PREFIX + (window.location.pathname || "document");
+    var MAX_EXPAND_LEVEL = 6;
+    var documentState = {
+        version: 2,
+        content: { level: MAX_EXPAND_LEVEL, overrides: Object.create(null) }
+    };
+    // Legacy key of the previous single-level model. It is read only when a
+    // document has no v2 state yet, is never modified, and keeps seeding every
+    // document that has not been opened since the migration.
     var FOLD_STORAGE = "markdownreader-expandlevel";
 
     function getHeadingLevel(el) {
@@ -189,7 +212,7 @@
                 e.preventDefault(); e.stopPropagation();
                 var h = this.closest("h1, h2, h3, h4, h5, h6");
                 setContentHeadingCollapsed(h, !isContentHeadingCollapsed(h));
-                saveExpandLevel();
+                saveDocumentState();
             });
         });
         syncContentFoldControls();
@@ -207,16 +230,27 @@
     }
 
     var CONTENT_FOLD_CLASS = "is-hidden-by-content-fold";
-    var collapsedContentHeadings = Object.create(null);
 
     function isContentHeadingCollapsed(heading) {
-        return !!(heading && heading.id && collapsedContentHeadings[heading.id]);
+        if (!heading || !heading.id) return false;
+        var override = documentState.content.overrides[heading.id];
+        if (override === "collapsed") return true;
+        if (override === "expanded") return false;
+        return getHeadingLevel(heading) > documentState.content.level;
     }
 
     function setContentHeadingCollapsed(heading, collapsed) {
         if (!heading || !heading.id) return;
-        if (collapsed) collapsedContentHeadings[heading.id] = true;
-        else delete collapsedContentHeadings[heading.id];
+        // An override records the difference from the baseline of this moment,
+        // so returning to that baseline removes the entry again and the state
+        // cannot accumulate entries that no longer mean anything.
+        //
+        // Only a manual click reaches this function. Level changes deliberately
+        // never prune: the baseline can move across an override, and dropping it
+        // at that point would silently discard a decision the user made.
+        var baselineCollapsed = getHeadingLevel(heading) > documentState.content.level;
+        if (collapsed === baselineCollapsed) delete documentState.content.overrides[heading.id];
+        else documentState.content.overrides[heading.id] = collapsed ? "collapsed" : "expanded";
         applyContentFoldState();
     }
 
@@ -327,49 +361,91 @@
     // ═══════════════════════════════════════════════════════════════
     // Module 9: Toolbar — step-wise content expand/collapse
     // ═══════════════════════════════════════════════════════════════
-    function applyExpandLevel(level) {
-        getContentHeadings().forEach(function (h) {
-            if (!h.id) return;
-            if (getHeadingLevel(h) > level) collapsedContentHeadings[h.id] = true;
-            else delete collapsedContentHeadings[h.id];
-        });
-        applyContentFoldState();
-    }
-
+    // Step-wise level control. This moves the baseline and nothing else: the
+    // manual overrides survive, which is what stops a click here from restoring
+    // a fold the user deliberately made. At the top of the range it is a no-op
+    // rather than a wipe, so the button can never outrank an explicit decision.
     function expandOneLevel() {
-        if (currentExpandedLevel >= 6) {
-            collapsedContentHeadings = Object.create(null);
-            applyContentFoldState();
-            saveExpandLevel();
-            return;
-        }
-        currentExpandedLevel++;
-        applyExpandLevel(currentExpandedLevel);
-        saveExpandLevel();
+        if (documentState.content.level >= MAX_EXPAND_LEVEL) return;
+        documentState.content.level++;
+        applyContentFoldState();
+        saveDocumentState();
     }
 
     function collapseOneLevel() {
-        if (currentExpandedLevel <= 0) return;
-        currentExpandedLevel--;
-        applyExpandLevel(currentExpandedLevel);
-        saveExpandLevel();
+        if (documentState.content.level <= 0) return;
+        documentState.content.level--;
+        applyContentFoldState();
+        saveDocumentState();
     }
 
-    function saveExpandLevel() {
-        try { localStorage.setItem(FOLD_STORAGE, String(currentExpandedLevel)); } catch (e) {}
+    function saveDocumentState() {
+        // Persist the whole state object rather than a rebuilt version/content
+        // pair: fields this stage does not own yet (toc, scroll) must survive a
+        // save instead of being dropped on the floor.
+        try { localStorage.setItem(DOCUMENT_STATE_KEY, JSON.stringify(documentState)); } catch (e) {}
     }
 
-    function restoreExpandLevel() {
-        var saved = null;
-        try { saved = localStorage.getItem(FOLD_STORAGE); } catch (e) {}
-        if (saved !== null) {
-            currentExpandedLevel = parseInt(saved, 10);
-            if (isNaN(currentExpandedLevel)) currentExpandedLevel = 6;
+    function parseStoredLevel(raw) {
+        // The previous model only ever wrote String(currentExpandedLevel), so
+        // anything that is not an integer is damage. Damage restores the default
+        // instead of being guessed at: parseInt would read "3abc" as level 3.
+        if (raw === null || String(raw).trim() === "") return MAX_EXPAND_LEVEL;
+        var level = Number(raw);
+        if (!Number.isInteger(level)) return MAX_EXPAND_LEVEL;
+        return Math.max(0, Math.min(MAX_EXPAND_LEVEL, level));
+    }
+
+    function pruneOverrides() {
+        // Heading ids that no longer exist cannot mean anything. They are
+        // filtered in memory only: merely opening a document must not rewrite
+        // its stored state. The next real save writes the filtered version.
+        var existing = Object.create(null);
+        getContentHeadings().forEach(function (h) {
+            if (h.id) existing[h.id] = true;
+        });
+        Object.keys(documentState.content.overrides).forEach(function (id) {
+            if (!existing[id]) delete documentState.content.overrides[id];
+        });
+    }
+
+    function loadDocumentState() {
+        var raw = null;
+        try { raw = localStorage.getItem(DOCUMENT_STATE_KEY); } catch (e) {}
+
+        var stored = null;
+        if (raw) {
+            try { stored = JSON.parse(raw); } catch (e) { stored = null; }
         }
-        // default: all visible (level 6)
-        if (currentExpandedLevel < 0) currentExpandedLevel = 6;
-        if (currentExpandedLevel > 6) currentExpandedLevel = 6;
-        applyExpandLevel(currentExpandedLevel);
+
+        if (stored && typeof stored === "object" && stored.content
+            && typeof stored.content === "object") {
+            // Adopt the stored state, carrying fields this stage does not own
+            // (toc, scroll) along so a later stage can take them over without a
+            // migration. Nothing is written back here.
+            documentState = stored;
+            documentState.content.level = parseStoredLevel(documentState.content.level);
+            if (!documentState.content.overrides
+                || typeof documentState.content.overrides !== "object") {
+                documentState.content.overrides = Object.create(null);
+            }
+            pruneOverrides();
+        } else {
+            // No v2 state for this document yet: seed from the legacy level and
+            // persist right away, so the migration is observable. The legacy key
+            // is never modified: it is global, so it must keep seeding every
+            // document that has not been opened since the migration.
+            var legacy = null;
+            try { legacy = localStorage.getItem(FOLD_STORAGE); } catch (e) {}
+            documentState = {
+                version: 2,
+                content: { level: parseStoredLevel(legacy), overrides: Object.create(null) }
+            };
+            pruneOverrides();
+            saveDocumentState();
+        }
+
+        applyContentFoldState();
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -515,7 +591,7 @@
         initScrollSpy();
         initTocFold();
         initContentFold();
-        restoreExpandLevel();
+        loadDocumentState();
         initImageLightbox();
         initCodeCopy();
         initTableScroll();
