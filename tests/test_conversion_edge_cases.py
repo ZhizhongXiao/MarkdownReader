@@ -1,8 +1,9 @@
 """Regression contracts for conversion edge cases.
 
 The tests marked xfail(strict=True) document known defects that are scheduled
-for a later fix. The strict marker makes the suite fail once the behaviour is
-corrected, which forces the marker to be removed in the fixing commit.
+for a later fix. They also pin the failure type via raises=, so an unrelated
+error (missing template, missing Node.js, broken helper) surfaces as a normal
+failure instead of being swallowed by the marker.
 """
 
 import sys
@@ -20,12 +21,18 @@ from core.conversion_plan import build_conversion_plan  # noqa: E402
 BASE_CONFIG = {"template": "modern", "numbering": False, "overwrite": False}
 
 
+class ExpectedRenderFailure(RuntimeError):
+    """Raised by the fake renderer to simulate a single-document failure."""
+
+
 def _convert(tmp_path: Path, name: str, text: str, cfg: dict, encoding: str = "utf-8") -> str:
     """Convert one Markdown file and return the generated HTML."""
     source = tmp_path / name
     source.write_text(text, encoding=encoding)
     output = tmp_path / (source.stem + ".html")
-    assert converter.process_single(str(source), str(output), cfg) is not None
+    result = converter.process_single(str(source), str(output), cfg)
+    if result is None:
+        raise RuntimeError("conversion produced no output for " + name)
     return output.read_text(encoding="utf-8")
 
 
@@ -42,7 +49,19 @@ def _toc_title(html: str) -> str:
     return html[start : html.index("</span>", start)]
 
 
-@pytest.mark.xfail(strict=True, reason="known: UTF-8 BOM defeats front matter detection")
+def _body_heading_title(html: str) -> str:
+    """Return the inline HTML of the first level-1 heading in the article body."""
+    start = html.index('<article class="markdown-body"')
+    open_tag = html.index("<h1", start)
+    content_start = html.index(">", open_tag) + 1
+    return html[content_start : html.index("</h1>", content_start)]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason="known: UTF-8 BOM defeats front matter detection",
+)
 def test_front_matter_is_read_when_the_file_starts_with_a_bom(tmp_path: Path):
     html = _convert(
         tmp_path,
@@ -55,7 +74,11 @@ def test_front_matter_is_read_when_the_file_starts_with_a_bom(tmp_path: Path):
     assert _document_title(html) == "MetaTitle"
 
 
-@pytest.mark.xfail(strict=True, reason="known: title is not HTML-escaped")
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason="known: title is not HTML-escaped",
+)
 def test_document_title_is_html_escaped(tmp_path: Path):
     html = _convert(
         tmp_path,
@@ -67,20 +90,28 @@ def test_document_title_is_html_escaped(tmp_path: Path):
     assert _document_title(html) == "A &lt;b&gt;B&lt;/b&gt;"
 
 
-@pytest.mark.xfail(strict=True, reason="known: TOC text is re-interpreted as HTML")
-def test_toc_does_not_reinterpret_plain_text_as_html(tmp_path: Path):
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason="known: TOC text is re-interpreted as HTML",
+)
+def test_toc_text_matches_the_body_heading_for_plain_text(tmp_path: Path):
     html = _convert(tmp_path, "lt.md", "# a < b\n", dict(BASE_CONFIG, title=None))
 
-    assert _toc_title(html) == "a &lt; b"
+    assert _toc_title(html) == _body_heading_title(html)
 
 
-def test_toc_keeps_raw_html_that_markdown_allows(tmp_path: Path):
+def test_toc_text_matches_the_body_heading_for_raw_html(tmp_path: Path):
     html = _convert(tmp_path, "raw.md", "# a <b>x</b> y\n", dict(BASE_CONFIG, title=None))
 
-    assert _toc_title(html) == "a <b>x</b> y"
+    assert _toc_title(html) == _body_heading_title(html)
 
 
-@pytest.mark.xfail(strict=True, reason="known: overwrite=False is ignored")
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason="known: overwrite=False is ignored",
+)
 def test_existing_output_is_preserved_when_overwrite_is_false(tmp_path: Path):
     source = tmp_path / "keep.md"
     source.write_text("# New\n", encoding="utf-8")
@@ -92,7 +123,11 @@ def test_existing_output_is_preserved_when_overwrite_is_false(tmp_path: Path):
     assert output.read_text(encoding="utf-8") == "SENTINEL"
 
 
-@pytest.mark.xfail(strict=True, reason="known: process_batch aborts on the first failure")
+@pytest.mark.xfail(
+    strict=True,
+    raises=ExpectedRenderFailure,
+    reason="known: process_batch aborts on the first failure",
+)
 def test_batch_continues_when_a_single_document_fails(tmp_path: Path, monkeypatch):
     source_dir = tmp_path / "src"
     source_dir.mkdir()
@@ -101,12 +136,10 @@ def test_batch_continues_when_a_single_document_fails(tmp_path: Path, monkeypatc
     broken.write_text("# BOOM\n", encoding="utf-8")
     healthy.write_text("# Fine\n", encoding="utf-8")
 
-    real_render = converter.render_markdown_node
-
     def fake_render(md_text, context=None):
         if "BOOM" in md_text:
-            raise RuntimeError("boom")
-        return real_render(md_text, context=context)
+            raise ExpectedRenderFailure("simulated renderer failure")
+        return {"html": "<p>rendered</p>", "headings": [], "assets": {}, "warnings": []}
 
     monkeypatch.setattr(converter, "render_markdown_node", fake_render)
 
