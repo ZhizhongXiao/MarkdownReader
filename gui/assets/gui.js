@@ -364,9 +364,11 @@ async function refreshConversionPlan(activateTab, snapshot) {
         ? document.getElementById("chk-preserve-structure").checked
         : source.preserve_structure;
     var inputs = source.inputs === undefined ? _inputSources : source.inputs;
-    var plan = await pywebview.api.prepare_conversion(
-        JSON.stringify(inputs), output, preserve
-    );
+    var plan = await pywebview.api.prepare_conversion({
+        inputs: inputs.slice(),
+        output_dir: output,
+        preserve_structure: preserve
+    });
     if (revision !== _planRevision) return null;
 
     _conversionItems = Array.isArray(plan.items) ? plan.items : [];
@@ -594,15 +596,15 @@ async function runConvert() {
 
         var result;
         try {
-            result = await pywebview.api.convert(
-                JSON.stringify(runInputs),
-                runOutput,
-                runTemplate,
-                true,
-                runBuildIndex,
-                runAutoOpen,
-                runPreserveStructure
-            );
+            result = await pywebview.api.convert({
+                inputs: runInputs.slice(),
+                output_dir: runOutput,
+                template: runTemplate,
+                overwrite: true,
+                build_index: runBuildIndex,
+                auto_open: runAutoOpen,
+                preserve_structure: runPreserveStructure
+            });
         } catch (error) {
             result = {success: false, files: [], errors: [String(error)], documents: []};
         }

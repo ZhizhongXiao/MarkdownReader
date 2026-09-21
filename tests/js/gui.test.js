@@ -66,10 +66,12 @@ contract("GU0 liveness: the real GUI initialised against the stub", "pass", asyn
   } finally { session.close(); }
 });
 
-contract("GU1 bridge shape: both conversion calls use a single request", "xfail", async () => {
+contract("GU1 bridge shape: both conversion calls send one structured request", "pass", async () => {
   const session = await bootGui();
   try {
-    session.window.addInputs(["C:\\docs\\a.md"]);
+    const first = PLAN_ONE.items[0].source_path;
+
+    session.window.addInputs([first]);
     await session.flush(3);
     await session.resolve("prepare_conversion", PLAN_ONE);
     session.window.runConvert();
@@ -79,12 +81,34 @@ contract("GU1 bridge shape: both conversion calls use a single request", "xfail"
     await session.resolve("set_configs", null);
     await session.flush(3);
 
-    const prepareCounts = session.argCounts("prepare_conversion");
-    const convertCounts = session.argCounts("convert");
-    assert.ok(prepareCounts.length !== 0, "preflight must have called prepare_conversion");
-    assert.ok(convertCounts.length !== 0, "runConvert must have called convert");
-    assert.deepEqual([...new Set(prepareCounts)], [1]);
-    assert.deepEqual([...new Set(convertCounts)], [1]);
+    const prepareCall = session.callsOf("prepare_conversion")[0];
+    const convertCall = session.callsOf("convert")[0];
+    assert.ok(prepareCall, "preflight must have called prepare_conversion");
+    assert.ok(convertCall, "runConvert must have called convert");
+
+    const prepareRequest = prepareCall.args[0];
+    assert.equal(typeof prepareRequest, "object", "prepare_conversion takes an object request");
+    assert.equal(Array.isArray(prepareRequest), false, "the request must not be an array");
+    assert.deepEqual(Object.keys(prepareRequest).sort(),
+      ["inputs", "output_dir", "preserve_structure"]);
+    assert.deepEqual(Array.from(prepareRequest.inputs), [first]);
+    assert.equal(prepareRequest.output_dir, "output");
+    assert.equal(prepareRequest.preserve_structure, false);
+
+    const convertRequest = convertCall.args[0];
+    assert.equal(typeof convertRequest, "object", "convert takes an object request");
+    assert.equal(Array.isArray(convertRequest), false, "the request must not be an array");
+    assert.deepEqual(Object.keys(convertRequest).sort(),
+      ["auto_open", "build_index", "inputs", "output_dir", "overwrite",
+       "preserve_structure", "template"]);
+    assert.deepEqual(Array.from(convertRequest.inputs), [first]);
+    assert.equal(convertRequest.output_dir, "output");
+    assert.equal(convertRequest.template, "modern");
+    assert.equal(convertRequest.overwrite, true);
+    assert.equal(convertRequest.build_index, true);
+    assert.equal(convertRequest.auto_open, true);
+    assert.equal(convertRequest.preserve_structure, false);
+
     assert.equal(PREPARE_SINGLE, "1", "gui/api.py::prepare_conversion must take self + one request");
     assert.equal(CONVERT_SINGLE, "1", "gui/api.py::convert must take self + one request");
   } finally { session.close(); }
@@ -219,7 +243,7 @@ contract("GU5 run snapshot: convert receives the confirmed plan, not live inputs
 
     const call = session.callsOf("convert")[0];
     assert.ok(call, "convert must have been called");
-    assert.deepEqual(JSON.parse(call.args[0]), [first],
+    assert.deepEqual(Array.from(call.args[0].inputs), [first],
       "the conversion request must use the plan snapshot that was confirmed");
   } finally { session.close(); }
 });

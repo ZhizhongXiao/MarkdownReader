@@ -114,17 +114,19 @@ class BridgeApi:
         root.destroy()
         return path if path else ""
 
-    def prepare_conversion(
-        self,
-        inputs_json: str = "[]",
-        output_dir: str = "",
-        preserve_structure: bool = False,
-    ) -> dict:
-        """Expand inputs and return a read-only conversion plan for the GUI."""
+    def prepare_conversion(self, request: dict | None = None) -> dict:
+        """Expand inputs and return a read-only conversion plan for the GUI.
+
+        The GUI sends one structured request, so ``inputs`` is a real list here
+        rather than a JSON string: the bridge has a single protocol.
+        """
+        request = request or {}
         try:
-            paths = json.loads(inputs_json) if isinstance(inputs_json, str) else inputs_json
+            paths = request.get("inputs", [])
             if not isinstance(paths, list):
                 raise ValueError("输入路径必须是数组。")
+            output_dir = request.get("output_dir", "")
+            preserve_structure = bool(request.get("preserve_structure", False))
             if not output_dir:
                 output_dir = load_config().get("output", "output")
             return build_conversion_plan(paths, output_dir, preserve_structure)
@@ -134,7 +136,7 @@ class BridgeApi:
                 "inputs": [],
                 "items": [],
                 "source_root": "",
-                "output_dir": output_dir or "output",
+                "output_dir": request.get("output_dir", "") or "output",
                 "warnings": [],
                 "errors": [str(exc)],
                 "counts": {"selected": 0, "directory": 0, "dependency": 0, "total": 0},
@@ -203,27 +205,13 @@ class BridgeApi:
 
     # ── Conversion ──────────────────────────────────────────
 
-    def convert(
-        self,
-        inputs_json: str = '["samples/demo.md"]',
-        output_dir: str = "",
-        template: str = "modern",
-        overwrite: bool = False,
-        build_index: bool = True,
-        auto_open: bool = False,
-        preserve_structure: bool = False,
-    ) -> dict:
-        """Run conversion and return a result dict.
+    def convert(self, request: dict | None = None) -> dict:
+        """Run conversion and return a result dict for one structured request.
 
         Args:
-            inputs_json: JSON array of file/directory paths.
-            output_dir: Output directory (defaults to config value).
-            template: Template name.
-            overwrite: Overwrite existing files.
-            build_index: Generate index.html.
-            auto_open: Open HTML in browser after generation.
-            preserve_structure: Recreate source subdirectories under a
-                source-name-HTML output directory.
+            request: mapping with inputs (a list of file or directory paths),
+                output_dir, template, overwrite, build_index, auto_open and
+                preserve_structure.
 
         Returns:
             {"success": bool, "files": [...], "errors": [...]}
@@ -234,7 +222,14 @@ class BridgeApi:
         except Exception as e:
             return {"success": False, "files": [], "errors": [str(e)]}
 
-        paths = json.loads(inputs_json) if isinstance(inputs_json, str) else inputs_json
+        request = request or {}
+        paths = request.get("inputs", [])
+        output_dir = request.get("output_dir", "")
+        template = request.get("template", "modern")
+        overwrite = bool(request.get("overwrite", False))
+        build_index = bool(request.get("build_index", True))
+        auto_open = bool(request.get("auto_open", False))
+        preserve_structure = bool(request.get("preserve_structure", False))
 
         if not output_dir:
             output_dir = load_config().get("output", "output")
