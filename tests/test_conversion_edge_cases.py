@@ -1,15 +1,14 @@
 """Regression contracts for conversion edge cases.
 
-The tests marked xfail(strict=True) document known defects that are scheduled
-for a later fix. They also pin the failure type via raises=, so an unrelated
-error (missing template, missing Node.js, broken helper) surfaces as a normal
-failure instead of being swallowed by the marker.
+Each test pins a defect that was found and fixed: a BOM defeating front matter
+detection, an unescaped document title, an ignored overwrite setting, and a
+batch run aborting on the first failure. None of them carries an xfail marker,
+so a regression fails the suite directly. TOC heading behaviour lives in
+test_toc_heading_contract.py.
 """
 
 import sys
 from pathlib import Path
-
-import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -42,21 +41,6 @@ def _document_title(html: str) -> str:
     return html[start : html.index("</title>", start)]
 
 
-def _toc_title(html: str) -> str:
-    """Return the first TOC title span content."""
-    marker = '<span class="toc-title">'
-    start = html.index(marker) + len(marker)
-    return html[start : html.index("</span>", start)]
-
-
-def _body_heading_title(html: str) -> str:
-    """Return the inline HTML of the first level-1 heading in the article body."""
-    start = html.index('<article class="markdown-body"')
-    open_tag = html.index("<h1", start)
-    content_start = html.index(">", open_tag) + 1
-    return html[content_start : html.index("</h1>", content_start)]
-
-
 def test_front_matter_is_read_when_the_file_starts_with_a_bom(tmp_path: Path):
     html = _convert(
         tmp_path,
@@ -78,23 +62,6 @@ def test_document_title_is_html_escaped(tmp_path: Path):
     )
 
     assert _document_title(html) == "A &lt;b&gt;B&lt;/b&gt;"
-
-
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="known: TOC text is re-interpreted as HTML",
-)
-def test_toc_text_matches_the_body_heading_for_plain_text(tmp_path: Path):
-    html = _convert(tmp_path, "lt.md", "# a < b\n", dict(BASE_CONFIG, title=None))
-
-    assert _toc_title(html) == _body_heading_title(html)
-
-
-def test_toc_text_matches_the_body_heading_for_raw_html(tmp_path: Path):
-    html = _convert(tmp_path, "raw.md", "# a <b>x</b> y\n", dict(BASE_CONFIG, title=None))
-
-    assert _toc_title(html) == _body_heading_title(html)
 
 
 def test_existing_output_is_preserved_when_overwrite_is_false(tmp_path: Path):
