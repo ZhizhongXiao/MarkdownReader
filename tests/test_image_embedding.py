@@ -165,7 +165,7 @@ def test_image_resolver_does_not_enable_file_links(tmp_path: Path):
     """Stage 5 must not change the ordinary link policy for images."""
     result = _render("[x](file:///C:/secret.txt)", tmp_path)
 
-    assert "href=""file:""" not in result["html"]
+    assert 'href="file:' not in result["html"]
 
 
 def test_file_image_keeps_the_markdown_it_default(tmp_path: Path):
