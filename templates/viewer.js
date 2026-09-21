@@ -27,7 +27,8 @@
     // Level changes only ever move the baseline; they never touch overrides,
     // not even when an override happens to agree with the new baseline.
     var DOC_STATE_PREFIX = "markdownreader-doc-state-v2:";
-    var DOCUMENT_STATE_KEY = DOC_STATE_PREFIX + (window.location.pathname || "document");
+    var DOCUMENT_ID = window.location.pathname || "document";
+    var DOCUMENT_STATE_KEY = DOC_STATE_PREFIX + DOCUMENT_ID;
     var MAX_EXPAND_LEVEL = 6;
     var documentState = {
         version: 2,
@@ -210,17 +211,6 @@
         syncContentFoldControls();
     }
 
-    function getContentUnder(heading, headingLevel) {
-        var elements = [], sibling = heading.nextElementSibling;
-        while (sibling) {
-            var sibLevel = getHeadingLevel(sibling);
-            if (sibLevel > 0 && sibLevel <= headingLevel) break;
-            elements.push(sibling);
-            sibling = sibling.nextElementSibling;
-        }
-        return elements;
-    }
-
     var CONTENT_FOLD_CLASS = "is-hidden-by-content-fold";
 
     function isContentHeadingCollapsed(heading) {
@@ -289,27 +279,51 @@
         toggle.textContent = collapsed ? "▶" : "▼";
     }
 
-    function clearContentFoldClasses() {
-        markdownBody.querySelectorAll("." + CONTENT_FOLD_CLASS).forEach(function (el) {
-            el.classList.remove(CONTENT_FOLD_CLASS);
-        });
-    }
-
     function syncContentFoldControls() {
         getContentHeadings().forEach(function (heading) {
             setContentHeadingToggle(heading, isContentHeadingCollapsed(heading));
         });
     }
 
+    // One linear pass decides visibility, and the DOM is only touched where the
+    // decision differs from what is already there. The previous version cleared
+    // every hidden class and then rebuilt them, which produced a two-phase state
+    // (a visible flicker) and rewrote classes that had not changed at all.
     function applyContentFoldState() {
-        clearContentFoldClasses();
-        getContentHeadings().forEach(function (heading) {
-            if (!isContentHeadingCollapsed(heading)) return;
-            getContentUnder(heading, getHeadingLevel(heading)).forEach(function (el) {
-                el.classList.add(CONTENT_FOLD_CLASS);
-            });
+        var hidden = new Set();
+        var collapsedDepth = 0;
+        var children = markdownBody.children;
+        for (var i = 0; i < children.length; i++) {
+            var element = children[i];
+            var level = getHeadingLevel(element);
+            if (level && collapsedDepth && level <= collapsedDepth) collapsedDepth = 0;
+            if (collapsedDepth) hidden.add(element);
+            if (level && !collapsedDepth && isContentHeadingCollapsed(element)) {
+                collapsedDepth = level;
+            }
+        }
+        hidden.forEach(function (element) {
+            if (!element.classList.contains(CONTENT_FOLD_CLASS)) {
+                element.classList.add(CONTENT_FOLD_CLASS);
+            }
+        });
+        markdownBody.querySelectorAll("." + CONTENT_FOLD_CLASS).forEach(function (element) {
+            if (hidden.has(element) || isInsideHiddenSection(element, hidden)) return;
+            element.classList.remove(CONTENT_FOLD_CLASS);
         });
         syncContentFoldControls();
+    }
+
+    // A nested element - the table or code block a wrapper was built around after
+    // the fold had already been applied - may keep its own class while its section
+    // stays hidden, but it must not keep it once that section is revealed again.
+    function isInsideHiddenSection(element, hidden) {
+        var node = element.parentElement;
+        while (node && node !== markdownBody) {
+            if (hidden.has(node)) return true;
+            node = node.parentElement;
+        }
+        return false;
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -379,7 +393,9 @@
     // ═══════════════════════════════════════════════════════════════
     // Module 8: Reading Position Restore
     // ═══════════════════════════════════════════════════════════════
-    var scrollStorageKey = "markdownreader-scroll-" + (document.title || "document");
+    // The reading position belongs to the same document identity as the fold
+    // state, so two documents with the same title cannot share it.
+    var scrollStorageKey = "markdownreader-scroll-" + DOCUMENT_ID;
     var SCROLL_SAVE_DELAY = 250;
 
     // The stylesheet gives .content-area scroll-behavior:smooth, so restoring
@@ -618,23 +634,16 @@
     // Module 11: Auto Numbering
     // ═══════════════════════════════════════════════════════════════
     var numberingStorageKey = "markdownreader-autonumbering";
+    // Number recognition belongs to the converter: core/toc.py decides once and
+    // publishes the result as data-explicit-number on every TOC row. The viewer
+    // only consumes that conclusion, so there is no second definition of what an
+    // explicit number looks like.
     function markAlreadyNumberedHeadings() {
-        getContentHeadings().forEach(function (h) {
-            var text = "";
-            for (var i = 0; i < h.childNodes.length; i++) {
-                var node = h.childNodes[i];
-                if (node.nodeType === 3) {
-                    text += node.textContent;
-                } else if (node.nodeType === 1) {
-                    if (!node.classList.contains("heading-toggle")) {
-                        text += node.textContent || "";
-                    }
-                }
-            }
-            if (/^\d+(\.\d+)*[\s\.、）\)　]/.test(text.trim()) || /^第[一二三四五六七八九十百千]+[章节]/.test(text.trim())) {
-                h.classList.add("no-autonumber");
-            }
-        });
+        tocBody.querySelectorAll('.toc-row[data-explicit-number="true"]')
+            .forEach(function (row) {
+                var heading = document.getElementById(row.getAttribute("data-id"));
+                if (heading) heading.classList.add("no-autonumber");
+            });
     }
     function applyAutoNumbering(enabled) {
         if (enabled) {

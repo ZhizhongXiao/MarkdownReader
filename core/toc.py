@@ -88,6 +88,9 @@ def generate_toc_html(headings: list[dict]) -> str:
             number_html = '<span class="toc-number"></span>'
 
         data_has = "true" if has_children else "false"
+        # Number recognition is decided here and published for the viewer to
+        # consume, so the rule exists in exactly one place.
+        data_explicit = "true" if number else "false"
 
         if has_children:
             toggle_html = (
@@ -101,6 +104,7 @@ def generate_toc_html(headings: list[dict]) -> str:
         row = (
             f'<div class="toc-row" data-id="{anchor}" '
             f'data-level="{level}" data-has-children="{data_has}" '
+            f'data-explicit-number="{data_explicit}" '
             f'style="--toc-level: {level}">'
             f"{toggle_html}"
             f'<a class="toc-link" href="#{anchor}">'

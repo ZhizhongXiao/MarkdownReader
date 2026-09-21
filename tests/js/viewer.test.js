@@ -64,7 +64,7 @@ function contract(name, expectation, body) {
 // Both fixtures are named README.md, so both documents share a title while
 // living at different pathnames: the precondition for the D1 contract.
 const TITLE = "README";
-const SCROLL_KEY = "markdownreader-scroll-" + TITLE;
+const SCROLL_KEY = "markdownreader-scroll-" + pathnameOf("A");
 
 function pathnameOf(variant) {
   const url = process.env[variant === "B" ? "MR_FIXTURE_B_URL" : "MR_FIXTURE_A_URL"];
@@ -280,13 +280,11 @@ contract("M2 damaged legacy levels are restored, never guessed", "pass", async (
 });
 
 // ── D1 (V6): document identity is the path, never the title. ────────────────
-contract("D1 same title, different pathname: positions never leak", "xfail", async () => {
+contract("D1 same title, different pathname: positions never leak", "pass", async () => {
   const a = await boot({ variant: "A" });
   const b = await boot({ variant: "B" });
-  let title;
   try {
-    title = a.doc.title;
-    assert.equal(title, b.doc.title, "precondition: both fixtures carry the same title");
+    assert.equal(a.doc.title, b.doc.title, "precondition: both fixtures carry the same title");
     assert.notEqual(
       a.window.location.pathname,
       b.window.location.pathname,
@@ -297,7 +295,11 @@ contract("D1 same title, different pathname: positions never leak", "xfail", asy
     b.close();
   }
 
-  const seed = { ["markdownreader-scroll-" + title]: "500" };
+  // The reading position belongs to one document, identified by its PATH. The
+  // old global title key is deliberately NOT honoured as a fallback: reading
+  // position is short-lived state, and a title fallback would reintroduce the
+  // very leak this contract is about.
+  const seed = { ["markdownreader-scroll-" + pathnameOf("A")]: "500" };
 
   const first = await boot({ variant: "A", seed });
   try {
@@ -497,7 +499,7 @@ contract("N2 navigation-induced unfolding is persisted as an override", "pass", 
 // everything". This is the one contract that observes an operation pattern
 // rather than resulting state, because in a layout-less environment the
 // symptom (flicker) is unobservable.
-contract("P1 collapsing a section never clears the hidden class elsewhere", "xfail", async () => {
+contract("P1 collapsing a section never clears the hidden class elsewhere", "pass", async () => {
   const session = await boot({ seed: { [LEGACY_FOLD_KEY]: "2" } });
   try {
     const before = session.hiddenCount();
@@ -518,7 +520,7 @@ contract("P1 collapsing a section never clears the hidden class elsewhere", "xfa
 // ── NUM1 (V10): Python owns number recognition; the viewer rejects the rest. ─
 // "2）楔子" is NOT an explicit number for core/toc.py, but the viewer's own
 // regex matches it, so it currently suppresses auto numbering by mistake.
-contract("NUM1 headings Python does not read as numbered are not marked", "xfail", async () => {
+contract("NUM1 headings Python does not read as numbered are not marked", "pass", async () => {
   const session = await boot();
   try {
     const falsePositives = session.numbered().filter((text) => text.startsWith("2）"));
@@ -530,7 +532,7 @@ contract("NUM1 headings Python does not read as numbered are not marked", "xfail
 });
 
 // ── NUM2 (V10): the three forms Python DOES read as numbered must be marked. ─
-contract("NUM2 every heading Python reads as numbered is marked", "xfail", async () => {
+contract("NUM2 every heading Python reads as numbered is marked", "pass", async () => {
   const session = await boot();
   try {
     const numbered = session.numbered();
