@@ -5,11 +5,16 @@ deliberate downgrades for content that must not be embedded in a TOC
 navigation link: links become their visible text and images become their alt
 text.
 
-The expectations in TOC_EXPECTATIONS are written out per heading on purpose.
-They describe the product contract, so the tests never re-implement number
-splitting or inline rendering to derive an expected value.
+Links and images are downgraded in both their Markdown form and their raw HTML
+form, while other raw HTML such as <b> is rendered as-is.
+
+The expectations in TOC_EXPECTATIONS and TOC_INLINE_HTML_EXPECTATIONS are
+written out per heading on purpose. They describe the product contract, so the
+tests never re-implement number splitting or inline rendering to derive an
+expected value.
 """
 
+import re
 import sys
 from pathlib import Path
 
@@ -44,9 +49,41 @@ TOC_EXPECTATIONS = [
         "<strong>1.2</strong> unusual",
         "known: the TOC re-renders inline Markdown",
     ),
+    (
+        '<a href="https://example.com">link</a>',
+        "",
+        "link",
+        "known: raw HTML anchors are not downgraded",
+    ),
+    (
+        '<img src="x.png" alt="alt">',
+        "",
+        "alt",
+        "known: raw HTML images keep their markup",
+    ),
 ]
 
 HEADING_SOURCES = [markdown for markdown, _, _, _ in TOC_EXPECTATIONS]
+
+# Expected toc_inline_html per heading inline source: the full TOC-safe
+# inline HTML before number splitting. Markdown and raw HTML links become their
+# visible content; Markdown and raw HTML images become their alt text.
+TOC_INLINE_HTML_EXPECTATIONS = [
+    ("a < b", "a &lt; b"),
+    ("a & b", "a &amp; b"),
+    ("*emphasis*", "<em>emphasis</em>"),
+    ("**strong**", "<strong>strong</strong>"),
+    ("`code`", "<code>code</code>"),
+    ("a <b>x</b> y", "a <b>x</b> y"),
+    ("[link](https://example.com)", "link"),
+    ("![alt](x.png)", "alt"),
+    ("![](x.png)", ""),
+    ("1.2 Plain", "1.2 Plain"),
+    ("1.2 *emphasis*", "1.2 <em>emphasis</em>"),
+    ("**1.2** unusual", "<strong>1.2</strong> unusual"),
+    ('<a href="https://example.com">link</a>', "link"),
+    ('<img src="x.png" alt="alt">', "alt"),
+]
 
 
 def _toc_params():
@@ -94,18 +131,43 @@ def test_heading_text_keeps_the_raw_inline_source(markdown: str):
     assert headings[0]["text"] == markdown
 
 
+def _multi_heading_document() -> str:
+    """Return one document that contains every heading source in order."""
+    return ("\n\n").join("# " + markdown for markdown in HEADING_SOURCES)
+
+
+def _body_heading_html(html: str) -> list:
+    """Return the inline HTML of every level-1 heading in the rendered body."""
+    return re.findall("<h1[^>]*>(.*?)</h1>", html, re.S)
+
+
 @pytest.mark.xfail(
     strict=True,
     raises=KeyError,
     reason="known: heading metadata does not expose inline_html yet",
 )
 def test_heading_metadata_exposes_inline_html():
-    document = "\n\n".join("# " + markdown for markdown in HEADING_SOURCES)
-    headings = render_markdown_node(document)["headings"]
+    rendered = render_markdown_node(_multi_heading_document())
+    headings = rendered["headings"]
+    body = _body_heading_html(rendered["html"])
 
     assert len(headings) == len(HEADING_SOURCES)
-    for heading in headings:
-        assert heading["inline_html"]
+    assert len(body) == len(HEADING_SOURCES)
+    for heading, expected in zip(headings, body):
+        assert heading["inline_html"] == expected
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=KeyError,
+    reason="known: heading metadata does not expose toc_inline_html yet",
+)
+def test_heading_metadata_exposes_toc_inline_html():
+    headings = render_markdown_node(_multi_heading_document())["headings"]
+
+    assert len(headings) == len(TOC_INLINE_HTML_EXPECTATIONS)
+    for heading, (_, expected) in zip(headings, TOC_INLINE_HTML_EXPECTATIONS):
+        assert heading["toc_inline_html"] == expected
 
 
 @pytest.mark.parametrize("markdown, expected_number, expected_title", _toc_params())
