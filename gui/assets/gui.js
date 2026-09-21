@@ -371,6 +371,16 @@ async function refreshConversionPlan(activateTab, snapshot) {
     });
     if (revision !== _planRevision) return null;
 
+    // The converter is the canonical authority for how an input is spelled: it
+    // runs abspath plus normpath and reports the result in plan.inputs. Adopting it
+    // here keeps identity comparisons consistent without teaching the GUI any
+    // Windows path rules. Only interactive preflights adopt, and only after the
+    // revision guard, so a stale response cannot rewrite the state.
+    if (!snapshot && Array.isArray(plan.inputs)) {
+        _inputSources = plan.inputs.slice();
+        updateInputSummary();
+    }
+
     _conversionItems = Array.isArray(plan.items) ? plan.items : [];
     _planWarnings = Array.isArray(plan.warnings) ? plan.warnings : [];
     _planErrors = Array.isArray(plan.errors) ? plan.errors : [];
@@ -387,7 +397,8 @@ function statusInfo(status) {
         success: ["✓", "完成"],
         warning: ["!", "警告"],
         error: ["×", "失败"],
-        conflict: ["×", "冲突"]
+        conflict: ["×", "冲突"],
+        skipped: ["–", "未转换"]
     };
     return values[status] || values.pending;
 }
@@ -632,9 +643,14 @@ async function runConvert() {
             }
         } else {
             _conversionItems.forEach(function(item) {
+                // Only the backend may report a file failure. Anything the run
+                // never reached is a terminal skipped state: calling it an error
+                // would invent evidence, and leaving it pending would imply work
+                // that is still coming. The run errors are not attached to these
+                // items, because that would imply the files themselves failed.
                 if (item.status === "pending" || item.status === "converting") {
-                    item.status = "error";
-                    item.warnings = result.errors || ["转换未完成。"];
+                    item.status = "skipped";
+                    item.warnings = [];
                 }
             });
             renderConversionList();

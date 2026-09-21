@@ -14,6 +14,7 @@ const PREPARE_SINGLE = process.env.MR_PREPARE_SINGLE_REQUEST;
 const CONVERT_SINGLE = process.env.MR_CONVERT_SINGLE_REQUEST;
 
 const PLAN_ONE = {
+  inputs: ["C:\\docs\\a.md"],
   items: [{
     source_path: "C:\\docs\\a.md", input_path: "C:\\docs\\a.md",
     output_path: "output/a.html", output_relative: "a.html",
@@ -162,16 +163,15 @@ contract("GU2 clear-inputs: a plan that resolves late must not come back", "pass
   } finally { session.close(); }
 });
 
-contract("GU3 terminal state: an untouched file is not a failure", "xfail", async () => {
+contract("GU3 terminal state: an untouched file is not a failure", "pass", async () => {
   const session = await bootGui();
   try {
-    session.window.addInputs(["C:\\docs\\a.md", "C:\\docs\\b.md"]);
+    const first = PLAN_ONE.items[0].source_path;
+    const second = PLAN_TWO.items[1].source_path;
+
+    session.window.addInputs([first, second]);
     await session.flush(3);
-    await session.resolve("prepare_conversion", {
-      items: PLAN_TWO.items,
-      warnings: [], errors: [], output_dir: "output",
-      counts: PLAN_TWO.counts,
-    });
+    await session.resolve("prepare_conversion", PLAN_TWO);
     session.window.runConvert();
     await session.flush(3);
     await session.resolve("prepare_conversion", PLAN_TWO);
@@ -180,39 +180,50 @@ contract("GU3 terminal state: an untouched file is not a failure", "xfail", asyn
     await session.flush(3);
     await session.resolve("convert", {
       success: false, files: [], errors: ["boom"], output_dir: "output",
-      documents: [{ source_path: "C:\\docs\\a.md", status: "error", warnings: [] }],
+      documents: [{ source_path: first, status: "error", warnings: [] }],
     });
     await session.flush(5);
 
-    assert.equal(session.text("stat-error"), "1",
-      "only the reported failure may count as an error; the untouched file must not");
+    const rows = session.list("conversion-list").children;
+    assert.equal(rows.length, 2, "both documents stay listed after the run");
+    assert.ok(rows[0].className.indexOf("status-error") !== -1,
+      "a failure the backend reported keeps its error state");
+    assert.ok(rows[1].className.indexOf("status-skipped") !== -1,
+      "a file the run never reached is a terminal skipped state, not a failure");
+    assert.equal(rows[1].querySelector(".conversion-status").title, "未转换",
+      "and it says so, instead of implying the file itself failed");
+    assert.equal(session.text("stat-error"), "1", "only the reported failure counts as an error");
+    assert.equal(session.text("stat-pending"), "0", "a finished run leaves nothing pending");
   } finally { session.close(); }
 });
 
-contract("GU4 identity: the same document added twice is still one input", "xfail", async () => {
+contract("GU4 identity: the same document added twice is still one input", "pass", async () => {
   const session = await bootGui();
   try {
     const raw = "C:\\Docs\\x\\..\\a.md";
+    const canonical = PLAN_ONE.inputs[0];
+
     session.window.addInputs([raw]);
     await session.flush(3);
+    // The converter is the canonical authority for input spelling: it runs
+    // abspath plus normpath and reports the result in plan.inputs. The GUI must
+    // not grow its own Windows path parser.
     await session.resolve("prepare_conversion", {
-      items: [Object.assign({}, PLAN_ONE.items[0], { source_path: raw, input_path: "C:\\Docs\\a.md" })],
+      inputs: [canonical],
+      items: [Object.assign({}, PLAN_ONE.items[0], { source_path: canonical })],
       warnings: [], errors: [], output_dir: "output",
       counts: { selected: 1, directory: 0, dependency: 0, total: 1 },
     });
     await session.flush(3);
     const single = session.text("input-summary");
 
-    // Removal already compares raw inputs with each other, so it is safe. The
-    // reachable defect of string identity is here: the canonical spelling of the
-    // very same document is accepted as a second input.
-    session.window.addInputs(["C:\\Docs\\a.md"]);
+    session.window.addInputs([canonical]);
     await session.flush(3);
     await session.resolve("prepare_conversion", PLAN_ONE);
     await session.flush(3);
 
     assert.equal(session.text("input-summary"), single,
-      "a canonically equal path must not become a second input");
+      "the canonical spelling of an added document must not become a second input");
   } finally { session.close(); }
 });
 
