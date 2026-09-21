@@ -113,11 +113,6 @@ def test_existing_output_is_preserved_when_overwrite_is_false(tmp_path: Path):
     assert report["warnings"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=ExpectedRenderFailure,
-    reason="known: process_batch aborts on the first failure",
-)
 def test_batch_continues_when_a_single_document_fails(tmp_path: Path, monkeypatch):
     source_dir = tmp_path / "src"
     source_dir.mkdir()

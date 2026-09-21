@@ -248,17 +248,23 @@ def process_batch(
             progress_callback(input_path, "converting", [], out_path)
 
         render_report: dict = {}
-        saved = process_single(
-            input_path,
-            out_path,
-            cfg,
-            link_context={
-                "source_path": input_path,
-                "output_path": out_path,
-                "document_map": link_map,
-            },
-            report=render_report,
-        )
+        try:
+            saved = process_single(
+                input_path,
+                out_path,
+                cfg,
+                link_context={
+                    "source_path": input_path,
+                    "output_path": out_path,
+                    "document_map": link_map,
+                },
+                report=render_report,
+            )
+        except Exception as e:
+            _logger.error("转换失败：%s；原因：%s", input_path, e)
+            if progress_callback:
+                progress_callback(input_path, "error", [str(e)], out_path)
+            continue
 
         if saved:
             # Extract metadata for index
