@@ -72,8 +72,17 @@ def process_single(
         cfg: Configuration dict (from load_config).
 
     Returns:
-        The output path on success, or None on failure.
+        The output path on success, or None on failure. When the output already
+        exists and overwrite is disabled, the existing file is kept, a warning is
+        recorded in ``report``, and that path is returned.
     """
+    if os.path.exists(output_path) and not cfg.get("overwrite", False):
+        warning = "目标文件已存在且未启用覆盖，已跳过：%s" % output_path
+        _logger.warning(warning)
+        if report is not None:
+            report["warnings"] = [warning]
+        return output_path
+
     template_name = normalize_template_name(cfg.get("template", "modern"))
 
     # 1. Read Markdown

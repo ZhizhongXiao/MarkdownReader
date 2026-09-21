@@ -97,20 +97,20 @@ def test_toc_text_matches_the_body_heading_for_raw_html(tmp_path: Path):
     assert _toc_title(html) == _body_heading_title(html)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="known: overwrite=False is ignored",
-)
 def test_existing_output_is_preserved_when_overwrite_is_false(tmp_path: Path):
     source = tmp_path / "keep.md"
     source.write_text("# New\n", encoding="utf-8")
     output = tmp_path / "keep.html"
     output.write_text("SENTINEL", encoding="utf-8")
+    report: dict = {}
 
-    converter.process_single(str(source), str(output), dict(BASE_CONFIG, overwrite=False))
+    saved = converter.process_single(
+        str(source), str(output), dict(BASE_CONFIG, overwrite=False), report=report
+    )
 
     assert output.read_text(encoding="utf-8") == "SENTINEL"
+    assert saved == str(output)
+    assert report["warnings"]
 
 
 @pytest.mark.xfail(
