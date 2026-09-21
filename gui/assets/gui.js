@@ -10,6 +10,7 @@ var _planWarnings = [];
 var _planErrors = [];
 var _planRevision = 0;
 var _apiReady = false;
+var _conversionRunning = false;
 var _expandedItems = {};
 var _logIssueCount = 0;
 var _logIssueLevel = "";
@@ -66,6 +67,26 @@ function updateLogAttention() {
     tab.setAttribute("aria-label", hasIssues ? "日志，" + _logIssueCount + " 个问题" : "日志");
 }
 
+// The lock is state, not just disabled controls: dropping files or calling a
+// mutator directly must not change the inputs of a run that is already in flight.
+function setConversionRunning(running) {
+    _conversionRunning = running;
+    var runButton = document.querySelector(".btn-run");
+    if (runButton) runButton.disabled = running;
+    var templateButton = document.getElementById("template-select-btn");
+    if (templateButton) templateButton.disabled = running;
+    var output = document.getElementById("output-path");
+    if (output) output.disabled = running;
+    ["chk-build-index", "chk-auto-open", "chk-preserve-structure"].forEach(function (id) {
+        var node = document.getElementById(id);
+        if (node) node.disabled = running;
+    });
+    updateInputSummary();      // keeps the clear button in step with the inputs
+    renderConversionList();    // the remove buttons are recreated, so they read _conversionRunning
+}
+
+// A TOC-independent helper: the GUI records the plan it confirmed, and the run
+// uses that snapshot for every bridge call.
 function resetLogAttention() {
     _logIssueCount = 0;
     _logIssueLevel = "";
@@ -146,6 +167,7 @@ function buildTemplateDropdown(items) {
 }
 
 function selectTemplate(name) {
+    if (_conversionRunning) return;
     _selectedTemplate = name;
     document.getElementById("template-select-text").textContent = name;
     updateTemplatePreview(name);
@@ -234,6 +256,7 @@ function updateInputSummary() {
 }
 
 async function addInputs(paths) {
+    if (_conversionRunning) return;
     if (!Array.isArray(paths)) paths = [paths];
     var existing = {};
     _inputSources.forEach(function(path) { existing[pathKey(path)] = true; });
@@ -250,6 +273,7 @@ async function addInputs(paths) {
 }
 
 async function removeInputSource(path) {
+    if (_conversionRunning) return;
     var key = pathKey(path);
     _inputSources = _inputSources.filter(function(item) { return pathKey(item) !== key; });
     updateInputSummary();
@@ -257,29 +281,43 @@ async function removeInputSource(path) {
 }
 
 async function clearInputs() {
+    if (_conversionRunning) return;
+    // Invalidate every plan request already in flight BEFORE the state is reset, so
+    // a response that arrives later cannot pass the revision guard and repopulate
+    // the list we just emptied.
+    ++_planRevision;
     _inputSources = [];
     _conversionItems = [];
     _planWarnings = [];
     _planErrors = [];
     _expandedItems = {};
+    // The produced file belongs to the run we just reset; the output DIRECTORY is
+    // deliberately kept, because clearing inputs does not invalidate a directory.
+    _lastOutputFile = "";
+    document.getElementById("btn-open-file").disabled = true;
+    document.getElementById("statusBadge").textContent = "READY";
+    document.getElementById("statusText").textContent = "就绪 - 选择 Markdown 文件开始转换";
     updateInputSummary();
     renderConversionList();
     showConversionTab();
 }
 
 async function selectFiles() {
+    if (_conversionRunning) return;
     if (!_apiReady) return;
     var paths = await pywebview.api.select_input_files();
     if (paths && paths.length) await addInputs(paths);
 }
 
 async function selectDir() {
+    if (_conversionRunning) return;
     if (!_apiReady) return;
     var path = await pywebview.api.select_input_directory();
     if (path) await addInputs([path]);
 }
 
 async function selectOutput() {
+    if (_conversionRunning) return;
     if (!_apiReady) return;
     var path = await pywebview.api.select_output_directory();
     if (path) {
@@ -290,6 +328,7 @@ async function selectOutput() {
 }
 
 async function acceptDroppedInputs(paths) {
+    if (_conversionRunning) return;
     setDropOverlay(false);
     if (paths && paths.length) {
         log("INFO", "已拖入 " + paths.length + " 个文件或目录来源。");
@@ -305,7 +344,7 @@ document.addEventListener("dragleave", function(event) {
     if (!event.relatedTarget) setDropOverlay(false);
 });
 
-async function refreshConversionPlan(activateTab) {
+async function refreshConversionPlan(activateTab, snapshot) {
     var revision = ++_planRevision;
     if (_inputSources.length === 0) {
         _conversionItems = [];
@@ -317,10 +356,16 @@ async function refreshConversionPlan(activateTab) {
     }
     if (!_apiReady) return null;
 
-    var output = document.getElementById("output-path").value.trim() || "output";
-    var preserve = document.getElementById("chk-preserve-structure").checked;
+    var source = snapshot || {};
+    var output = source.output === undefined
+        ? document.getElementById("output-path").value.trim() || "output"
+        : source.output;
+    var preserve = source.preserve_structure === undefined
+        ? document.getElementById("chk-preserve-structure").checked
+        : source.preserve_structure;
+    var inputs = source.inputs === undefined ? _inputSources : source.inputs;
     var plan = await pywebview.api.prepare_conversion(
-        JSON.stringify(_inputSources), output, preserve
+        JSON.stringify(inputs), output, preserve
     );
     if (revision !== _planRevision) return null;
 
@@ -435,6 +480,7 @@ function renderConversionList() {
 
         var action = document.createElement("button");
         action.className = "conversion-remove";
+    action.disabled = _conversionRunning;
         action.textContent = "×";
         action.title = item.origin === "directory" ? "移除该目录来源" : "移除该文件";
         action.onclick = function(event) {
@@ -506,88 +552,102 @@ async function runConvert() {
         return;
     }
 
-    resetLogAttention();
-    var plan = await refreshConversionPlan(false);
-    if (!plan || _planErrors.length || _conversionItems.length === 0) {
-        log("ERROR", _planErrors.join("；") || "转换清单为空。");
-        showConversionTab();
-        return;
-    }
+    // Freeze the whole run at entry. The lock stops the GUI from drifting, and the
+    // snapshot is what every bridge call of this run uses. The output directory is
+    // taken from the UI and never from plan.output_dir, because the plan may
+    // already hold the derived "<dir>-HTML" directory for a single-source run.
+    setConversionRunning(true);
+    var runInputs = _inputSources.slice();
+    var runOutput = document.getElementById("output-path").value.trim() || "output";
+    var runTemplate = getSelectedTemplate();
+    var runBuildIndex = document.getElementById("chk-build-index").checked;
+    var runAutoOpen = document.getElementById("chk-auto-open").checked;
+    var runPreserveStructure = document.getElementById("chk-preserve-structure").checked;
+    var snapshot = {
+        inputs: runInputs,
+        output: runOutput,
+        preserve_structure: runPreserveStructure
+    };
 
-    var output = document.getElementById("output-path").value.trim() || "output";
-    var template = getSelectedTemplate();
-    var buildIndex = document.getElementById("chk-build-index").checked;
-    var autoOpen = document.getElementById("chk-auto-open").checked;
-    var preserveStructure = document.getElementById("chk-preserve-structure").checked;
-    await pywebview.api.set_configs({
-        input: _inputSources[0] || "",
-        template: template,
-        output: output,
-        build_index: buildIndex,
-        auto_open: autoOpen,
-        preserve_structure: preserveStructure
-    });
-    _lastOutputDir = output;
-
-    document.getElementById("statusBadge").textContent = "BUSY";
-    document.getElementById("statusText").textContent = "正在转换 " + _conversionItems.length + " 个文档…";
-    document.querySelector(".btn-run").disabled = true;
-    showConversionTab();
-    log("INFO", "开始转换。文档: " + _conversionItems.length + "  模板: " + template);
-
-    var result;
     try {
-        result = await pywebview.api.convert(
-            JSON.stringify(_inputSources),
-            output,
-            template,
-            true,
-            buildIndex,
-            autoOpen,
-            preserveStructure
-        );
-    } catch (error) {
-        result = {success: false, files: [], errors: [String(error)], documents: []};
-    } finally {
-        document.querySelector(".btn-run").disabled = false;
-    }
-
-    (result.documents || []).forEach(function(documentResult) {
-        updateConversionStatus(
-            documentResult.source_path,
-            documentResult.status || "success",
-            documentResult.warnings || [],
-            documentResult.output_path || documentResult.path || ""
-        );
-    });
-
-    if (result.success) {
-        document.getElementById("statusBadge").textContent = "DONE";
-        document.getElementById("statusText").textContent = "转换完成 - " + result.files.length + " 个文件";
-        log("INFO", "转换完成：共生成 " + result.files.length + " 个文件");
-        log("INFO", "使用模板：" + template);
-        _lastOutputDir = result.output_dir || output;
-        log("INFO", "输出目录：" + _lastOutputDir);
-        if (result.files.length > 0) {
-            _lastOutputFile = result.entry_file || result.files[0];
-            document.getElementById("btn-open-file").disabled = false;
-            document.getElementById("btn-open-dir").disabled = false;
+        resetLogAttention();
+        var plan = await refreshConversionPlan(false, snapshot);
+        if (!plan || _planErrors.length || _conversionItems.length === 0) {
+            log("ERROR", _planErrors.join("；") || "转换清单为空。");
+            showConversionTab();
+            return;
         }
-    } else {
-        _conversionItems.forEach(function(item) {
-            if (item.status === "pending" || item.status === "converting") {
-                item.status = "error";
-                item.warnings = result.errors || ["转换未完成。"];
-            }
-        });
-        renderConversionList();
-        document.getElementById("statusBadge").textContent = "ERROR";
-        document.getElementById("statusText").textContent = "转换出错";
-    }
 
-    (result.warnings || []).forEach(function(message) { log("WARNING", message); });
-    (result.errors || []).forEach(function(message) { log("ERROR", message); });
-    showConversionTab();
+        await pywebview.api.set_configs({
+            input: runInputs[0] || "",
+            template: runTemplate,
+            output: runOutput,
+            build_index: runBuildIndex,
+            auto_open: runAutoOpen,
+            preserve_structure: runPreserveStructure
+        });
+        _lastOutputDir = runOutput;
+
+        document.getElementById("statusBadge").textContent = "BUSY";
+        document.getElementById("statusText").textContent = "正在转换 " + _conversionItems.length + " 个文档…";
+        showConversionTab();
+
+        var result;
+        try {
+            result = await pywebview.api.convert(
+                JSON.stringify(runInputs),
+                runOutput,
+                runTemplate,
+                true,
+                runBuildIndex,
+                runAutoOpen,
+                runPreserveStructure
+            );
+        } catch (error) {
+            result = {success: false, files: [], errors: [String(error)], documents: []};
+        }
+
+        (result.documents || []).forEach(function(documentResult) {
+            updateConversionStatus(
+                documentResult.source_path,
+                documentResult.status || "success",
+                documentResult.warnings || [],
+                documentResult.output_path || documentResult.path || ""
+            );
+        });
+
+        if (result.success) {
+            document.getElementById("statusBadge").textContent = "DONE";
+            document.getElementById("statusText").textContent = "转换完成 - " + result.files.length + " 个文件";
+            log("INFO", "转换完成：共生成 " + result.files.length + " 个文件");
+            log("INFO", "使用模板：" + runTemplate);
+            _lastOutputDir = result.output_dir || runOutput;
+            log("INFO", "输出目录：" + _lastOutputDir);
+            if (result.files.length !== 0) {
+                _lastOutputFile = result.entry_file || result.files[0];
+                document.getElementById("btn-open-file").disabled = false;
+                document.getElementById("btn-open-dir").disabled = false;
+            }
+        } else {
+            _conversionItems.forEach(function(item) {
+                if (item.status === "pending" || item.status === "converting") {
+                    item.status = "error";
+                    item.warnings = result.errors || ["转换未完成。"];
+                }
+            });
+            renderConversionList();
+            document.getElementById("statusBadge").textContent = "ERROR";
+            document.getElementById("statusText").textContent = "转换出错";
+        }
+
+        (result.warnings || []).forEach(function(message) { log("WARNING", message); });
+        (result.errors || []).forEach(function(message) { log("ERROR", message); });
+        showConversionTab();
+    } finally {
+        // The single unlock point: preflight errors, a rejected set_configs, a
+        // rejected convert and the happy path all leave the GUI unlocked.
+        setConversionRunning(false);
+    }
 }
 
 function getSelectedTemplate() { return _selectedTemplate; }

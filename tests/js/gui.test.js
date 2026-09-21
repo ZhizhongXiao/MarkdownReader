@@ -90,21 +90,51 @@ contract("GU1 bridge shape: both conversion calls use a single request", "xfail"
   } finally { session.close(); }
 });
 
-contract("GU2 clear-inputs: a plan that resolves late must not come back", "xfail", async () => {
+contract("GU2 clear-inputs: a plan that resolves late must not come back", "pass", async () => {
   const session = await bootGui();
   try {
     const idleStatus = session.status();
-    session.window.addInputs(["C:\\docs\\a.md"]);
-    await session.flush(3);
+    const first = PLAN_ONE.items[0].source_path;
+    const second = PLAN_TWO.items[1].source_path;
 
+    // A completed run first, so the open-HTML entry really carries a file.
+    session.window.addInputs([first]);
+    await session.flush(3);
+    await session.resolve("prepare_conversion", PLAN_ONE);
+    session.window.runConvert();
+    await session.flush(3);
+    await session.resolve("prepare_conversion", PLAN_ONE);
+    await session.flush(3);
+    await session.resolve("set_configs", null);
+    await session.flush(3);
+    await session.resolve("convert", {
+      success: true, files: ["output/a.html"], entry_file: "output/a.html",
+      errors: [], warnings: [], output_dir: "output",
+      documents: [{ source_path: first, status: "success", warnings: [] }],
+    });
+    await session.flush(5);
+    assert.equal(session.list("btn-open-file").disabled, false,
+      "precondition: a completed run enables the open-HTML entry");
+
+    // Now a pending preflight, a clear, and only then the stale response.
+    session.window.addInputs([second]);
+    await session.flush(3);
     session.window.clearInputs();
     await session.flush(1);
     await session.resolve("prepare_conversion", PLAN_ONE);
     await session.flush(5);
 
+    const opensBefore = session.callsOf("open_file").length;
+    session.window.openFile();
+    await session.flush(3);
+
     assert.equal(session.conversionRows(), 0, "a stale plan must not repopulate the list");
     assert.deepEqual(session.status(), idleStatus, "clearing inputs must return the idle status");
     assert.equal(session.text("stat-total"), "0", "clearing inputs must reset the totals");
+    assert.equal(session.list("btn-open-file").disabled, true,
+      "clearing inputs must forget the previously produced file");
+    assert.equal(session.callsOf("open_file").length, opensBefore,
+      "the open-HTML entry must not open a forgotten file");
   } finally { session.close(); }
 });
 
@@ -162,25 +192,34 @@ contract("GU4 identity: the same document added twice is still one input", "xfai
   } finally { session.close(); }
 });
 
-contract("GU5 run snapshot: convert receives the confirmed plan, not live inputs", "xfail", async () => {
+contract("GU5 run snapshot: convert receives the confirmed plan, not live inputs", "pass", async () => {
   const session = await bootGui();
   try {
-    session.window.addInputs(["C:\\docs\\a.md"]);
+    const first = PLAN_ONE.items[0].source_path;
+    const second = PLAN_TWO.items[1].source_path;
+
+    session.window.addInputs([first]);
     await session.flush(3);
+    const singleSummary = session.text("input-summary");
     await session.resolve("prepare_conversion", PLAN_ONE);
     session.window.runConvert();
     await session.flush(3);
     await session.resolve("prepare_conversion", PLAN_ONE);
     await session.flush(3);
 
-    session.window.addInputs(["C:\\docs\\b.md"]);
+    // While the run is in flight the GUI state must not drift ...
+    session.window.addInputs([second]);
     await session.flush(3);
+    assert.equal(session.text("input-summary"), singleSummary,
+      "the GUI state must not drift while a run is in flight");
+
+    // ... and the bridge request must use the snapshot frozen at entry.
     await session.resolve("set_configs", null);
     await session.flush(3);
 
     const call = session.callsOf("convert")[0];
     assert.ok(call, "convert must have been called");
-    assert.deepEqual(JSON.parse(call.args[0]), ["C:\\docs\\a.md"],
+    assert.deepEqual(JSON.parse(call.args[0]), [first],
       "the conversion request must use the plan snapshot that was confirmed");
   } finally { session.close(); }
 });

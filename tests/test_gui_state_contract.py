@@ -39,8 +39,8 @@ API_PY = ROOT / "gui" / "api.py"
 
 # Locked counts: a vanished or renamed contract must fail instead of silently
 # reducing coverage.
-EXPECTED_PASS = 1
-EXPECTED_XFAIL = 7
+EXPECTED_PASS = 3
+EXPECTED_XFAIL = 5
 EXPECTED_CONTRACTS = 8
 
 
