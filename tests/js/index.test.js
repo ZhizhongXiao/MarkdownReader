@@ -188,8 +188,11 @@ contract("IX1 copy feedback: a copy that did not happen is not reported as succe
 // Out of scope on purpose: dataset.search, location.pathname, malformed URIs,
 // clipboard permission UX and the copy handler's own group lookup.
 contract("IX2 robustness: a missing node degrades its own feature only", "xfail", async () => {
-  // V1: the search box is gone.
+  // V1: the search box is gone. The toggle and a copy path which is known to
+  // succeed must both keep working: a missing search box may only kill search.
   const noSearch = await boot({
+    clipboard: "resolve",
+    execCommand: false,
     mutate: function (document) {
       document.getElementById("document-search").remove();
     },
@@ -202,9 +205,19 @@ contract("IX2 robustness: a missing node degrades its own feature only", "xfail"
     noSearch.click(noSearch.toggleOf(folder));
     assert.equal(noSearch.isHidden(noSearch.listOf(folder)), true,
       "the toggle must still work without the search box");
-    assert.equal(noSearch.claimsSuccess(noSearch.copyButtonOf(folder)), true,
-      "so must the copy feedback: " + noSearch.errorSummary());
-    assert.deepEqual(noSearch.errors(), [], "and neither of them may throw while doing so");
+
+    // The clipboard is stubbed to accept the write, so this is a positive
+    // sentinel that holds whatever I1 does: a copy that really succeeded must
+    // still report success even when the search box was never there.
+    const copyButton = noSearch.copyButtonOf(folder);
+    noSearch.click(copyButton);
+    await noSearch.settle(4);
+    assert.equal(noSearch.claimsSuccess(copyButton), true,
+      "copy must still work without the search box: " + noSearch.errorSummary());
+    assert.equal(noSearch.execCalls().length, 0,
+      "a working primary clipboard must not fall back");
+
+    assert.deepEqual(noSearch.errors(), [], "and none of them may throw while doing so");
   } finally { noSearch.close(); }
 
   // V2: the no-results note is gone. Search itself must keep working.
