@@ -110,7 +110,7 @@ def hello(name):
 ## 跨文档链接
 
 - 指向同目录下的 [甲组的一号](甲组/一号.md)
-- 指向带空格的 [中文空格目录文档](中文 空格 目录/文档 一.md)
+- 指向带空格的 [中文空格目录文档](<中文 空格 目录/文档 一.md>)
 """
     write(root / "根文档.md", root_doc)
     (root / "图片").mkdir(parents=True, exist_ok=True)
@@ -182,7 +182,7 @@ GUIDE = """# MarkdownReader 1.0.0-rc1 实机验收操作指引
 
 在 GUI 里把「本目录」整体作为输入，输出目录另选一个空目录；
 模板分别用 Modern / Office / VS Code 各跑一次。
-下面每一条对应 docs/QA-CHECKLIST.md 中的同名条目。
+下面每一条对应 `docs/QA-CHECKLIST.md` 中的同名条目。
 
 ## A 启动与外壳
 
@@ -194,29 +194,29 @@ GUIDE = """# MarkdownReader 1.0.0-rc1 实机验收操作指引
 
 ## B 输入与转换
 
-- B1 用「添加文件」原生窗口选 根文档.md，按住 Ctrl / Shift 多选
-  甲组/一号.md 与 乙组/YAML 全类型.md。
-- B2 把 根文档.md 拖入窗口；再把「甲组」目录拖入窗口。
-- B3 只保留 根文档.md 做单文件转换。
+- B1 用「添加文件」原生窗口选 `根文档.md`，按住 Ctrl / Shift 多选
+  `甲组/一号.md` 与 `乙组/YAML 全类型.md`。
+- B2 把 `根文档.md` 拖入窗口；再把「甲组」目录拖入窗口。
+- B3 只保留 `根文档.md` 做单文件转换。
 - B4 整个本目录做批量转换（含子目录），勾选 preserve structure。
 - B5 批量后打开生成的索引页，确认列出了全部文档。
-- B6 Modern / Office / VS Code 三套模板各转换一次 根文档.md。
+- B6 Modern / Office / VS Code 三套模板各转换一次 `根文档.md`。
 
 ## C 文档特性
 
-- C1 乙组/YAML 全类型.md：页面标题应为「带引号的标题」，front matter 不应残留为正文。
-- C2 根文档.md：行内公式与块级公式都正常渲染。
-- C3 根文档.md：转换后把 HTML **单独拷到别处**打开，图片仍显示（已内嵌 data URI）。
-- C4 根文档.md：两条脚注可跳转与回跳。
-- C5 甲组/一号.md：转成 HTML 后回链指向 根文档 的 HTML，另一个指向 二号 的 HTML。
+- C1 `乙组/YAML 全类型.md`：页面标题应为「带引号的标题」，front matter 不应残留为正文。
+- C2 `根文档.md`：行内公式与块级公式都正常渲染。
+- C3 `根文档.md`：转换后把 HTML **单独拷到别处**打开，图片仍显示（已内嵌 data URI）。
+- C4 `根文档.md`：两条脚注可跳转与回跳。
+- C5 `甲组/一号.md`：转成 HTML 后回链指向 根文档 的 HTML，另一个指向 二号 的 HTML。
 
-## D 阅读器（用 甲组/二号.md 的 HTML）
+## D 阅读器（用 `甲组/二号.md` 的 HTML）
 
 - D1 目录导航点击跳转正确。
 - D2 折叠若干正文小节。
 - D3 记下滚动位置 → 刷新 → 折叠状态与阅读位置都恢复。
 - D4 折叠若干目录分支 → 刷新 → 目录状态保持。
-- D5 代码复制按钮可用（用 根文档.md 的代码块）。
+- D5 代码复制按钮可用（用 `根文档.md` 的代码块）。
 - D6 点击图片 → 灯箱打开与关闭。
 - D7 切换明暗模式 → 刷新后保持。
 - D8 打开自动编号（配置 numbering 为 true 后转换一次）→ 标题编号出现。
@@ -227,7 +227,7 @@ GUIDE = """# MarkdownReader 1.0.0-rc1 实机验收操作指引
 - E2 复制文件夹绝对路径，粘贴核对是否为真实路径。
 - E3 文件夹折叠与展开正常。
 
-## F 打印（用 甲组/二号.md 的 HTML）
+## F 打印（用 `甲组/二号.md` 的 HTML）
 
 - F1 Edge 打印预览正常（Ctrl+P）。
 - F2 导出 PDF 并翻页检查。
@@ -237,9 +237,9 @@ GUIDE = """# MarkdownReader 1.0.0-rc1 实机验收操作指引
 
 - G1 首次双击 onefile 时观察 Defender：是否拦截、是否需要放行。
 
-全部通过后，把 docs/QA-CHECKLIST.md 的 31 项全部勾选，并写下结论行「QA 结论：通过」，然后：
+全部通过后，把 `docs/QA-CHECKLIST.md` 的 31 项全部勾选，并写下结论行「QA 结论：通过」，然后：
 
-    git add docs/QA-CHECKLIST.md
+    git add `docs/QA-CHECKLIST.md`
     git commit -m "docs: record the 1.0.0-rc1 acceptance run"
     git push origin main
     python packaging/release_freeze.py --check-only
