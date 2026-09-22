@@ -34,6 +34,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / "dist"
 PASS_MARKER = "QA 结论：通过"
+# The record is written by hand, so a tick may arrive as [X], with spaces inside
+# the brackets, or indented. Every shape counts the same. A box holding anything
+# other than x stays unticked, so a typo cannot pass for a finished item.
+BOX = re.compile(r"^\s*-\s*\[\s*([^\]]*?)\s*\]", re.MULTILINE)
 
 
 def fail(message: str) -> None:
@@ -106,8 +110,9 @@ def qa_gate(record_path: Path) -> bool:
     if not record_path.is_file():
         return report(False, "missing acceptance record: " + str(record_path))
     text = read(record_path)
-    ticked = text.count("- [x]")
-    total = ticked + text.count("- [ ]")
+    marks = [match.group(1) for match in BOX.finditer(text)]
+    ticked = sum(1 for mark in marks if mark.lower() == "x")
+    total = len(marks)
     passed = total > 0 and ticked == total and PASS_MARKER in text
     # The marker alone is not enough: a fresh checklist must not pass itself.
     shown = (
