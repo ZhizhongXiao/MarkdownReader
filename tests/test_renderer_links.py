@@ -48,6 +48,9 @@ def test_unselected_markdown_target_is_left_unchanged_with_warning(tmp_path: Pat
 
     assert ".md" in result["html"]
     assert any("未加入转换清单" in warning for warning in result["warnings"])
+    warning = next(w for w in result["warnings"] if "未加入转换清单" in w)
+    assert "./第7章.md" in warning, "the message must read like the document writes it"
+    assert "%E7" not in warning
 
 
 def test_internal_and_external_links_are_not_rewritten(tmp_path: Path):
@@ -77,3 +80,39 @@ def test_heading_link_warning_is_reported_once(tmp_path: Path):
     )
 
     assert sum("未加入转换清单" in warning for warning in result["warnings"]) == 1
+
+
+def _unlisted_warning(tmp_path: Path, markdown: str) -> str:
+    """Return the single warning about a target that is not in the conversion plan."""
+    source = tmp_path / "第24章.md"
+    source.write_text("", encoding="utf-8")
+    output = tmp_path / "html" / "第24章.html"
+    result = render_markdown_node(markdown, context=_context(source, output, {source: output}))
+
+    warnings = [warning for warning in result["warnings"] if "未加入转换清单" in warning]
+    assert len(warnings) == 1, result["warnings"]
+    return warnings[0]
+
+
+def test_an_unlisted_warning_keeps_the_query_and_the_fragment(tmp_path: Path):
+    """The whole address is decoded, not only its path part."""
+    warning = _unlisted_warning(tmp_path, "[章节](./章节.md?view=1#第二节)")
+
+    assert "./章节.md?view=1#第二节" in warning
+
+
+def test_an_unlisted_warning_shows_a_percent_file_name_as_written(tmp_path: Path):
+    """100%.md travels as 100%25.md; the message has to show the real name."""
+    warning = _unlisted_warning(tmp_path, "[百分号](./100%.md)")
+
+    assert "./100%.md" in warning
+
+
+def test_an_unlisted_warning_survives_a_malformed_percent_sequence(tmp_path: Path):
+    """An address that cannot be decoded is reported unchanged, without raising."""
+    warning = _unlisted_warning(tmp_path, "[坏编码](./broken%E0%A4%A.md)")
+
+    # markdown-it itself rewrites the stray %A as %25A, and %E0%A4 is an
+    # incomplete UTF-8 sequence, so there is nothing to decode here. The raw text
+    # is what the author has to see.
+    assert "./broken%E0%A4%25A.md" in warning

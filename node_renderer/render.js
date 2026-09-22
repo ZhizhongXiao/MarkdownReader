@@ -183,7 +183,7 @@ function resolveImageSource(src, sourcePath, cache, warnings) {
     bytes = fs.readFileSync(absolute);
   } catch (e) {
     // Failures are deliberately not cached: every render pass reports them.
-    warnings.push("图片无法内嵌，保留原引用：" + raw);
+    warnings.push("图片无法内嵌，保留原引用：" + decodeForDisplay(raw));
     return "";
   }
 
@@ -275,7 +275,7 @@ function rewriteDocumentHref(href, sourcePath, outputPath, documentMap, warnings
   const targetSource = path.resolve(path.dirname(sourcePath), decodedPath);
   const targetOutput = documentMap.get(normalizeFsPath(targetSource));
   if (!targetOutput) {
-    warnings.push("Markdown 链接目标未加入转换清单：" + href);
+    warnings.push("Markdown 链接目标未加入转换清单：" + decodeForDisplay(href));
     return href;
   }
 
@@ -292,6 +292,25 @@ function normalizeFsPath(value) {
     normalized = normalized.toLowerCase();
   }
   return normalized;
+}
+
+// href and src arrive already percent-encoded, because markdown-it normalises
+// link targets while parsing. That is the correct form for the document - a
+// browser reads it as a URL - but it is not what the author wrote:
+// 甲组/一号.md reaches us as %E7%94%B2%E7%BB%84/%E4%B8%80%E5%8F%B7.md.
+//
+// Messages meant for a person go through this helper, the markup keeps the
+// encoding. The whole address is decoded rather than its path part, so a query
+// and a fragment stay visible too. decodeURI leaves an invalid sequence alone by
+// raising, which is why the raw text is returned then: a message about a broken
+// address must not break the render.
+function decodeForDisplay(value) {
+  const raw = String(value || "");
+  try {
+    return decodeURI(raw);
+  } catch (_error) {
+    return raw;
+  }
 }
 
 // Narrow, quote-aware handling for raw inline HTML: only <a>, </a> and <img>

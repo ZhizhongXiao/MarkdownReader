@@ -136,6 +136,15 @@ def test_missing_local_image_keeps_src_and_warns(tmp_path: Path):
     assert result["warnings"]
 
 
+def test_a_missing_unicode_image_keeps_the_encoded_src_but_reads_in_the_warning(tmp_path: Path):
+    """The src is a URL for the browser; the message is for the author."""
+    result = _render("![a](图片/示例.png)", tmp_path)
+
+    assert _img_src(result["html"]) == "%E5%9B%BE%E7%89%87/%E7%A4%BA%E4%BE%8B.png"
+    assert any("图片/示例.png" in warning for warning in result["warnings"])
+    assert all("%E5" not in warning for warning in result["warnings"])
+
+
 
 def test_remote_image_is_left_untouched(tmp_path: Path):
     sources = [
