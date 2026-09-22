@@ -269,4 +269,50 @@ contract("IX2 robustness: a missing node degrades its own feature only", "pass",
   } finally { noToggle.close(); }
 });
 
+// ── IX3 (7.2): a copy button outside any folder group must no-op safely. ───
+// The generated page always emits .copy-btn inside .folder-group, so this
+// simulates template drift: one button ends up outside its group. The handler
+// dereferenced the closest group without checking and threw out of the listener.
+// The question here is deliberately narrow - that one click must do nothing, and
+// the rest of the page must not notice.
+contract("IX3 copy outside a folder group is a safe no-op", "pass", async () => {
+  const session = await boot({
+    clipboard: "resolve",
+    execCommand: false,
+    mutate: function (document) {
+      const moved = document.querySelector('.folder-group[data-folder="' + FOLDER + '"] .copy-btn');
+      moved.setAttribute("data-detached", "1");
+      document.body.appendChild(moved);
+    },
+  });
+  try {
+    assert.equal(session.initError(), null,
+      "moving a copy button must not abort initialisation: " + session.errorSummary());
+
+    const detached = session.element("[data-detached]");
+    assert.ok(detached, "precondition: the button was moved");
+    assert.equal(detached.closest(".folder-group"), null,
+      "precondition: it no longer belongs to a folder group");
+
+    session.click(detached);
+    await session.settle(4);
+
+    // Without a group there is no folder path to copy at all, so the click must
+    // not reach either copy channel - a fix that merely survives the throw but
+    // still copies a bogus path would not be good enough.
+    assert.equal(session.clipboardCalls().length, 0, "a button without a group must copy nothing");
+    assert.equal(session.execCalls().length, 0, "and it must not fall back either");
+    assert.equal(session.claimsSuccess(detached), false, "and it must not claim success");
+    assert.deepEqual(session.errors(), [],
+      "a button without a group must not throw: " + session.errorSummary());
+
+    // An unrelated feature on the same page must still work.
+    const folder = session.group(FOLDER);
+    session.click(session.toggleOf(folder));
+    assert.equal(session.isHidden(session.listOf(folder)), true,
+      "the toggle must still collapse its list");
+    assert.deepEqual(session.errors(), [], "and it must not throw while doing so");
+  } finally { session.close(); }
+});
+
 

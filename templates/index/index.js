@@ -78,6 +78,7 @@
             document.querySelectorAll(".copy-btn").forEach(function (button) {
                 button.addEventListener("click", function () {
                     var group = button.closest(".folder-group");
+                    if (!group) return;
                     copyPath(button, getAbsoluteFolder(group.dataset.folder || ""));
                 });
             });
