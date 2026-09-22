@@ -95,7 +95,7 @@
             // feature: the block below is skipped, never the whole script.
             if (search) {
                 search.addEventListener("input", function () {
-                    var query = search.value.trim().toLocaleLowerCase();
+                    var query = search.value.trim().toLowerCase();
                     var visibleCount = 0;
 
                     document.querySelectorAll(".folder-group").forEach(function (group) {

@@ -437,4 +437,40 @@ contract("IX6 the copied folder path is the product path", "pass", async () => {
   } finally { root.close(); }
 });
 
+// ── IX7 (7.5): a title the page shows must be findable by typing it. ───────
+// The generator folds the haystack with Python casefold(), which is more
+// aggressive than the browser lowercase the page applies to the query: Straße
+// becomes strasse in the haystack while the typed query stays straße, so the
+// document cannot be found by its own visible title.
+//
+// This locks that single invariant, not casefold-equivalent search: typing
+// STRASSE is deliberately not required to match, because that would demand a
+// Unicode folding implementation the browser does not have.
+contract("IX7 a visible title stays searchable with the page normalization", "pass", async () => {
+  const session = await boot();
+  try {
+    assert.equal(session.initError(), null,
+      "the fixture page must initialise first: " + session.errorSummary());
+
+    const group = session.group("德文组");
+    assert.ok(group, "precondition: the fixture contains the German group");
+    const row = group.querySelector(".document-row");
+    assert.ok(row, "precondition: the group lists the document");
+
+    const search = session.element("#document-search");
+    session.type(search, "");
+    assert.equal(row.hidden, false, "precondition: the row is visible with an empty query");
+
+    session.type(search, "Straße");
+    assert.equal(row.hidden, false,
+      "typing the visible title must keep the row visible, so both sides normalise alike");
+    assert.deepEqual(session.errors(), [],
+      "and the search must not throw: " + session.errorSummary());
+
+    session.type(search, "STRAẞE");
+    assert.equal(row.hidden, false, "the upper-case spelling must match too");
+    assert.deepEqual(session.errors(), [], "and it must not throw either");
+  } finally { session.close(); }
+});
+
 

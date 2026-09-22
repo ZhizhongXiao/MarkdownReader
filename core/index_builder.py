@@ -52,7 +52,7 @@ def _render_document(doc: dict, folder: str = "") -> str:
     title = str(doc.get("title") or fallback_title)
     href = escape(quote(filename, safe="/"), quote=True)
     safe_title = escape(title)
-    search_text = escape(f"{title} {folder}".casefold(), quote=True)
+    search_text = escape(f"{title} {folder}".lower(), quote=True)
     return (
         f'<div class="document-row" data-search="{search_text}">'
         f'<a class="document-title" href="{href}" target="_blank" '
