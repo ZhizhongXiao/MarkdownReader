@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import subprocess
+import sys
 
 from core.config import BUNDLE_ROOT
 
@@ -15,6 +16,9 @@ _logger = logging.getLogger(__name__)
 
 _RENDER_JS = os.path.join(BUNDLE_ROOT, "node_renderer", "render.js")
 _BUNDLED_NODE = os.path.join(BUNDLE_ROOT, "node", "node.exe")
+
+# The runtime is resolved and validated once per process; renders then reuse it.
+_RESOLVED_NODE: str | None = None
 
 
 def _subprocess_window_kwargs() -> dict:
@@ -24,16 +28,41 @@ def _subprocess_window_kwargs() -> dict:
     return {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0)}
 
 
-def get_node_command() -> str:
-    """Return bundled Node.js first, then fall back to PATH."""
+def _is_frozen() -> bool:
+    return bool(getattr(sys, "frozen", False))
+
+
+def resolve_node_runtime() -> str:
+    """Return the Node executable this run must use.
+
+    A packaged build carries its own Node, so a missing file means the package is
+    broken; borrowing a Node from PATH at that point would hide a build error
+    until the release reaches a machine without Node installed. A source checkout
+    may use the bundled runtime when present and PATH otherwise.
+    """
     if os.path.isfile(_BUNDLED_NODE):
         return _BUNDLED_NODE
+    if _is_frozen():
+        raise RuntimeError(
+            "MarkdownReader 打包物损坏：缺少内置 Node 运行时（%s）。请重新获取完整发布包。"
+            % _BUNDLED_NODE
+        )
     return "node"
 
 
-def _check_node_available():
-    """Raise RuntimeError if Node.js is not available."""
-    node_command = get_node_command()
+def validate_renderer_runtime() -> str:
+    """Validate Node and the renderer assets once, then remember the answer.
+
+    Node and its dependencies belong to the runtime, not to an individual
+    conversion job, so this check runs once per process instead of once per
+    document.
+    """
+    global _RESOLVED_NODE
+    if _RESOLVED_NODE is not None:
+        return _RESOLVED_NODE
+
+    node_command = resolve_node_runtime()
+    missing = "未找到可用的 Node.js，请检查内置 Node 或系统 PATH。"
     try:
         result = subprocess.run(
             [node_command, "--version"],
@@ -42,21 +71,25 @@ def _check_node_available():
             timeout=5,
             **_subprocess_window_kwargs(),
         )
-        if result.returncode != 0:
-            raise RuntimeError("未找到可用的 Node.js，请检查内置 Node 或系统 PATH。")
     except FileNotFoundError:
-        raise RuntimeError("未找到可用的 Node.js，请检查内置 Node 或系统 PATH。")
+        raise RuntimeError(missing)
+    if result.returncode != 0:
+        raise RuntimeError(missing)
 
-
-def _check_renderer_installed():
-    """Raise RuntimeError if node_renderer dependencies are not installed."""
     if not os.path.isfile(_RENDER_JS):
         raise RuntimeError("未找到 Node 渲染脚本：%s" % _RENDER_JS)
     node_modules = os.path.join(os.path.dirname(_RENDER_JS), "node_modules")
     if not os.path.isdir(node_modules):
-        raise RuntimeError(
-            "Node 渲染依赖尚未安装，请运行：cd node_renderer && npm install"
-        )
+        raise RuntimeError("Node 渲染依赖尚未安装，请运行：cd node_renderer && npm install")
+
+    _RESOLVED_NODE = node_command
+    _logger.debug("Node 渲染运行时已就绪：%s", node_command)
+    return node_command
+
+
+def get_node_command() -> str:
+    """Return the resolved Node executable, validating the runtime once."""
+    return validate_renderer_runtime()
 
 
 def render_markdown_node(md_text, context=None):
@@ -64,9 +97,8 @@ def render_markdown_node(md_text, context=None):
 
     Returns HTML body fragment string.
     """
-    _check_node_available()
-    _check_renderer_installed()
-    node_command = get_node_command()
+    # Validated once per process: a render no longer asks whether Node exists.
+    node_command = validate_renderer_runtime()
 
     input_data = {
         "markdown": md_text,
