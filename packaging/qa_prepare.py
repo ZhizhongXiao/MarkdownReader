@@ -146,7 +146,7 @@ nested:
     - one
     - two
 flag: true
-off: false
+disabled: false
 count: 42
 ratio: 1.5
 nothing: null
