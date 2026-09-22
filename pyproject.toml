@@ -1,6 +1,6 @@
 [project]
 name = "markdownreader"
-version = "0.1.0"
+version = "1.0.0rc1"
 description = "Markdown 到自包含 HTML 的本地转换与阅读工具"
 # A release is built with one interpreter line: a build must not silently
 # happen on a newer Python than the one the release was validated with.

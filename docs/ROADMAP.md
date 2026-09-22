@@ -1,6 +1,6 @@
 # MarkdownReader 路线图
 
-版本：1.0 发布候选
+版本：1.0.0-rc1
 
 ---
 
@@ -11,10 +11,10 @@
 建议版本标记：
 
 ```text
-MarkdownReader 1.0.0-rc
+MarkdownReader 1.0.0-rc1
 ```
 
-完成最终 EXE 重新打包、干净目录试跑和版本/许可证确认后，可升为：
+实机 QA 通过、许可证确认后，可升为：
 
 ```text
 MarkdownReader 1.0.0

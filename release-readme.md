@@ -1,4 +1,4 @@
-# MarkdownReader v1.0.0
+# MarkdownReader v1.0.0-rc1
 
 Windows 便携式 Markdown 转 HTML 阅读器生成工具，无需安装器。
 

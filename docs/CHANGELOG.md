@@ -1,5 +1,27 @@
 ﻿# MarkdownReader 更新日志
 
+## [1.0.0-rc1] - 2026-09-22
+
+### 发布工程
+
+- Python 依赖改为 `pyproject.toml` 分层声明（runtime / build / test / lint），由 `uv.lock` 锁定解析；`requirements.txt` 退役。
+- PyYAML 成为正式运行依赖，删除「有则用、无则退化」的双模式；同时修掉块标量结尾换行被丢弃的解析缺陷。
+- Node 运行时归入应用生命周期：进程内只校验一次；frozen 包只使用内置 Node，缺失即视为打包物损坏；源码运行仍可使用系统 Node。
+- spec 增加发布资源硬清单与构建模式白名单，并校验内置 Node 的版本与 SHA-256（`packaging/node-runtime.json`）。
+- 新增 `packaging/validate_release.py`：对 onefile 与 onedir 产物做存在性、体积、资源与启动存活校验。
+- 关闭 UPX；同一 spec 支持 `onefile`（默认）与 `onedir`（`MR_BUILD_MODE=onedir`）。
+- `config.json` 退出版本库，改为 `config.example.json` 与 `.gitignore`。
+- 启动日志同时写入 EXE 同级目录的 `MarkdownReader.log`。
+- 测试增至 97 项：三层行为契约（viewer 21 / GUI 8 / index 9）、harness 自检 5 条，以及前后端单元与集成用例。
+- 仓库文档（README、DESIGN、ARCHITECTURE、ROADMAP、release-readme）与上述实现对齐。
+
+### 版本
+
+- 版本收敛为 1.0.0-rc1（`pyproject.toml` 记为 `1.0.0rc1`）；1.0.0 待实机 QA 通过后发布。
+- 本版本包含下方两个原 `[未发布]` 区块的全部内容。
+
+---
+
 ## [未发布] - 2026-09-15
 
 - 应用、窗口标题及构建产物统一命名为 `MarkdownReader`。
