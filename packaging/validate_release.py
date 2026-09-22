@@ -14,6 +14,7 @@ Usage:
 """
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -46,12 +47,24 @@ def launch_and_survive(exe: Path, wait: int) -> bool:
         time.sleep(wait)
         return process.poll() is None
     finally:
+        # A onefile build starts a bootloader which spawns the real process, and the
+        # child keeps the executable open after the parent is gone, so the next build
+        # fails with a permission error. The tree is therefore killed while the
+        # parent is still alive: Windows cannot walk the tree of a dead process.
+        if process.poll() is None and os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(process.pid)],
+                capture_output=True,
+            )
+            time.sleep(2)
         if process.poll() is None:
             process.terminate()
             try:
                 process.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 process.kill()
+        if os.name == "nt":
+            time.sleep(1)
         shutil.rmtree(workdir, ignore_errors=True)
 
 

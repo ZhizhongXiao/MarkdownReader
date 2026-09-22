@@ -1,5 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import hashlib
+import json
 import os
 import subprocess
 import sys
@@ -87,6 +89,29 @@ _probe = subprocess.run(
 )
 if _probe.returncode != 0:
     raise SystemExit("内置 Node 无法运行：packaging/node/node.exe")
+
+# The bundled runtime is a build input like any other: record which one was
+# validated, so swapping node.exe is noticed instead of silently shipped.
+_runtime_record = project_root / "packaging" / "node-runtime.json"
+if not _runtime_record.is_file():
+    raise SystemExit("缺少 packaging/node-runtime.json：请先记录内置 Node 的版本与哈希。")
+_manifest = json.loads(_runtime_record.read_text(encoding="utf-8"))
+_actual_version = (_probe.stdout or "").strip()
+_expected_version = str(_manifest.get("version", ""))
+if _actual_version != _expected_version:
+    raise SystemExit(
+        "内置 Node 版本与 packaging/node-runtime.json 不一致："
+        + _actual_version + " != " + _expected_version
+    )
+_hasher = hashlib.sha256()
+with open(bundled_node, "rb") as _stream:
+    for _chunk in iter(lambda: _stream.read(1024 * 1024), b""):
+        _hasher.update(_chunk)
+_expected_sha = str(_manifest.get("sha256", ""))
+if _hasher.hexdigest() != _expected_sha:
+    raise SystemExit(
+        "内置 Node 的 SHA-256 与 packaging/node-runtime.json 不一致。"
+    )
 
 _smoke = subprocess.run(
     [
