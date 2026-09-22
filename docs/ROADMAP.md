@@ -126,26 +126,24 @@ MarkdownReader 1.0.0
 
 ## v1.0 前剩余任务
 
-### 必做
+### 已完成
 
-- 重新打包 EXE。
-- 在干净目录中只放 `MarkdownReader.exe` 试跑。
-- 确认 `config.json` 写入 EXE 同级目录。
-- 确认单文件转换、批量转换、索引页、三套模板均正常。
-- 明确正式版本号和许可证或保留全部权利声明。
+- 重新打包 EXE，并在干净目录中只放 `MarkdownReader.exe` 试跑。
+- 确认 `config.json` 在首次保存设置或首次转换时写入 EXE 同级目录。
+- 单文件转换、批量转换、索引页与三套模板均已验证。
+- Python 依赖已迁移到 `pyproject.toml` 与 `uv.lock`，由 `uv` 管理项目专用环境与可复现构建。
+- 保留无安装器的 PyInstaller `onefile` 发布形态，关闭 UPX，并支持 `onedir` 备选形态。
+- 构建前做真实渲染器自检；发布产物由 `packaging/validate_release.py` 校验。
 
-### 建议做
+### 仍待办
 
-- 将项目定位为低频维护期：只接受 CSS、模板、兼容性和内部逻辑微调，不再规划大型功能。
-- 整理发布包命名。
-- 将本轮标准回归固化为 pytest 或脚本化测试。
-- 将 Python 依赖迁移到 `pyproject.toml` 和 `uv.lock`，使用 `uv` 管理项目专用环境与可复现构建。
-- 保留无安装器的 PyInstaller `onefile` 发布形态，关闭 UPX。
-- 增加 WebView2 Runtime 启动前检测和原生失败提示，禁止静默降级到 MSHTML。
-- 记录 Python、uv、PyInstaller、pywebview、Node.js、锁文件哈希和 EXE SHA-256。
+- 1.0.0-rc1 实机 QA：真 GUI、真浏览器、真打印、便携配置与 Defender 表现。
+- 实机 QA 通过后把版本从 `1.0.0-rc1` 升为 `1.0.0`，并冻结 release notes。
+- 明确许可证，或继续保留全部权利声明。
+- WebView2 Runtime 启动前检测与原生失败提示（当前要求目标机器已安装 Runtime）。
 - 每次维护更新发布新的完整 EXE，不引入安装器、自更新器或增量补丁，并保留上一版用于回退。
 
-上述便携打包升级尚未实施，不改变当前发布候选的代码、spec 或成品。完整建议见 [packaging/README.md](../packaging/README.md)。
+完整的构建与发布流程见 [packaging/README.md](../packaging/README.md)。
 
 ---
 

@@ -39,7 +39,7 @@ samples/              Markdown 示例（输出本地生成，不纳入版本控�
 tools/                本地辅助脚本（不参与打包）
 docs/                 设计、架构、路线图、更新日志和截图
 tests/                pytest 自动化测试
-config.json           GUI 保存的运行配置
+config.json           运行时生成（首次保存设置时写入，不进版本库；仓库只保留 config.example.json）
 main.py               GUI 启动入口
 ```
 
@@ -118,7 +118,7 @@ Python 通过子进程调用 Node：
 Python stdin JSON → Node render.js → stdout JSON → Python
 ```
 
-源码运行时依赖系统 Node；打包后优先使用内置：
+源码运行时可以使用系统 Node；正式包只使用内置 Node，缺失即视为打包物损坏：
 
 ```text
 node/node.exe

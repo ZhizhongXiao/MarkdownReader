@@ -169,7 +169,7 @@ Office 模板是打印优先模板；Modern 和 VS Code 只保证正常打印，
 
 源码运行依赖：
 
-- Python 3.11+
+- Python 3.12.x（发布链固定在 3.12：`pyproject.toml` 要求 `>=3.12,<3.13`）
 - Node.js 18+
 - pywebview
 - markdown-it / KaTeX 等 Node 依赖
@@ -180,7 +180,7 @@ Office 模板是打印优先模板；Modern 和 VS Code 只保证正常打印，
 packaging/node/node.exe
 ```
 
-最终 EXE 优先使用内置 Node；没有内置 Node 时回退到系统 `PATH` 中的 `node`。
+最终 EXE 只使用内置 Node（`node/node.exe`）：正式包缺少它即视为打包物损坏并在启动时报错，**不会**回退到系统 `PATH`；源码运行时可以只依赖系统 `node`。
 
 ---
 
