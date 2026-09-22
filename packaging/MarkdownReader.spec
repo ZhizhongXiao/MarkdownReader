@@ -27,14 +27,55 @@ def add_tree(datas, source, target):
 # A release must be self-contained. Fail the build here instead of producing an
 # EXE that only works on machines which happen to have Node installed.
 bundled_node = packaging_dir / "node" / "node.exe"
-if not bundled_node.is_file():
-    raise SystemExit("缺少 packaging/node/node.exe：正式发布包必须内置 Node 运行时。")
-if not (project_root / "main.py").is_file():
-    raise SystemExit("缺少 main.py：请从仓库根运行打包。")
-if not (project_root / "node_renderer" / "node_modules").is_dir():
-    raise SystemExit(
-        "缺少 node_renderer/node_modules：请先在 node_renderer 目录执行 npm install。"
-    )
+
+
+def require_file(relative):
+    """Fail the build when a release-required file is missing."""
+    if not (project_root / relative).is_file():
+        raise SystemExit("发布资源缺失（文件）：" + relative)
+
+
+def require_dir(relative):
+    """Fail the build when a release-required directory is missing."""
+    if not (project_root / relative).is_dir():
+        raise SystemExit("发布资源缺失（目录）：" + relative)
+
+
+# Everything the packaged application reads at runtime. add_tree() below skips
+# missing sources on purpose, since templates ship as whole trees, so the files
+# that must exist are named here instead: a release either carries all of them or
+# it is not produced, because gui/app.py falls back to a placeholder page and
+# would otherwise let a broken build start and look healthy.
+REQUIRED_FILES = (
+    "main.py",
+    "gui/assets/index.html",
+    "gui/assets/gui.css",
+    "gui/assets/gui.js",
+    "templates/viewer.js",
+    "templates/print.css",
+    "templates/default/viewer.html",
+    "templates/default/viewer.css",
+    "templates/default/theme.css",
+    "templates/default/metadata.json",
+    "templates/Modern/theme.css",
+    "templates/Modern/metadata.json",
+    "templates/Office/theme.css",
+    "templates/Office/metadata.json",
+    "templates/Vscode/theme.css",
+    "templates/Vscode/metadata.json",
+    "templates/index/index.html",
+    "templates/index/index.js",
+    "templates/index/theme.css",
+    "node_renderer/render.js",
+    "node_renderer/package.json",
+    "node_renderer/package-lock.json",
+    "packaging/node/node.exe",
+)
+for _relative in REQUIRED_FILES:
+    require_file(_relative)
+
+for _relative in ("node_renderer/node_modules", "packaging/node"):
+    require_dir(_relative)
 
 # Validate the renderer for real before building: an empty or incomplete
 # node_modules satisfies an existence check while the first conversion fails.
@@ -121,6 +162,11 @@ exe_kwargs = dict(
     entitlements_file=None,
     icon=str(icon_file) if icon_file.exists() else None,
 )
+
+if BUILD_MODE not in ("onefile", "onedir"):
+    raise SystemExit(
+        "MR_BUILD_MODE 只能是 onefile 或 onedir，收到：" + BUILD_MODE
+    )
 
 if BUILD_MODE == "onedir":
     exe = EXE(
