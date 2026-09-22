@@ -13,7 +13,7 @@ MarkdownReader 使用的 Node.js Markdown 渲染服务。npm 包标识统一为�
 
 ```bash
 cd node_renderer
-npm install
+npm ci
 ```
 
 ## 调用方式

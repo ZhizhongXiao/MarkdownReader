@@ -61,6 +61,31 @@ def version_facts() -> dict:
     return {"package": package_version, "display": display}
 
 
+def git(*args) -> str:
+    return run(["git", *args]).stdout.strip()
+
+
+def repository_gate() -> bool:
+    """A release must be buildable from the commit it claims to be."""
+    print("repository:")
+    fetched = run(["git", "fetch", "origin", "main", "--quiet"])
+    ok = report(fetched.returncode == 0, "reached origin")
+    branch = git("rev-parse", "--abbrev-ref", "HEAD")
+    ok &= report(branch == "main", "on branch main (found " + branch + ")")
+    dirty = git("status", "--porcelain")
+    ok &= report(
+        not dirty,
+        "working tree is clean" if not dirty else "working tree has uncommitted changes",
+    )
+    if dirty:
+        print(dirty[:1200])
+        print("  commit the release evidence first: the tag must describe the code that was built.")
+    head = git("rev-parse", "HEAD")
+    remote = git("rev-parse", "origin/main")
+    ok &= report(head == remote, "HEAD matches origin/main (" + head[:12] + ")")
+    return ok
+
+
 def version_agreement(facts: dict) -> bool:
     """The same version must appear in every place a consumer reads it."""
     print("version:")
@@ -82,14 +107,15 @@ def qa_gate(record_path: Path) -> bool:
         return report(False, "missing acceptance record: " + str(record_path))
     text = read(record_path)
     ticked = text.count("- [x]")
-    passed = PASS_MARKER in text and ticked > 0
+    total = ticked + text.count("- [ ]")
+    passed = total > 0 and ticked == total and PASS_MARKER in text
     # The marker alone is not enough: a fresh checklist must not pass itself.
     shown = (
         str(record_path.relative_to(ROOT)) if record_path.is_relative_to(ROOT) else str(record_path)
     )
     return report(
         passed,
-        shown + " (" + str(ticked) + " steps ticked)",
+        shown + " (" + str(ticked) + "/" + str(total) + " steps ticked)",
     )
 
 
@@ -117,6 +143,11 @@ def build() -> bool:
                 "-m",
                 "PyInstaller",
                 "--noconfirm",
+                "--clean",
+                "--workpath",
+                "packaging/.pyinstaller-build",
+                "--distpath",
+                "dist",
                 "--log-level",
                 "WARN",
                 "packaging/MarkdownReader.spec",
@@ -210,17 +241,36 @@ def write_record(display: str, artifacts: list, with_tag: bool) -> None:
 
 
 def create_tag(display: str) -> bool:
+    """Create the tag only when it matches HEAD, locally and on the remote."""
     print("tag:")
     name = "v" + display
-    if run(["git", "tag", "--list", name]).stdout.strip():
-        return report(True, name + " already exists")
-    ok = report(
+    head = git("rev-parse", "HEAD")
+    local = git("rev-parse", "-q", "--verify", "refs/tags/" + name)
+    if local:
+        if not report(local == head, name + " points at HEAD (" + local[:12] + ")"):
+            print("the tag exists but points elsewhere: delete it deliberately, do not move it")
+            return False
+    elif not report(
         run(["git", "tag", "-a", name, "-m", "MarkdownReader " + display]).returncode == 0,
         "created " + name,
+    ):
+        return False
+
+    peeled = "refs/tags/" + name + "^{}"
+    remote = git("ls-remote", "--tags", "origin", peeled)
+    if not remote:
+        # The local tag may exist while an earlier push failed, so the remote
+        # is always probed and the push retried instead of reporting success.
+        pushed = run(["git", "push", "origin", name])
+        if not report(pushed.returncode == 0, "pushed " + name):
+            return False
+        remote = git("ls-remote", "--tags", "origin", peeled)
+    parts = remote.split()
+    remote_sha = parts[0] if parts else ""
+    return report(
+        remote_sha == head,
+        "remote " + name + " points at HEAD (" + (remote_sha[:12] or "missing") + ")",
     )
-    if ok:
-        ok &= report(run(["git", "push", "origin", name]).returncode == 0, "pushed " + name)
-    return ok
 
 
 def main() -> int:
@@ -232,6 +282,9 @@ def main() -> int:
     parser.add_argument("--tag", action="store_true", help="create and push the release tag")
     args = parser.parse_args()
 
+    if not repository_gate():
+        print("release freeze: FAIL (repository state)")
+        return 1
     facts = version_facts()
     if not version_agreement(facts) or not qa_gate(Path(args.qa_record)):
         print("release freeze: FAIL (evidence missing, nothing built)")
