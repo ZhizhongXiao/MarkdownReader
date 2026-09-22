@@ -2,7 +2,9 @@
 name = "markdownreader"
 version = "0.1.0"
 description = "Markdown 到自包含 HTML 的本地转换与阅读工具"
-requires-python = ">=3.12"
+# A release is built with one interpreter line: a build must not silently
+# happen on a newer Python than the one the release was validated with.
+requires-python = ">=3.12,<3.13"
 dependencies = [
     "pywebview>=5.0",
     "pyyaml>=6.0",
@@ -10,7 +12,12 @@ dependencies = [
 
 [project.optional-dependencies]
 # 打包 EXE 时才需要；最终用户不安装 Python，也感知不到这些依赖
-build = ["pyinstaller>=6.0"]
+build = [
+    "pyinstaller>=6.0",
+    # The splash screen build needs it; leaving it undeclared meant a build
+    # depended on whatever the developer happened to have installed.
+    "pillow>=10.0",
+]
 # 开发与验证需要
 test = ["pytest>=8.0"]
 lint = ["ruff>=0.6", "black>=24.0"]
