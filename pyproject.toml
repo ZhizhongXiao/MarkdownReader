@@ -5,6 +5,7 @@ description = "Markdown 到自包含 HTML 的本地转换与阅读工具"
 requires-python = ">=3.12"
 dependencies = [
     "pywebview>=5.0",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]

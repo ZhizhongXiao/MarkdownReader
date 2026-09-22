@@ -89,7 +89,7 @@ MarkdownReader 是一款离线 Markdown 转 HTML 阅读器生成工具。
 安装 Python 依赖：
 
 ```powershell
-pip install -r requirements.txt
+uv sync    # 或者：pip install pywebview pyyaml
 ```
 
 安装 Node 渲染依赖：

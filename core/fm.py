@@ -1,21 +1,15 @@
 """Front Matter parser for Markdown files.
 
 Parses YAML front matter blocks (delimited by --- at the start of a file)
-and returns a dictionary of metadata fields.
+and returns a dictionary of metadata fields. PyYAML is a runtime dependency, so
+front matter means the same thing in a source checkout and in a packaged build.
 """
 
 import logging
 
+import yaml
+
 _logger = logging.getLogger(__name__)
-
-# Detect YAML parser availability
-try:
-    import yaml as _yaml_module
-
-    _HAS_YAML = True
-except ImportError:
-    _HAS_YAML = False
-    _yaml_module = None  # type: ignore
 
 
 def parse_front_matter(md_text: str) -> tuple[dict, str]:
@@ -53,57 +47,19 @@ def parse_front_matter(md_text: str) -> tuple[dict, str]:
         _logger.warning("Front Matter 已找到起始分隔线，但缺少结束分隔线。")
         return {}, md_text
 
-    yaml_text = "\n".join(lines[1:end_idx])
+    # A block scalar may legally end with a newline, and splitlines dropped it,
+    # so the YAML text gets one back before it is handed to the parser.
+    yaml_text = "\n".join(lines[1:end_idx]) + "\n"
 
     metadata = {}
     try:
-        if _HAS_YAML and _yaml_module is not None:
-            parsed = _yaml_module.safe_load(yaml_text)
-        else:
-            parsed = _parse_simple_yaml(yaml_text)
+        parsed = yaml.safe_load(yaml_text)
         if isinstance(parsed, dict):
             metadata = parsed
     except Exception as e:
+        # Malformed front matter is a page-level problem, not a reason to stop the
+        # conversion: the reader still gets its Markdown.
         _logger.warning("Front Matter YAML 解析失败：%s", e)
 
     remaining = "\n".join(lines[end_idx + 1 :])
     return metadata, remaining
-
-
-def _parse_simple_yaml(yaml_text: str) -> dict:
-    """Minimal YAML key: value parser (no PyYAML dependency).
-
-    Supports: key: value, "quoted values", '- list items'.
-    """
-    result: dict = {}
-    lines = yaml_text.splitlines()
-    last_key: str | None = None
-
-    for line in lines:
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-
-        if stripped.startswith("- "):
-            if last_key is not None:
-                if last_key not in result:
-                    result[last_key] = []
-                val = stripped[2:].strip().strip('"').strip("'")
-                result[last_key].append(val)
-            continue
-
-        if ":" in stripped:
-            key, _, val = stripped.partition(":")
-            key = key.strip()
-            val = val.strip()
-            if val.startswith('"') and val.endswith('"'):
-                val = val[1:-1]
-            elif val.startswith("'") and val.endswith("'"):
-                val = val[1:-1]
-            if val == "":
-                last_key = key
-                continue
-            result[key] = val
-            last_key = key
-
-    return result
