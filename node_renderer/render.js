@@ -53,6 +53,13 @@ function render(input) {
     typographer: false,
   });
 
+  // Bare text that looks like a domain must stay text. A Markdown reader meets
+  // file names far more often than scheme less domains - README.md, report.md,
+  // 版本 1.2.3 - and linkify turns those into http links with punycode hosts,
+  // because extensions such as .md are also country codes. Explicit Markdown
+  // links never pass through linkify, so real URLs keep working.
+  md.linkify.set({ fuzzyLink: false });
+
   installHeadingIds(md, headings, warnings);
 
   try {

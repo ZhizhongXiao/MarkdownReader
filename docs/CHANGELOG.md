@@ -15,6 +15,10 @@
 - 测试增至 97 项：三层行为契约（viewer 21 / GUI 8 / index 9）、harness 自检 5 条，以及前后端单元与集成用例。
 - 仓库文档（README、DESIGN、ARCHITECTURE、ROADMAP、release-readme）与上述实现对齐。
 
+### 修复
+
+- 关闭 markdown-it 的模糊链接识别（`fuzzyLink: false`）：正文里的裸文件名（`README.md`、`report.md`、`版本 1.2.3`）不再被当成互联网域名并生成 `http://xn--…` 假链接；带 scheme 的真 URL 与显式 Markdown 链接不受影响。
+
 ### 版本
 
 - 版本收敛为 1.0.0-rc1（`pyproject.toml` 记为 `1.0.0rc1`）；1.0.0 待实机 QA 通过后发布。
