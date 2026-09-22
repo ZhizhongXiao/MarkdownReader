@@ -14,6 +14,16 @@ def add_tree(datas, source, target):
         datas.append((str(source), target))
 
 
+# A release must be self-contained. Fail the build here instead of producing an
+# EXE that only works on machines which happen to have Node installed.
+bundled_node = packaging_dir / "node" / "node.exe"
+if not bundled_node.is_file():
+    raise SystemExit("缺少 packaging/node/node.exe：正式发布包必须内置 Node 运行时。")
+if not (project_root / "node_renderer" / "node_modules").is_dir():
+    raise SystemExit(
+        "缺少 node_renderer/node_modules：请先在 node_renderer 目录执行 npm install。"
+    )
+
 datas = []
 add_tree(datas, project_root / "gui" / "assets", "gui/assets")
 add_tree(datas, project_root / "templates", "templates")
@@ -65,7 +75,10 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    # UPX compression is off: it is a common false-positive trigger for
+# antivirus engines, and a release that gets quarantined is worse than
+# a larger file.
+upx=False,
     upx_exclude=[],
     runtime_tmpdir=None,
     console=False,
