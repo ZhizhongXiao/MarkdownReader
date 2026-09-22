@@ -9,7 +9,6 @@ v5.1 — Flat TOC with CSS Grid layout, number splitting, CSS triangles.
 
 import re
 
-
 # ─────────────────────────────────────────────────────────────────
 # Phase 5.1 — Flat TOC generator
 # ─────────────────────────────────────────────────────────────────
