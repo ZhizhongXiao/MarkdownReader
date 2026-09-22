@@ -547,5 +547,39 @@ contract("NUM2 every heading Python reads as numbered is marked", "pass", async 
   }
 });
 
+// ── E1 (7.4): a normal interaction session raises nothing. ─────────────────
+// Stage 7.1 taught the harness to see an exception thrown inside a DOM listener,
+// but the only assertions on it are the two at init time. A throw during an
+// interaction would therefore be visible to the harness and still unnoticed by
+// the suite. This record closes that hole: it drives the ordinary interactions
+// and requires the error list to stay empty after every one of them.
+//
+// It is a regression lock, not a fix. The sequence below was measured against the
+// real fixture and produces no errors and no jsdom notices on the current page.
+contract("E1 a normal interaction session raises no uncaught exception", "pass", async () => {
+  const session = await boot();
+  try {
+    const steps = [
+      ["heading toggle", function () { session.clickHeadingToggle(h(session, "1.1 甲组")); }],
+      ["toc link", function () { session.clickTocLink(h(session, "一、乙组").id); }],
+      ["expand all", function () { session.clickToolbar(ADVANCE); }],
+      ["collapse all", function () { session.clickToolbar(COLLAPSE); }],
+      ["scroll write", function () { session.scrollTo(240); }],
+      ["scroll event", function () {
+        session.area.dispatchEvent(new session.window.Event("scroll"));
+      }],
+      ["scroll spy", function () { session.fireSpy(h(session, "1.1 甲组").id, true); }],
+    ];
 
+    assert.deepEqual(session.sentinels().errors, [], "precondition: init logged nothing");
 
+    for (const entry of steps) {
+      entry[1]();
+      assert.deepEqual(session.sentinels().errors, [],
+        "an uncaught page exception appeared at step " + entry[0] + ": "
+        + JSON.stringify(session.sentinels().errors));
+    }
+  } finally {
+    session.close();
+  }
+});
