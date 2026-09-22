@@ -76,6 +76,7 @@ MarkdownReader 是一款离线 Markdown 转 HTML 阅读器生成工具。
 正式发布的 EXE 支持内置 Node.js。内置后，普通用户无需再安装 Python、Node.js 或 npm 依赖。
 
 输入预检通过后，点击“开始转换”会将设置保存到 `MarkdownReader.exe` 同级目录的 `config.json`（源码运行时为项目根目录）。下次启动恢复设置；输入记录仅保存第一个输入来源的目录，不保存完整的多选文件清单。
+- 仓库只提供 `config.example.json`；`config.json` 由程序在运行目录首次写入并已被 `.gitignore` 忽略，请不要把它提交进版本库。
 
 ## 开发者
 

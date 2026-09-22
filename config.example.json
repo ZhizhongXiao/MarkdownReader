@@ -1,8 +1,8 @@
 {
   "build": {
-    "input": "C:/Users/X3692/OneDrive/CPA 笔记",
+    "input": "C:/path/to/your/markdown",
     "template": "modern",
-    "output": "C:/Users/X3692/Downloads"
+    "output": "C:/path/to/output"
   },
   "document": {
     "numbering": false

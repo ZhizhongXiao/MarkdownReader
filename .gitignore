@@ -36,3 +36,6 @@ samples/demo.html
 # ===== 工具目录 =====
 .agents/
 .codex/
+
+# ===== 运行时配置（由程序写入，不进版本库）=====
+config.json
