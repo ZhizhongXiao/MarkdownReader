@@ -44,7 +44,9 @@ def test_demo_has_no_legacy_nested_toc_markup(demo_html: str):
 
 
 def test_demo_inlines_katex_assets(demo_html: str):
-    assert "katex" in demo_html
+    """samples/demo.md contains real formulas, so the fonts must be present."""
+    assert 'class="katex"' in demo_html
+    assert "KaTeX_AMS" in demo_html
 
 
 def test_demo_inlines_the_shared_viewer_javascript(demo_html: str):

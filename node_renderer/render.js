@@ -8,6 +8,9 @@
  * Outputs JSON to stdout:
  *   {"html": "...", "warnings": [], "assets": {"css": "..."}}
  *
+ * assets.css carries the self-contained KaTeX stylesheet and is empty unless the
+ * document actually contains a formula.
+ *
  * Dependencies: markdown-it, markdown-it-footnote, markdown-it-texmath, katex
  */
 
@@ -92,15 +95,16 @@ function render(input) {
   // Render Markdown → HTML
   const html = md.render(markdown);
 
-  // Collect KaTeX CSS for embedding
+  // Collect KaTeX CSS for embedding - only when a formula was rendered
   let css = "";
-  try {
-    const katex = require("katex");
-    // katex CSS is bundled in the package — read it from dist/
-    const cssPath = require.resolve("katex/dist/katex.min.css");
-    css = inlineCssUrls(fs.readFileSync(cssPath, "utf8"), cssPath, warnings);
-  } catch (e) {
-    warnings.push("Cannot read katex CSS: " + e.message);
+  if (containsMathMarkup(html)) {
+    try {
+      // katex CSS is bundled in the package — read it from dist/
+      const cssPath = require.resolve("katex/dist/katex.min.css");
+      css = inlineCssUrls(fs.readFileSync(cssPath, "utf8"), cssPath, warnings);
+    } catch (e) {
+      warnings.push("Cannot read katex CSS: " + e.message);
+    }
   }
 
   return {
@@ -440,6 +444,20 @@ function trimSeparator(value, separator) {
   return value
     .replace(new RegExp("^" + escaped + "+"), "")
     .replace(new RegExp(escaped + "+$"), "");
+}
+
+// KaTeX marks every formula it renders with a class starting with "katex":
+// inline formulas use katex, display formulas katex-display, and malformed
+// input that katexOptions.throwOnError lets through uses katex-error. All three
+// need the stylesheet, so the prefix is the test rather than an exact class.
+//
+// Asking the rendered HTML instead of scanning the Markdown for $ keeps the
+// decision with the parser: a price such as $100, a dollar inside a code block
+// and an escaped dollar are text, and the markup already says so. The
+// stylesheet is about 1.4 MB of base64 fonts, which a document without a single
+// formula must not carry.
+function containsMathMarkup(html) {
+  return html.includes('class="katex');
 }
 
 function inlineCssUrls(css, cssPath, warnings) {

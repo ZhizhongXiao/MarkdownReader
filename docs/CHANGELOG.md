@@ -12,12 +12,13 @@
 - 关闭 UPX；同一 spec 支持 `onefile`（默认）与 `onedir`（`MR_BUILD_MODE=onedir`）。
 - `config.json` 退出版本库，改为 `config.example.json` 与 `.gitignore`。
 - 启动日志同时写入 EXE 同级目录的 `MarkdownReader.log`。
-- 测试增至 97 项：三层行为契约（viewer 21 / GUI 8 / index 9）、harness 自检 5 条，以及前后端单元与集成用例。
+- 测试增至 108 项：三层行为契约（viewer 21 / GUI 8 / index 9）、harness 自检 5 条，以及前后端单元与集成用例。
 - 仓库文档（README、DESIGN、ARCHITECTURE、ROADMAP、release-readme）与上述实现对齐。
 
 ### 修复
 
 - 关闭 markdown-it 的模糊链接识别（`fuzzyLink: false`）：正文里的裸文件名（`README.md`、`report.md`、`版本 1.2.3`）不再被当成互联网域名并生成 `http://xn--…` 假链接；带 scheme 的真 URL 与显式 Markdown 链接不受影响。
+- KaTeX 资源改为按需内联：文档正文没有任何公式时不再注入 KaTeX 样式与字体。此前每篇 HTML 都无条件携带约 1.4 MB 的 base64 字体，几百字节的文档同样膨胀到约 1.5 MB；现在是否内联由渲染结果是否产出 KaTeX 标记决定，代码块里的 `$`、价格 `$100` 与转义 `\$` 都不会触发，含公式的文档行为完全不变。
 
 ### 版本
 
