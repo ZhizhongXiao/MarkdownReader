@@ -2,7 +2,7 @@
 
 在目标机器上按顺序执行；每一项都记录实际结果，不通过就停下修，不带着已知问题发布。
 
-结论行必须写成 `QA 结论：通过`（`packaging/release_freeze.py` 会校验这一行）才会允许打 tag。
+只有在结论处写下 `QA 结论：` 接 `通过`，并且勾选至少一项，`packaging/release_freeze.py` 才会允许打 tag。
 
 ## A. 启动与外壳
 
