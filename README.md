@@ -76,13 +76,13 @@ MarkdownReader 是一款离线 Markdown 转 HTML 阅读器生成工具。
 正式发布的 EXE 支持内置 Node.js。内置后，普通用户无需再安装 Python、Node.js 或 npm 依赖。
 
 输入预检通过后，点击“开始转换”会将设置保存到 `MarkdownReader.exe` 同级目录的 `config.json`（源码运行时为项目根目录）。下次启动恢复设置；输入记录仅保存第一个输入来源的目录，不保存完整的多选文件清单。
-- 仓库只提供 `config.example.json`；`config.json` 由程序在运行目录首次写入并已被 `.gitignore` 忽略，请不要把它提交进版本库。
+- 仓库只提供 `config.example.json`；`config.json` 已被 `.gitignore` 忽略；它由程序在**首次保存设置 / 首次成功进入转换流程时**写入运行目录，单纯启动不会创建它。请不要把它提交进版本库。
 
 ## 开发者
 
 源码运行需要本机安装：
 
-- Python 3.11 或更高版本
+- Python 3.12（发布链固定在 3.12.x：`pyproject.toml` 要求 `>=3.12,<3.13`）
 - Node.js，且 `node` 命令可从 `PATH` 调用
 - Microsoft Edge WebView2 Runtime
 
@@ -215,7 +215,7 @@ Markdown。也可以从资源管理器直接拖入文件或文件夹。所有实
 完成 Python 和 npm 依赖安装后，先安装打包工具：
 
 ```powershell
-python -m pip install pyinstaller Pillow
+uv sync --extra build    # 或者：pip install pyinstaller pillow
 ```
 
 在项目根目录构建单文件 Windows EXE：
@@ -234,7 +234,7 @@ python -m PyInstaller --clean --noconfirm --workpath "packaging\.pyinstaller-bui
 packaging/node/node.exe
 ```
 
-打包后的 EXE 会优先使用内置 Node；如果未内置，则回退到系统 `PATH` 中的 `node`。本地构建已准备 `packaging/node/node.exe`；此文件被 Git 忽略，重新检出源码后需自行准备，不能仅凭打包成功认定已内置 Node。
+打包后的 EXE 只使用内置 Node；内置 Node 缺失即视为打包物损坏：正式包必须内置，运行时不会回退到系统 `PATH`。本地构建已准备 `packaging/node/node.exe`；此文件被 Git 忽略，重新检出源码后需自行准备，不能仅凭打包成功认定已内置 Node。
 
 详细说明见 [packaging/README.md](packaging/README.md)。
 
@@ -280,7 +280,7 @@ packaging/node/node.exe
 
 - Windows 10 / Windows 11
 - Microsoft Edge / Chromium 内核浏览器
-- Python 3.11+
+- Python 3.12+
 - Node.js 18+ 或随 EXE 内置的 Windows 版 Node.js
 
 生成的 HTML 阅读器主体可离线直接打开；本地 Markdown 图片已内嵌，无需保证图片可访问。
@@ -307,10 +307,10 @@ packaging/node/node.exe
 已知限制：
 
 - 暂未作为跨平台应用设计，主要测试环境是 Windows。
-- Node 渲染器仍是必要组成部分；EXE 发布时应内置 Node.js，或要求用户本机安装 Node.js。
+- Node 渲染器仍是必要组成部分；正式包必须内置 Node.js（构建期强制，缺失则构建失败）。
 - 打印分页无法做到与 Microsoft Word 100% 一致。
 - Markdown 原始 HTML 的复杂样式由浏览器自行解释，不保证所有网页级布局都适合打印。
-- 已有 pytest 测试，覆盖转换清单、渲染链接、批量转换、demo 生成结构、转换边界契约和 GUI 结构约定；渲染测试需要 Node.js 和 npm 依赖，不能替代 GUI、打印和 EXE 实机验证。
+- 测试分三层：行为契约（viewer 21 条 / GUI 8 条 / index 9 条，各自锁定记录数与通过数）、harness 自检 5 条、以及前后端单元与集成用例；无 Node 或 jsdom 时相应层会显式跳过而不是失败。这些仍不能替代 GUI、打印和 EXE 实机验证，发布前请运行 `packaging/validate_release.py`。
 - 本地 Markdown 图片会内嵌为 data URI，分享 HTML 时无需再携带图片文件；网络图片与原始 HTML 中的资源引用仍由源文档决定。
 - 正文逐条折叠状态目前不会可靠持久化，刷新后可能按全局展开级别重新计算；
   滚动高亮会自动展开当前标题的目录父项，因此可能临时改变手动折叠的目录显示。
