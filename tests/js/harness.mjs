@@ -17,7 +17,7 @@
 // "reload" when the previous session's storage snapshot is passed back in.
 
 import { readFileSync } from "node:fs";
-import { JSDOM } from "jsdom";
+import { JSDOM, VirtualConsole } from "jsdom";
 
 export const HIDDEN_CLASS = "is-hidden-by-content-fold";
 export const TOC_HIDDEN_CLASS = "is-hidden-by-collapse";
@@ -57,6 +57,43 @@ class FakeIntersectionObserver {
 }
 FakeIntersectionObserver.instances = [];
 
+// ── error journal: what the harness can see about the page ─────────────────
+// Day one the only channel was an override of window.console.error. That is
+// blind to an exception thrown inside a DOM listener: jsdom reports those on its
+// virtual console instead, and the harness never installed one, so they were
+// lost. tests/js/harness_selfcheck.test.js locks the gap down before the fix and
+// asserts the fixed behaviour afterwards.
+export function viewerErrorVirtualConsole(journal) {
+    // An exception thrown inside a DOM listener never reaches window.console.error:
+    // jsdom reports it on its virtual console, so the harness has to listen there
+    // too. The listener is installed before the window exists, which is what jsdom
+    // asks for - a console installed later would miss errors raised while the page
+    // was still loading.
+    const virtualConsole = new VirtualConsole();
+    virtualConsole.on("jsdomError", function (error) {
+        // jsdom spells the type with spaces ("unhandled exception",
+        // "not implemented"), so it is normalised to the hyphenated form before it
+        // is compared. Branching on the message text instead would tie every
+        // contract to jsdom wording.
+        const type = String((error && error.type) || "unknown").trim().replace(/[ -]+/g, "-");
+        const message = String((error && error.message) || error);
+        if (type === "unhandled-exception") {
+            journal.errors.push(message);
+            return;
+        }
+        journal.notices.push({ type: type, message: message });
+    });
+    return virtualConsole;
+}
+
+// The original channel, kept as it was: a page that writes to console.error is
+// reporting a problem the contracts should see.
+export function attachPageErrorChannel(window, journal) {
+    window.console.error = function () {
+        journal.errors.push(Array.prototype.map.call(arguments, String).join(" "));
+    };
+}
+
 export function storageSnapshot(window) {
   const store = window.localStorage;
   const out = {};
@@ -81,11 +118,12 @@ function documentSettled(dom) {
 }
 
 export class ViewerSession {
-  constructor({ dom, window, spy, errors, scrollLog }) {
+  constructor({ dom, window, spy, errors, notices, scrollLog }) {
     this.dom = dom;
     this.window = window;
     this.spy = spy;
     this.errors = errors;
+    this.notices = notices;
     this.scrollLog = scrollLog;
     this.doc = window.document;
     this.area = this.doc.getElementById("content-area");
@@ -97,6 +135,7 @@ export class ViewerSession {
     return {
       readyState: this.doc.readyState,
       errors: this.errors.slice(),
+      notices: this.notices.slice(),
       contentArea: !!this.area,
       markdownBody: !!this.body,
       headingToggles: this.doc.querySelectorAll(".heading-toggle").length,
@@ -256,10 +295,16 @@ export class ViewerSession {
 
 export async function boot({ variant = "A", seed = {} } = {}) {
   const { html, url } = FIXTURES[variant]();
-  const dom = new JSDOM(html, { url, pretendToBeVisual: true, runScripts: "outside-only" });
+  const journal = { errors: [], notices: [] };
+  const virtualConsole = viewerErrorVirtualConsole(journal);
+  const dom = new JSDOM(html, {
+    url,
+    pretendToBeVisual: true,
+    runScripts: "outside-only",
+    virtualConsole,
+  });
   const { window } = dom;
-  const errors = [];
-  window.console.error = (...args) => errors.push(args.map(String).join(" "));
+  attachPageErrorChannel(window, journal);
 
   const spy = { scrollIntoView: [] };
   FakeIntersectionObserver.instances = [];
@@ -271,7 +316,7 @@ export async function boot({ variant = "A", seed = {} } = {}) {
 
   await documentSettled(dom);
 
-  const session = new ViewerSession({ dom, window, spy, errors, scrollLog: [] });
+  const session = new ViewerSession({ dom, window, spy, errors: journal.errors, notices: journal.notices, scrollLog: [] });
   Object.defineProperty(session.area, "scrollTop", {
     configurable: true,
     get() { return this.__scrollTop || 0; },
