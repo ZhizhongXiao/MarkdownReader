@@ -1,6 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 # onefile is the primary release shape; onedir starts faster and is friendlier to
@@ -32,6 +34,33 @@ if not (project_root / "main.py").is_file():
 if not (project_root / "node_renderer" / "node_modules").is_dir():
     raise SystemExit(
         "缺少 node_renderer/node_modules：请先在 node_renderer 目录执行 npm install。"
+    )
+
+# Validate the renderer for real before building: an empty or incomplete
+# node_modules satisfies an existence check while the first conversion fails.
+_probe = subprocess.run(
+    [str(bundled_node), "--version"],
+    capture_output=True,
+    text=True,
+    timeout=15,
+)
+if _probe.returncode != 0:
+    raise SystemExit("内置 Node 无法运行：packaging/node/node.exe")
+
+_smoke = subprocess.run(
+    [
+        sys.executable,
+        "-c",
+        "from core.renderer_node import validate_renderer_runtime; validate_renderer_runtime()",
+    ],
+    cwd=str(project_root),
+    capture_output=True,
+    text=True,
+)
+if _smoke.returncode != 0:
+    raise SystemExit(
+        "Node 渲染器自检未通过："
+        + ((_smoke.stderr or _smoke.stdout or "").strip()[:2000])
     )
 
 datas = []

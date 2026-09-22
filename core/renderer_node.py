@@ -32,6 +32,48 @@ def _is_frozen() -> bool:
     return bool(getattr(sys, "frozen", False))
 
 
+# A tiny document with math, used to prove the renderer really works.
+_SMOKE_MARKDOWN = "# 自检\n\n行内公式 $a^2+b^2=c^2$。\n"
+
+
+def _run_renderer_smoke(node_command: str) -> None:
+    """Render one tiny document, so a broken renderer cannot pass validation.
+
+    Checking that render.js and node_modules exist is not enough: an empty or
+    incomplete node_modules satisfies both checks while the first real
+    conversion fails.
+    """
+    payload = {
+        "markdown": _SMOKE_MARKDOWN,
+        "options": {"html": True, "math": True},
+        "context": {},
+    }
+    try:
+        result = subprocess.run(
+            [node_command, _RENDER_JS],
+            input=json.dumps(payload, ensure_ascii=False),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=30,
+            cwd=os.path.dirname(_RENDER_JS),
+            **_subprocess_window_kwargs(),
+        )
+    except Exception as error:
+        raise RuntimeError("Node 渲染器自检无法运行：%s" % error)
+    if result.returncode != 0:
+        raise RuntimeError(
+            "Node 渲染器自检失败（退出码 %d）：%s"
+            % (result.returncode, (result.stderr or "").strip() or "无错误输出")
+        )
+    try:
+        output = json.loads((result.stdout or "").strip())
+    except json.JSONDecodeError:
+        raise RuntimeError("Node 渲染器自检返回了无效 JSON。")
+    if not isinstance(output, dict) or not output.get("html"):
+        raise RuntimeError("Node 渲染器自检未返回 HTML。")
+
+
 def resolve_node_runtime() -> str:
     """Return the Node executable this run must use.
 
@@ -81,6 +123,10 @@ def validate_renderer_runtime() -> str:
     node_modules = os.path.join(os.path.dirname(_RENDER_JS), "node_modules")
     if not os.path.isdir(node_modules):
         raise RuntimeError("Node 渲染依赖尚未安装，请运行：cd node_renderer && npm install")
+
+    # Prove the renderer works, not merely that its files exist, before the
+    # runtime is remembered for the rest of the process.
+    _run_renderer_smoke(node_command)
 
     _RESOLVED_NODE = node_command
     _logger.debug("Node 渲染运行时已就绪：%s", node_command)
