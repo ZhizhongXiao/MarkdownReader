@@ -315,4 +315,77 @@ contract("IX3 copy outside a folder group is a safe no-op", "pass", async () => 
   } finally { session.close(); }
 });
 
+// ── IX4 (7.3a): a row without data-search must not take the search down. ───
+// The builder always emits data-search, so this is template drift again: the
+// haystack is optional in the DOM but the filter required it.
+contract("IX4 a row without data-search is treated as no match", "pass", async () => {
+  const session = await boot({
+    mutate: function (document) {
+      document.querySelector('.folder-group[data-folder="' + FOLDER + '"] .document-row')
+        .removeAttribute("data-search");
+      document.querySelector(".root-list .document-row").removeAttribute("data-search");
+    },
+  });
+  try {
+    assert.equal(session.initError(), null,
+      "a row without a haystack must not abort initialisation: " + session.errorSummary());
+
+    const search = session.element("#document-search");
+    const folder = session.group(FOLDER);
+    const root = session.element(".root-list");
+    const noResults = session.element("#no-results");
+
+    // The query the stripped folder row would have matched before the mutation.
+    session.type(search, "甲组一号");
+    assert.deepEqual(session.errors(), [],
+      "a missing haystack must not throw: " + session.errorSummary());
+    assert.equal(session.visibleRows(folder).length, 0,
+      "a row whose haystack is gone cannot claim a match");
+    assert.equal(session.isHidden(noResults), false, "nothing matches, so the note is shown");
+
+    // The empty query is the baseline: every row is visible and nothing is claimed.
+    // It is also the sentinel that the filter is alive rather than dead.
+    session.type(search, "");
+    assert.equal(session.visibleRows(folder).length, 2, "clearing the query brings the rows back");
+    assert.equal(session.visibleRows(root).length, 1, "including the root row");
+    assert.deepEqual(session.errors(), [], "and nothing may throw on the way");
+  } finally { session.close(); }
+});
+
+// ── IX5 (7.3a): a malformed escape in the page URL must not break copying. ──
+// getIndexDirectory decodes location.pathname to derive the folder path, and
+// decodeURIComponent throws a URIError on a malformed escape - inside the click
+// listener, where it became an uncaught error.
+contract("IX5 a malformed page URL does not break the copy button", "pass", async () => {
+  const session = await boot({
+    url: "http://localhost/C:/Docs/%ZZ/index.html",
+    clipboard: "resolve",
+    execCommand: false,
+  });
+  try {
+    assert.equal(session.initError(), null,
+      "a malformed URL must not abort initialisation: " + session.errorSummary());
+
+    const button = session.copyButtonOf(session.group(FOLDER));
+    session.click(button);
+    await session.settle(4);
+
+    assert.deepEqual(session.errors(), [],
+      "clicking copy must not throw on a malformed URL: " + session.errorSummary());
+    // Whatever the fallback decides to copy, it must be a real string: losing the
+    // directory is a degraded answer, not a crash and not an undefined argument.
+    assert.ok(session.clipboardCalls().length <= 1, "the copy is attempted at most once");
+    session.clipboardCalls().forEach(function (value) {
+      assert.equal(typeof value, "string", "the copy argument must stay a string");
+    });
+    assert.equal(session.claimsSuccess(button), session.clipboardCalls().length === 1,
+      "success is claimed exactly when a copy was attempted and accepted");
+
+    const folder = session.group(FOLDER);
+    session.click(session.toggleOf(folder));
+    assert.equal(session.isHidden(session.listOf(folder)), true, "the toggle must still collapse");
+    assert.deepEqual(session.errors(), [], "and it must not throw while doing so");
+  } finally { session.close(); }
+});
+
 

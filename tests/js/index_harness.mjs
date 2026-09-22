@@ -176,7 +176,7 @@ export async function boot(options) {
   });
 
   const dom = new JSDOM(INDEX_HTML, {
-    url: INDEX_URL,
+    url: settings.url || INDEX_URL,
     runScripts: "outside-only",
     virtualConsole: virtualConsole,
     pretendToBeVisual: true,

@@ -1,6 +1,12 @@
         (function () {
             function getIndexDirectory() {
-                var path = decodeURIComponent(window.location.pathname);
+                var path = window.location.pathname;
+                try {
+                    path = decodeURIComponent(path);
+                } catch (error) {
+                    // A malformed escape sequence must not take the copy feature
+                    // down: the raw pathname is a degraded answer, not a crash.
+                }
                 if (/^\/[A-Za-z]:\//.test(path)) path = path.slice(1);
                 path = path.replace(/\//g, "\\");
                 return path.slice(0, path.lastIndexOf("\\"));
@@ -95,7 +101,7 @@
                     document.querySelectorAll(".folder-group").forEach(function (group) {
                         var groupCount = 0;
                         group.querySelectorAll(".document-row").forEach(function (row) {
-                            var matches = !query || row.dataset.search.includes(query);
+                            var matches = !query || (row.dataset.search || "").includes(query);
                             row.hidden = !matches;
                             if (matches) groupCount += 1;
                         });
@@ -113,7 +119,7 @@
                     });
 
                     document.querySelectorAll(".root-list .document-row").forEach(function (row) {
-                        var matches = !query || row.dataset.search.includes(query);
+                        var matches = !query || (row.dataset.search || "").includes(query);
                         row.hidden = !matches;
                         if (matches) visibleCount += 1;
                     });
