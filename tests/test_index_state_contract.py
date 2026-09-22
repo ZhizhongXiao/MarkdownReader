@@ -39,9 +39,9 @@ INDEX_JS = ROOT / "templates" / "index" / "index.js"
 
 # Locked counts. They make a vanished or renamed contract a failure instead of a
 # silent reduction of coverage.
-EXPECTED_PASS = 6
+EXPECTED_PASS = 7
 EXPECTED_XFAIL = 0
-EXPECTED_CONTRACTS = 6
+EXPECTED_CONTRACTS = 7
 
 # The fixture mirrors what a batch conversion hands the builder: one document in
 # the output root, one folder with two documents so a search can single one out,

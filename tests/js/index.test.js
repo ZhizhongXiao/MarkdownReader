@@ -388,4 +388,53 @@ contract("IX5 a malformed page URL does not break the copy button", "pass", asyn
   } finally { session.close(); }
 });
 
+// ── IX6 (7.3b): the copied Windows path is a product-level fact. ───────────
+// IX1 already checks a copied path, but it derives the expectation with the
+// harness folderPath helper, so a mistake shared by that helper and the page
+// would cancel out. IX6 pins the literal results instead, for the two shapes the
+// product can really produce: a page opened from a local file URL, in a normal
+// directory and in a drive root.
+//
+// This is a regression lock, not a fix: both shapes are already correct, which is
+// why the record starts as "pass". If it ever fails, the fixture and the real page
+// have diverged and that divergence is the bug to chase.
+contract("IX6 the copied folder path is the product path", "pass", async () => {
+  // A: a normal, non-root directory. The folder name is percent-encoded on the
+  // way in and decoded again by the page, so the escape round-trip is locked too.
+  const deep = await boot({
+    url: "file:///C:/文档/卡/index.html",
+    clipboard: "resolve",
+    execCommand: false,
+  });
+  try {
+    const button = deep.copyButtonOf(deep.group("乙组"));
+    deep.click(button);
+    await deep.settle(4);
+    assert.deepEqual(deep.clipboardCalls(), ["C:\\文档\\卡\\乙组"],
+      "a folder in a normal directory must copy its absolute path");
+    assert.equal(deep.execCalls().length, 0, "a working clipboard must not fall back");
+    assert.equal(deep.claimsSuccess(button), true, "and the copy must be reported");
+    assert.deepEqual(deep.errors(), [], "and nothing may throw: " + deep.errorSummary());
+  } finally { deep.close(); }
+
+  // B: the page itself sits in a drive root, where the intermediate directory is
+  // just "C:". The composed path must still be a real path, with no doubled
+  // separator and no bare drive letter.
+  const root = await boot({
+    url: "file:///C:/index.html",
+    clipboard: "resolve",
+    execCommand: false,
+  });
+  try {
+    const button = root.copyButtonOf(root.group("乙组"));
+    root.click(button);
+    await root.settle(4);
+    assert.deepEqual(root.clipboardCalls(), ["C:\\乙组"],
+      "a drive root must not produce a doubled separator or a bare drive");
+    assert.equal(root.execCalls().length, 0, "a working clipboard must not fall back");
+    assert.equal(root.claimsSuccess(button), true, "and the copy must be reported");
+    assert.deepEqual(root.errors(), [], "and nothing may throw: " + root.errorSummary());
+  } finally { root.close(); }
+});
+
 
