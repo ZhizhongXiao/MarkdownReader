@@ -280,7 +280,7 @@ packaging/node/node.exe
 
 - Windows 10 / Windows 11
 - Microsoft Edge / Chromium 内核浏览器
-- Python 3.12+
+- Python 3.12.x（仅源码开发与构建环境；正式发布包不要求用户安装 Python）
 - Node.js 18+ 或随 EXE 内置的 Windows 版 Node.js
 
 生成的 HTML 阅读器主体可离线直接打开；本地 Markdown 图片已内嵌，无需保证图片可访问。
