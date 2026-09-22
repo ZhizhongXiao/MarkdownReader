@@ -13,6 +13,9 @@ var _apiReady = false;
 // The log keeps its history, so the history needs a bound.
 var LOG_CAPACITY = 500;
 var _conversionRunning = false;
+// A native dialog is a modal, single-owner resource: while one is open every
+// other dialog control is disabled, so a second call cannot overlap it.
+var _dialogOpen = false;
 var _expandedItems = {};
 var _logIssueCount = 0;
 var _logIssueLevel = "";
@@ -87,6 +90,18 @@ function setConversionRunning(running) {
     });
     updateInputSummary();      // keeps the clear button in step with the inputs
     renderConversionList();    // the remove buttons are recreated, so they read _conversionRunning
+}
+
+// The dialog controls are disabled while one is open. This is a state lock, not
+// only a visual cue: JavaScript is single threaded, so the click that opens a
+// dialog disables the other controls before the next click can be dispatched,
+// which is what stops two dialogs from ever overlapping.
+function setDialogOpen(open) {
+    _dialogOpen = open;
+    ["btn-select-files", "btn-select-dir", "btn-select-output"].forEach(function (id) {
+        var node = document.getElementById(id);
+        if (node) node.disabled = open;
+    });
 }
 
 // A TOC-independent helper: the GUI records the plan it confirmed, and the run
@@ -310,27 +325,42 @@ async function clearInputs() {
 }
 
 async function selectFiles() {
-    if (_conversionRunning) return;
+    if (_conversionRunning || _dialogOpen) return;
     if (!_apiReady) return;
-    var paths = await pywebview.api.select_input_files();
-    if (paths && paths.length) await addInputs(paths);
+    setDialogOpen(true);
+    try {
+        var paths = await pywebview.api.select_input_files();
+        if (paths && paths.length) await addInputs(paths);
+    } finally {
+        setDialogOpen(false);
+    }
 }
 
 async function selectDir() {
-    if (_conversionRunning) return;
+    if (_conversionRunning || _dialogOpen) return;
     if (!_apiReady) return;
-    var path = await pywebview.api.select_input_directory();
-    if (path) await addInputs([path]);
+    setDialogOpen(true);
+    try {
+        var path = await pywebview.api.select_input_directory();
+        if (path) await addInputs([path]);
+    } finally {
+        setDialogOpen(false);
+    }
 }
 
 async function selectOutput() {
-    if (_conversionRunning) return;
+    if (_conversionRunning || _dialogOpen) return;
     if (!_apiReady) return;
-    var path = await pywebview.api.select_output_directory();
-    if (path) {
-        document.getElementById("output-path").value = path;
-        _lastOutputDir = path;
-        await refreshConversionPlan(false);
+    setDialogOpen(true);
+    try {
+        var path = await pywebview.api.select_output_directory();
+        if (path) {
+            document.getElementById("output-path").value = path;
+            _lastOutputDir = path;
+            await refreshConversionPlan(false);
+        }
+    } finally {
+        setDialogOpen(false);
     }
 }
 

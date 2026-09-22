@@ -317,3 +317,36 @@ contract("GU7 stats: the error stat counts documents only", "pass", async () => 
       "plan messages are not failed documents, but the stat read " + observed);
   } finally { session.close(); }
 });
+
+contract("GU8 dialog lock: one dialog at a time disables the other controls", "pass", async () => {
+  const session = await bootGui();
+  try {
+    const filesButton = session.doc.getElementById("btn-select-files");
+    const dirButton = session.doc.getElementById("btn-select-dir");
+    const outputButton = session.doc.getElementById("btn-select-output");
+    assert.ok(filesButton && dirButton && outputButton,
+      "the three dialog controls must exist");
+
+    session.window.selectFiles();
+    await session.flush(2);
+    assert.equal(session.callsOf("select_input_files").length, 1,
+      "the first click must open exactly one dialog");
+    assert.equal(filesButton.disabled, true, "the control in use is disabled");
+    assert.equal(dirButton.disabled, true, "another control must be disabled too");
+    assert.equal(outputButton.disabled, true, "another control must be disabled too");
+
+    // The other controls must not reach the bridge while the first dialog is open.
+    session.window.selectDir();
+    session.window.selectOutput();
+    await session.flush(2);
+    assert.equal(session.callsOf("select_input_directory").length, 0,
+      "a second dialog must not be opened");
+    assert.equal(session.callsOf("select_output_directory").length, 0,
+      "a second dialog must not be opened");
+
+    await session.resolve("select_input_files", []);
+    assert.equal(filesButton.disabled, false, "the controls come back");
+    assert.equal(dirButton.disabled, false, "the controls come back");
+    assert.equal(outputButton.disabled, false, "the controls come back");
+  } finally { session.close(); }
+});

@@ -8,7 +8,10 @@ import json
 import logging
 import os
 import sys
+import threading
 import webbrowser
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 from core.config import (
     CONFIG_FILENAME,
@@ -50,6 +53,23 @@ class BridgeApi:
 
     def __init__(self) -> None:
         self._window = None
+        # pywebview runs every JS call in a thread of its own, and tkinter keeps a
+        # single process-wide default root. A second dialog opened while the first
+        # one still owns that root calls Tcl from the wrong thread and dies with
+        # "main thread is not in main loop". An overlap is therefore refused
+        # rather than queued: the caller gets an empty answer, like a cancel.
+        self._dialog_lock = threading.Lock()
+
+    @contextmanager
+    def _one_dialog_at_a_time(self) -> Iterator[bool]:
+        """Yield True when this call may open a native dialog, False when not."""
+        if not self._dialog_lock.acquire(blocking=False):
+            yield False
+            return
+        try:
+            yield True
+        finally:
+            self._dialog_lock.release()
 
     def attach_window(self, window) -> None:
         """Attach the created webview window for conversion progress events."""
@@ -80,39 +100,48 @@ class BridgeApi:
         from tkinter import Tk
         from tkinter.filedialog import askopenfilenames
 
-        root = Tk()
-        root.withdraw()
-        root.attributes("-topmost", True)
-        paths = askopenfilenames(
-            title="选择一个或多个 Markdown 文件",
-            filetypes=[("Markdown", "*.md *.markdown"), ("All Files", "*.*")],
-        )
-        root.destroy()
-        return list(paths) if paths else []
+        with self._one_dialog_at_a_time() as opened:
+            if not opened:
+                return []
+            root = Tk()
+            root.withdraw()
+            root.attributes("-topmost", True)
+            paths = askopenfilenames(
+                title="选择一个或多个 Markdown 文件",
+                filetypes=[("Markdown", "*.md *.markdown"), ("All Files", "*.*")],
+            )
+            root.destroy()
+            return list(paths) if paths else []
 
     def select_input_directory(self) -> str:
         """Open a folder dialog to select a directory of .md files."""
         from tkinter import Tk
         from tkinter.filedialog import askdirectory
 
-        root = Tk()
-        root.withdraw()
-        root.attributes("-topmost", True)
-        path = askdirectory(title="选择包含 Markdown 文件的目录")
-        root.destroy()
-        return path if path else ""
+        with self._one_dialog_at_a_time() as opened:
+            if not opened:
+                return ""
+            root = Tk()
+            root.withdraw()
+            root.attributes("-topmost", True)
+            path = askdirectory(title="选择包含 Markdown 文件的目录")
+            root.destroy()
+            return path if path else ""
 
     def select_output_directory(self) -> str:
         """Open a folder dialog for output directory."""
         from tkinter import Tk
         from tkinter.filedialog import askdirectory
 
-        root = Tk()
-        root.withdraw()
-        root.attributes("-topmost", True)
-        path = askdirectory(title="选择输出目录")
-        root.destroy()
-        return path if path else ""
+        with self._one_dialog_at_a_time() as opened:
+            if not opened:
+                return ""
+            root = Tk()
+            root.withdraw()
+            root.attributes("-topmost", True)
+            path = askdirectory(title="选择输出目录")
+            root.destroy()
+            return path if path else ""
 
     def prepare_conversion(self, request: dict | None = None) -> dict:
         """Expand inputs and return a read-only conversion plan for the GUI.

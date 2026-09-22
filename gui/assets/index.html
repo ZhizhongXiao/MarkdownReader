@@ -45,8 +45,8 @@
                             <button id="btn-clear-inputs" onclick="clearInputs()" disabled>清空</button>
                         </div>
                         <div class="path-row input-picker-row">
-                            <button onclick="selectFiles()">添加文件</button>
-                            <button onclick="selectDir()">选择目录</button>
+                            <button id="btn-select-files" onclick="selectFiles()">添加文件</button>
+                            <button id="btn-select-dir" onclick="selectDir()">选择目录</button>
                         </div>
                     </div>
                 </details>
@@ -57,7 +57,7 @@
                         <label>输出目录</label>
                         <div class="path-row">
                             <input type="text" id="output-path" placeholder="output/">
-                            <button onclick="selectOutput()">浏览</button>
+                            <button id="btn-select-output" onclick="selectOutput()">浏览</button>
                         </div>
                         <label style="margin-top:8px">模板</label>
                         <div class="custom-select" id="template-select-wrap">

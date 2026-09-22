@@ -39,9 +39,9 @@ API_PY = ROOT / "gui" / "api.py"
 
 # Locked counts: a vanished or renamed contract must fail instead of silently
 # reducing coverage.
-EXPECTED_PASS = 8
+EXPECTED_PASS = 9
 EXPECTED_XFAIL = 0
-EXPECTED_CONTRACTS = 8
+EXPECTED_CONTRACTS = 9
 
 
 def _single_request_shape(method: str) -> int:

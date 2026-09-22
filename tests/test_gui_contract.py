@@ -26,6 +26,11 @@ def test_gui_exposes_multiselect_drop_and_conversion_list_contract():
     assert "appendDetailLine" in javascript
     assert "function updateLogAttention()" in javascript
     assert 'tab.classList.toggle("has-error"' in javascript
+    assert 'id="btn-select-files"' in html
+    assert 'id="btn-select-dir"' in html
+    assert 'id="btn-select-output"' in html
+    assert "function setDialogOpen(open)" in javascript
+    assert "_one_dialog_at_a_time" in api
 
 
 def test_template_selection_returns_to_preview_tab():
@@ -53,3 +58,53 @@ def test_native_window_minimum_width_matches_two_column_layout():
     app = (ROOT / "gui" / "app.py").read_text(encoding="utf-8")
 
     assert '"min_size": (720, 500)' in app
+
+
+class _StubTk:
+    """Minimal stand-in for the hidden root the dialogs create."""
+
+    def withdraw(self):
+        return None
+
+    def attributes(self, *_args):
+        return None
+
+    def destroy(self):
+        return None
+
+
+def test_a_second_dialog_is_refused_while_one_is_open(monkeypatch):
+    """An overlap is what breaks tkinter's process-wide default root.
+
+    pywebview runs every bridge call in a thread of its own, so a second dialog
+    can arrive while the first one is still open. The bridge must refuse it
+    instead of calling Tcl from the wrong thread.
+    """
+    import tkinter
+    import tkinter.filedialog
+
+    from gui.api import BridgeApi
+
+    monkeypatch.setattr(tkinter, "Tk", _StubTk)
+    monkeypatch.setattr(tkinter.filedialog, "askopenfilenames", lambda **_kwargs: ("a.md",))
+    monkeypatch.setattr(tkinter.filedialog, "askdirectory", lambda **_kwargs: r"C:\picked")
+
+    api = BridgeApi()
+    assert api.select_input_directory() == r"C:\picked"
+    assert api.select_input_files() == ["a.md"]
+
+    def must_not_open(**_kwargs):
+        raise AssertionError("a second dialog must not reach tkinter")
+
+    monkeypatch.setattr(tkinter.filedialog, "askdirectory", must_not_open)
+    monkeypatch.setattr(tkinter.filedialog, "askopenfilenames", must_not_open)
+
+    with api._one_dialog_at_a_time() as opened:
+        assert opened is True
+        assert api.select_input_directory() == ""
+        assert api.select_output_directory() == ""
+        assert api.select_input_files() == []
+
+    # The refusal must not leave the lock behind: the next dialog has to work.
+    monkeypatch.setattr(tkinter.filedialog, "askdirectory", lambda **_kwargs: r"C:\picked")
+    assert api.select_input_directory() == r"C:\picked"
