@@ -7,6 +7,13 @@
                     // A malformed escape sequence must not take the copy feature
                     // down: the raw pathname is a degraded answer, not a crash.
                 }
+                // A file URL that carries a server host is a network share:
+                // file://server/share/x.html is \\server\share\x.html, and the host is
+                // the only place where the server name survives.
+                // Only a file URL can name a network share here: for any other
+                // scheme the host is a web server rather than a UNC server.
+                var server = window.location.protocol === "file:" ? window.location.host : "";
+                if (server) path = "\\\\" + server + path;
                 if (/^\/[A-Za-z]:\//.test(path)) path = path.slice(1);
                 path = path.replace(/\//g, "\\");
                 return path.slice(0, path.lastIndexOf("\\"));

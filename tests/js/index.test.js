@@ -473,4 +473,37 @@ contract("IX7 a visible title stays searchable with the page normalization", "pa
   } finally { session.close(); }
 });
 
+// ── IX8 (7.6): a page opened from a network share copies a UNC path. ───────
+// The product opens the generated index from the local file system, so a page
+// living on a network share arrives as file://server/share/... . The server name
+// survives only in location.host, and the directory helper ignored it, so the
+// copied path lost the server and became a root-relative path on the reader
+// machine.
+//
+// Only the canonical shape is locked here. Crafted spellings such as
+// file://///server/... leave the host empty and are not a product shape, so no
+// rule is written for them and no second URL representation is frozen.
+contract("IX8 a file URL with a server host copies a UNC folder path", "pass", async () => {
+  const session = await boot({
+    url: "file://server/share/Docs/index.html",
+    clipboard: "resolve",
+    execCommand: false,
+  });
+  try {
+    assert.equal(session.initError(), null,
+      "a page on a share must initialise first: " + session.errorSummary());
+    assert.equal(session.window.location.host, "server",
+      "precondition: for a file URL the server name is the host");
+
+    const button = session.copyButtonOf(session.group("乙组"));
+    session.click(button);
+    await session.settle(4);
+    assert.deepEqual(session.clipboardCalls(), ["\\\\server\\share\\Docs\\乙组"],
+      "a folder on a network share must copy its full UNC path, server included");
+    assert.equal(session.execCalls().length, 0, "a working clipboard must not fall back");
+    assert.equal(session.claimsSuccess(button), true, "and the copy must be reported");
+    assert.deepEqual(session.errors(), [], "and nothing may throw: " + session.errorSummary());
+  } finally { session.close(); }
+});
+
 
