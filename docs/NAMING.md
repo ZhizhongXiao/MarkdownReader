@@ -20,6 +20,5 @@
 - 阅读器浏览器存储键统一使用 `markdownreader-*`，包括主题、折叠、阅读位置和目录宽度。项目尚未发布，不读取或迁移旧名称存储键。
 - 配置文件继续使用 `config.json`。
 - 项目尚未发布，`dist/` 仅保留当前 `MarkdownReader.exe` 和运行配置，旧版 EXE 可移除。
-- README 使用当前 GUI 与阅读模板截图，成品保存在 `docs/screenshots/`；原始窗口截图保留在 `packaging/assets/Screenshot_*.png`。
 
 后续项目名称统一使用 `MarkdownReader`，不要新增旧名称别名或兼容分支。

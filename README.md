@@ -29,38 +29,9 @@ MarkdownReader 是一款离线 Markdown 转 HTML 阅读器生成工具。
 - 批量文档索引
 - Modern、Office、VS Code 三种阅读模板
 
-## 效果截图
+## 效果展示
 
-### GUI（浅色模式）
-
-![MarkdownReader 主界面浅色模式](docs/screenshots/gui_main.png)
-
-左侧为输入源、输出设置和选项，右侧为“列表 / 预览 / 日志”页签；“预览”展示模板风格示意，不是当前 Markdown 的实时渲染。
-
-<details>
-<summary>查看 GUI 深色模式</summary>
-
-![MarkdownReader 主界面深色模式](docs/screenshots/gui_dark.png)
-
-两张 GUI 截图均选择 Modern 模板，右侧为模板风格示意；GUI 明暗模式与阅读模板的明暗模式分别控制。
-
-</details>
-
-### 阅读模板
-
-三套模板均支持明暗切换；以下使用同一份 [阅读示例](samples/demo.md)，展示 Modern、Office 的浅色模式和 VS Code 的深色模式。
-
-### Modern（浅色模式）
-
-![Modern 模板浅色模式](docs/screenshots/demo_modern.png)
-
-### Office（浅色模式）
-
-![Office 模板浅色模式](docs/screenshots/demo_office.png)
-
-### VS Code（深色模式）
-
-![VS Code 模板深色模式](docs/screenshots/demo_vscode.png)
+效果不在此处保存截图，直接对照 [阅读示例](samples/demo.md) 与转换后的 HTML 即可。
 
 ## 普通用户
 

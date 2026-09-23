@@ -19,7 +19,8 @@ build/
 *.spec
 !packaging/MarkdownReader.spec
 packaging/.pyinstaller-build/
-packaging/node/node.exe
+# 内置 Node 运行时（本地准备，不进版本库；spec 在构建期强制要求已放入）
+packaging/node/
 
 # ===== Node / 前端依赖 =====
 node_renderer/node_modules/
@@ -28,6 +29,17 @@ tests/js/node_modules/
 
 # ===== 示例生成的 HTML =====
 samples/demo.html
+
+# ===== 本地产物（编辑器 / 系统 / 覆盖率）=====
+.env*
+.env.local
+Thumbs.db
+Desktop.ini
+.DS_Store
+.coverage
+coverage.xml
+htmlcov/
+*.log
 
 # ===== IDE =====
 .vscode/
