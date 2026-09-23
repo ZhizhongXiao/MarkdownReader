@@ -12,6 +12,7 @@ import threading
 import webbrowser
 from collections.abc import Iterator
 from contextlib import contextmanager
+from pathlib import Path
 
 from core.config import (
     CONFIG_FILENAME,
@@ -46,6 +47,15 @@ def _normalize_input_root(path: str) -> str:
         return _normalize_config_path(parent or normalized)
 
     return _normalize_config_path(normalized)
+
+
+def _file_uri(path: str) -> str:
+    """Return a file:// URI, so the system opens a local document as one.
+
+    A bare Windows path is handed to the .html association instead, and a stale
+    association can then open something else, or nothing at all.
+    """
+    return Path(path).resolve().as_uri()
 
 
 class BridgeApi:
@@ -366,7 +376,7 @@ class BridgeApi:
 
             # Auto-open
             if auto_open and entry_file:
-                webbrowser.open(entry_file)
+                webbrowser.open(_file_uri(entry_file))
 
             return {
                 "success": len(files) > 0,
@@ -386,7 +396,7 @@ class BridgeApi:
     def open_file(self, path: str) -> None:
         """Open a file with the default system application."""
         if os.path.isfile(path):
-            webbrowser.open(path)
+            webbrowser.open(_file_uri(path))
 
     def open_directory(self, path: str) -> None:
         """Open a directory in the system file explorer."""

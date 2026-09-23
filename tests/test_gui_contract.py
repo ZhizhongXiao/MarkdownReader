@@ -108,3 +108,33 @@ def test_a_second_dialog_is_refused_while_one_is_open(monkeypatch):
     # The refusal must not leave the lock behind: the next dialog has to work.
     monkeypatch.setattr(tkinter.filedialog, "askdirectory", lambda **_kwargs: r"C:\picked")
     assert api.select_input_directory() == r"C:\picked"
+
+
+def test_opening_a_result_hands_the_system_a_file_uri(monkeypatch, tmp_path):
+    """A bare Windows path is decided by the .html association, not by us.
+
+    A stale association opens something else, or nothing at all; a file:// URI
+    says what the target is, and survives spaces and non-ASCII names.
+    """
+    from gui import api as gui_api
+
+    opened: list[str] = []
+    monkeypatch.setattr(gui_api.webbrowser, "open", opened.append)
+
+    target = tmp_path / "索引-示例.html"
+    target.write_text("<html><body>ok</body></html>", encoding="utf-8")
+    gui_api.BridgeApi().open_file(str(target))
+
+    assert opened == [target.resolve().as_uri()], opened
+    assert opened[0].startswith("file:///")
+
+    opened.clear()
+    gui_api.BridgeApi().open_file(str(tmp_path / "absent.html"))
+    assert opened == [], "a missing file must not be handed to the system"
+
+
+def test_the_auto_open_path_uses_the_same_file_uri_helper():
+    api = (ROOT / "gui" / "api.py").read_text(encoding="utf-8")
+
+    assert "webbrowser.open(_file_uri(entry_file))" in api
+    assert "webbrowser.open(_file_uri(path))" in api
