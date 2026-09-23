@@ -7,6 +7,11 @@
     .markdown-body{max-width:100%!important}
     [data-theme="dark"]{--color-bg:#ffffff!important;--color-text:#000!important;--color-heading:#000!important;--color-code-bg:#f4f4f4!important}
     body{color:#000!important;background:#fff!important}
+    /* The canvas colour comes from html, not from body: without this the area
+       below the last line prints in the theme background (the pale blue a
+       reviewer saw on the final page). */
+    html{background:#fff!important}
+    .viewer-container,.content-area{background:transparent!important}
     .markdown-body h1,.markdown-body h2,.markdown-body h3,.markdown-body h4,.markdown-body h5,.markdown-body h6{break-after:avoid-page;page-break-after:avoid;break-inside:avoid-page;page-break-inside:avoid}
     .markdown-body pre,.code-block-wrapper,.markdown-body blockquote,.markdown-body table,.markdown-body img,.markdown-body li{page-break-inside:avoid}
     .markdown-body img,.markdown-body figure,.markdown-body p:has(img){break-inside:avoid-page;page-break-inside:avoid}

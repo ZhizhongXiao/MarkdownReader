@@ -30,6 +30,10 @@
     var DOCUMENT_ID = window.location.pathname || "document";
     var DOCUMENT_STATE_KEY = DOC_STATE_PREFIX + DOCUMENT_ID;
     var MAX_EXPAND_LEVEL = 6;
+    // The image lightbox zooms with the wheel, between the fitted size and this
+    // factor: the whole image is already visible at 1, so shrinking has no use.
+    var LIGHTBOX_MAX_ZOOM = 6;
+    var LIGHTBOX_ZOOM_STEP = 1.15;
     var documentState = {
         version: 2,
         content: { level: MAX_EXPAND_LEVEL, overrides: Object.create(null) }
@@ -337,10 +341,19 @@
             overlay.className = "lightbox-overlay";
             var largeImg = document.createElement("img");
             largeImg.src = img.src; largeImg.alt = img.alt || "";
+            var zoom = 1;
             overlay.appendChild(largeImg);
             document.body.appendChild(overlay);
             overlay.addEventListener("click", function () { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); });
             largeImg.addEventListener("click", function (e) { e.stopPropagation(); if (overlay.parentNode) overlay.parentNode.removeChild(overlay); });
+            // The wheel zooms the image in place: the overlay itself never moves, so
+            // the click that closes it keeps working at any zoom level.
+            overlay.addEventListener("wheel", function (wheelEvent) {
+                wheelEvent.preventDefault();
+                var factor = wheelEvent.deltaY < 0 ? LIGHTBOX_ZOOM_STEP : 1 / LIGHTBOX_ZOOM_STEP;
+                zoom = Math.min(LIGHTBOX_MAX_ZOOM, Math.max(1, zoom * factor));
+                largeImg.style.transform = zoom === 1 ? "" : "scale(" + zoom + ")";
+            }, { passive: false });
         });
     }
 

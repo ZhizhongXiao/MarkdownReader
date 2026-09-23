@@ -583,3 +583,45 @@ contract("E1 a normal interaction session raises no uncaught exception", "pass",
     session.close();
   }
 });
+contract("L1 lightbox: the wheel zooms the opened image and the overlay still closes", "pass", async () => {
+  const session = await boot();
+  try {
+    const body = session.doc.getElementById("markdown-body");
+    const image = session.doc.createElement("img");
+    image.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+    image.alt = "示例图";
+    body.appendChild(image);
+
+    // The fixture has no image, so the contract adds one: the handler under test is
+    // delegated on the body, which is exactly what a real image would trigger.
+    image.dispatchEvent(new session.window.MouseEvent("click", { bubbles: true }));
+    const overlay = session.doc.querySelector(".lightbox-overlay");
+    assert.ok(overlay, "clicking an image must open the lightbox");
+    const large = overlay.querySelector("img");
+    assert.equal(large.src, image.src, "the lightbox shows the same image");
+    assert.equal(large.style.transform, "", "it opens at the fitted size");
+
+    const wheel = (deltaY) => {
+      const event = new session.window.Event("wheel", { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "deltaY", { value: deltaY });
+      overlay.dispatchEvent(event);
+      return Number(String(large.style.transform).replace(/[^0-9.]/g, "")) || 1;
+    };
+
+    const enlarged = wheel(-120);
+    assert.ok(enlarged > 1, "a wheel up must enlarge the image, got " + enlarged);
+
+    let capped = enlarged;
+    for (let index = 0; index < 40; index += 1) capped = wheel(-120);
+    assert.ok(capped <= 6.001, "the zoom must stop at its ceiling, got " + capped);
+
+    const shrunken = wheel(120);
+    assert.ok(shrunken < capped, "a wheel down must shrink it again, got " + shrunken);
+
+    overlay.dispatchEvent(new session.window.MouseEvent("click", { bubbles: true }));
+    assert.equal(session.doc.querySelector(".lightbox-overlay"), null,
+      "the overlay must still close while zoomed");
+  } finally {
+    session.close();
+  }
+});
