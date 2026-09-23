@@ -1,318 +1,60 @@
-﻿# MarkdownReader
+# MarkdownReader
 
-MarkdownReader 是一款离线 Markdown 转 HTML 阅读器生成工具。
+MarkdownReader 是一个离线 Markdown 转 HTML 阅读器生成工具：把 Markdown 文件转换成适合长文阅读、
+目录导航与打印的独立 HTML，Windows 便携使用，不需要安装器。
 
-项目名称、应用窗口和构建产物统一使用 `MarkdownReader`；可执行文件为 `MarkdownReader.exe`，构建配置为 `packaging/MarkdownReader.spec`。 命名约定见 [项目命名说明](docs/NAMING.md)。
+## 能做什么
 
-它将一个或多个 Markdown 文件转换为适合阅读、导航和打印的 HTML 文档。
-生成结果内置阅读器 CSS、JavaScript、公式样式与公式字体（KaTeX），无需服务器或 CDN。
-正文与界面字体只声明系统字体名，不内嵌字体文件。源 Markdown 中通过标准图片语法引用、
-且本地可读取的图片会自动内嵌为 data URI，无需随 HTML 携带；网络图片与原始 HTML 中的
-资源引用保持源文档行为，网络图片仍需要网络连接。
+- 单文件、Windows 原生多选与文件夹批量转换，支持从资源管理器拖入文件或目录。
+- 三套阅读模板：Modern（通用阅读）、Office（正式文档与打印）、VS Code（技术文档）。
+- 生成的 HTML 单文件自包含：阅读器样式、脚本、目录、公式样式与字体都在文件内；不使用 CDN、
+  不需要服务器；本地图片内嵌，离线可直接打开。
+- 阅读器交互：目录跳转与滚动定位、目录与正文折叠、阅读位置恢复、代码复制、
+  图片灯箱（滚轮缩放到 6 倍）、明暗主题、自动编号，以及白纸 + 跟随正文主题框线的打印。
+- 批量转换可生成索引页，并保留源目录结构。
 
-> 项目面向个人使用和内部发布。本次构建已完成标准回归与 33 项实机验收（见 [验收清单](docs/QA-CHECKLIST.md)）。
+具体的写法范围见 [兼容范围](docs/MARKDOWN.md)。
 
-## 功能概览
+## 开始使用
 
-- 单文件、Windows 原生多选与目录批量转换
-- 资源管理器拖放、转换前清单与逐文件状态
-- H1 至 H6 多级目录、跳转与滚动定位
-- 正文和目录折叠
-- 图片点击放大（灯箱内可滚轮缩放至 6 倍）
-- 代码复制
-- 超宽表格与长代码横向滚动
-- 行内公式与块级公式由本地 Node.js 预渲染
-- Markdown 脚注和清单内跨文档链接重写
-- 明暗主题与自动编号
-- 正文左对齐；超长链接与裸文件名在容器内折行，不会被裁掉
-- 打印为白纸 + 跟随正文的主题块与左右框线
-- 批量文档索引
-- Modern、Office、VS Code 三种阅读模板
+1. 下载 `MarkdownReader-1.0.0-rc1-win-x64.exe` 放入可写目录后双击运行；或解压便携版 ZIP，运行其中的 EXE。
+2. 添加 Markdown 文件或文件夹，选择输出目录与模板。
+3. 点「开始转换」，完成后用浏览器打开生成的 HTML。
 
-## 效果展示
+需要 Windows 10 / 11（64 位）与 Microsoft Edge WebView2 Runtime；EXE 已内置 Python、Node.js 与渲染依赖。
+逐步操作、输出规则与常见问题见 [使用说明](docs/USAGE.md)。
 
-效果不在此处保存截图，直接对照 [阅读示例](samples/demo.md) 与转换后的 HTML 即可。
+## 效果与示例
 
-## 普通用户
+- 渲染标本：[samples/demo.md](samples/demo.md)
+- 对应的生成结果：[samples/demo.html](samples/demo.html)（由当前源码生成，测试会校验两者一致）
 
-普通用户建议直接使用打包后的 `MarkdownReader.exe`。
+## 文档
 
-基本流程：
-
-1. 打开 `MarkdownReader.exe`。
-2. 单选/复选 Markdown 文件，选择文件夹，或从资源管理器拖入文件和文件夹。
-3. 选择输出目录。
-4. 选择模板：`modern`、`office` 或 `vscode`。
-5. 按“开始转换”。
-6. 在“列表”查看逐文件状态；完成后点击“打开 HTML”阅读，或点击“输出目录”查看文件。启用“自动打开”时会自动打开阅读入口，批量生成索引时优先打开索引。
-
-正式发布的 EXE 支持内置 Node.js。内置后，普通用户无需再安装 Python、Node.js 或 npm 依赖。
-
-输入预检通过后，点击“开始转换”会将设置保存到 `MarkdownReader.exe` 同级目录的 `config.json`（源码运行时为项目根目录）。下次启动恢复设置；输入记录仅保存第一个输入来源的目录，不保存完整的多选文件清单。
-- 仓库只提供 `config.example.json`；`config.json` 已被 `.gitignore` 忽略；它由程序在**首次保存设置 / 首次成功进入转换流程时**写入运行目录，单纯启动不会创建它。请不要把它提交进版本库。
-
-## 开发者
-
-源码运行需要本机安装：
-
-- Python 3.12（发布链固定在 3.12.x：`pyproject.toml` 要求 `>=3.12,<3.13`）
-- Node.js，且 `node` 命令可从 `PATH` 调用
-- Microsoft Edge WebView2 Runtime
-
-安装 Python 依赖：
-
-```powershell
-uv sync    # 或者：pip install pywebview pyyaml
-```
-
-安装 Node 渲染依赖：
-
-```powershell
-cd node_renderer
-npm install
-cd ..
-```
-
-启动 GUI：
-
-```powershell
-python main.py
-```
-
-运行自动化测试：
-
-```powershell
-python -m pip install pytest
-python -m pytest -q
-```
-
-## 输出规则
-
-### 单文件转换
-
-输入：
-
-```text
-notes/demo.md
-```
-
-输出：
-
-```text
-输出目录/demo.html
-```
-
-生成的 HTML 内置样式、脚本、目录和正文。通过标准图片语法引用、且本地可读取的图片会内嵌为 data URI，不再需要随 HTML 携带；网络图片与原始 HTML 中的资源引用保持原样。
-
-### 多文件复选
-
-点击“添加文件”后，可在 Windows 文件窗口中使用 `Ctrl` 或 `Shift` 复选多个
-Markdown。也可以从资源管理器直接拖入文件或文件夹。所有实际参与转换的文档会先
-显示在右侧“列表”页签中，可搜索文档并查看逐文件状态；重复文件自动去重，输出文件冲突会在写入前阻止转换。
-
-### 文件夹批量转换
-
-选择一个文件夹时，程序会递归收集其中的 `.md` 和 `.markdown` 文件（扩展名不区分大小写）。
-
-未开启“保留目录结构”、且启用“生成索引”时输出：
-
-```text
-输出目录/
-  文档A.html
-  文档B.html
-  索引-源文件夹名.html
-```
-
-开启“保留目录结构”后：
-
-```text
-输出目录/
-  源文件夹名-HTML/
-    第一章/
-      文档A.html
-    第二章/
-      文档B.html
-    索引-源文件夹名.html
-```
-
-索引页用于集中跳转到各个生成文档。文档链接默认在新标签页打开，看完后关闭标签页即可回到索引。取消“生成索引”后不生成索引页；多文件或混合来源批量转换的索引名为 `index.html`，单个文件直接转换不生成索引。
-
-### 脚注与跨文档链接
-
-源文档可以直接链接其他 Markdown：
-
-```markdown
-参见[第20章](./第20章.md#第二节)。
-
-计量方法[^chapter]
-
-[^chapter]: 参见[第20章](./第20章.md)。
-```
-
-当目标 Markdown 同样位于本次转换清单中时，链接会按照实际输出位置改写为 `.html`。
-文档内 `#锚点`、网络链接和已经写成 `.html` 的旧链接保持不变。目标没有加入
-转换清单时，程序保留原链接并在转换清单和日志中给出警告。
-
-### 覆盖规则
-
-当前生成时会写入目标 HTML 路径；如果目标文件已存在，会被新的生成结果覆盖。
-
-## 模板
-
-| 模板 | 定位 |
+| 文档 | 内容 |
 | --- | --- |
-| `modern` | 清爽、舒适的通用阅读主题 |
-| `office` | 类 Word 的正式文档与打印主题 |
-| `vscode` | 类 VS Code Markdown Preview 的技术阅读主题 |
-| `default` | 供其他模板继承的共享基础模板 |
+| [使用说明](docs/USAGE.md) | 操作流程、输出规则、设置与日志、常见问题 |
+| [兼容范围](docs/MARKDOWN.md) | 支持的 Markdown 与原始 HTML 写法、明确不支持的部分、图片处理 |
+| [设计](docs/DESIGN.md) | 产品定位与设计原则 |
+| [架构](docs/ARCHITECTURE.md) | 分层结构与各层职责 |
+| [开发与构建](docs/DEVELOPMENT.md) | 环境、测试、目录、命名约定、打包与发布 |
+| [路线图](docs/ROADMAP.md) | 当前状态与下一步方向 |
+| [更新日志](docs/CHANGELOG.md) | 各版本变更记录 |
+| [实机验收清单](docs/QA-CHECKLIST.md) | 1.0.0-rc1 的实机验收记录（历史证据） |
+| [打包说明](packaging/README.md) | 构建形态与发布流程细节 |
 
-`default` 提供共用的 `viewer.html`、`viewer.css`、工具栏、目录外壳和兼容变量。
-个性化模板只覆盖必要的主题变量和视觉规则。
+## 环境与主要限制
 
-自定义模板可通过 `metadata.json` 继承基础模板：
+- 面向 Windows 10 / 11（64 位）与 Chromium 内核浏览器；打印以 Microsoft Edge 为主要参考。
+- 打印分页与字体替换取决于浏览器和本机环境，不追求与 Word 逐页一致。
+- 原始 HTML 的复杂样式由浏览器解释，不保证所有网页级布局都适合打印。
+- 部分模板依赖系统安装的 `Source Han Sans SC`（未随 HTML 内嵌），缺少时由系统字体回退决定实际显示；
+  Modern 与 VS Code 还把它用作代码字体，因此代码不保证等宽。
+- 网络图片与原始 HTML 中的资源引用保持源文档行为，需要相应的网络或文件访问。
 
-```json
-{
-  "id": "mycompany",
-  "name": "My Company",
-  "version": "1.0.0",
-  "description": "公司文档主题",
-  "extends": "default"
-}
-```
+## 当前状态
 
-在同一目录添加 `theme.css` 即可。不要复制 `viewer.js` 或另建阅读器。
+1.0.0-rc1 已完成 33 项实机验收并通过，结论与测试机器信息记录在 [实机验收清单](docs/QA-CHECKLIST.md)；
+发布物是 `dist/` 下的 EXE、便携 ZIP、`SHA256SUMS.txt` 与构建记录。升为 1.0.0 待许可证与正式发布决定。
 
-## 打包
-
-完成 Python 和 npm 依赖安装后，先安装打包工具：
-
-```powershell
-uv sync --extra build    # 或者：pip install pyinstaller pillow
-```
-
-在项目根目录构建单文件 Windows EXE：
-
-```powershell
-python -m PyInstaller --clean --noconfirm --workpath "packaging\.pyinstaller-build" --distpath "dist" packaging\MarkdownReader.spec
-```
-
-该命令会把 PyInstaller 的中间构建缓存放在 `packaging/.pyinstaller-build/`，最终产物输出到 `dist/MarkdownReader.exe`。这样可以避开默认 `build/` 目录可能出现的权限占用问题，同时仍然把缓存和输出保留在项目文件夹中，便于检查和清理。
-
-发布前如需确保没有旧产物残留，可以先删除 `dist/`，再重新执行上面的打包命令。`packaging/.pyinstaller-build/` 是构建缓存，打包完成后可以安全删除。
-
-发布给普通用户前，需要把 Windows 便携版 Node.js 放入：
-
-```text
-packaging/node/node.exe
-```
-
-打包后的 EXE 只使用内置 Node；内置 Node 缺失即视为打包物损坏：正式包必须内置，运行时不会回退到系统 `PATH`。本地构建已准备 `packaging/node/node.exe`；此文件被 Git 忽略，重新检出源码后需自行准备，不能仅凭打包成功认定已内置 Node。
-
-详细说明见 [packaging/README.md](packaging/README.md)。
-
-## 故障排查
-
-### 提示找不到 Node.js
-
-源码运行时，请确认已经安装 Node.js，并且 PowerShell 中可以执行：
-
-```powershell
-node -v
-```
-
-打包运行时，请确认打包前已放入：
-
-```text
-packaging/node/node.exe
-```
-
-### 公式没有渲染
-
-公式由 Node 渲染器处理。请确认：
-
-- `node_renderer/node_modules` 已安装。
-- 源码运行时执行过 `cd node_renderer && npm install`。
-- EXE 打包时已包含 `node_renderer/node_modules`。
-
-### GUI 无法启动或空白
-
-请确认系统安装了 Microsoft Edge WebView2 Runtime。Windows 10/11 通常已经内置或可通过 Edge 组件更新获得。
-
-### 生成后浏览器没有自动打开
-
-请检查 GUI 中“自动打开”是否启用。即使没有自动打开，生成的 HTML 仍会保存在输出目录。
-
-自动打开把结果以 `file://` 地址交给系统默认浏览器。若仍无反应，先确认系统里 `.html` 的默认应用是浏览器——仍指向已停用的 IE 时不会打开；也可以把生成的 HTML 直接拖进浏览器窗口。
-
-### 打印效果和屏幕显示不完全一致
-
-打印由浏览器打印引擎决定。纸面统一为白纸，主题的浅蓝底与左右两条框线画在正文列上，长度随正文；关闭打印对话框里的“背景图形”时只会丢掉蓝底，框线保留，因为边框不受该开关影响。Office 模板已针对 Edge 打印做过优化，但表格分页、边框和纸张缩放仍可能受浏览器和打印机驱动影响。
-
-## 兼容范围
-
-当前主要面向：
-
-- Windows 10 / Windows 11
-- Microsoft Edge / Chromium 内核浏览器
-- Python 3.12.x（仅源码开发与构建环境；正式发布包不要求用户安装 Python）
-- Node.js 18+ 或随 EXE 内置的 Windows 版 Node.js
-
-生成的 HTML 阅读器主体可离线直接打开；本地 Markdown 图片已内嵌，无需保证图片可访问。
-网络图片与原始 HTML 中的资源引用仍需源文档保证可访问。通常可在现代 Chromium 浏览器中直接打开。打印效果以 Microsoft Edge 为主要参考。
-
-## 项目状态与限制
-
-项目当前处于个人正式版候选、内部发布候选阶段；1.0.0-rc1 已通过 33 项实机验收（见 [验收清单](docs/QA-CHECKLIST.md)）。
-
-当前已实现的功能：
-
-- GUI 转换流程（文件/目录选择、拖入、预检清单、逐文件状态）
-- 三套阅读模板（Modern / Office / VS Code）
-- 阅读器交互：目录跳转、目录与正文折叠、滚动高亮、阅读位置恢复
-- 图片、代码块、表格、公式渲染；代码复制、图片放大（灯箱内可滚轮缩放至 6 倍）
-- 批量索引与目录结构保留
-- Windows 单文件 EXE 打包方案；正式构建可将 Python 运行时和便携版 Node.js 一并打包
-
-最终发布前仍建议完成：
-
-- 明确正式版本号与许可证策略。
-
-已知限制：
-
-- 暂未作为跨平台应用设计，主要测试环境是 Windows。
-- Node 渲染器仍是必要组成部分；正式包必须内置 Node.js（构建期强制，缺失则构建失败）。
-- 打印分页无法做到与 Microsoft Word 100% 一致。
-- Markdown 原始 HTML 的复杂样式由浏览器自行解释，不保证所有网页级布局都适合打印。
-- 测试分三层：行为契约（viewer 22 条 / GUI 9 条 / index 9 条，各自锁定记录数与通过数）、harness 自检 5 条、以及前后端单元与集成用例；无 Node 或 jsdom 时相应层会显式跳过而不是失败。这些仍不能替代 GUI、打印和 EXE 实机验证，发布前请运行 `packaging/validate_release.py`。
-- 本地 Markdown 图片会内嵌为 data URI，分享 HTML 时无需再携带图片文件；网络图片与原始 HTML 中的资源引用仍由源文档决定。
-- 正文与目录的折叠状态、阅读位置按文档持久化（`viewer.js` 的 v2 文档状态键），刷新或重开同一文档会恢复；
-  滚动高亮会自动展开当前标题的目录父项，因此可能临时改变手动折叠的目录显示。
-- 部分模板依赖系统安装的 `Source Han Sans SC`，对应字体文件未随 HTML 内嵌；
-  未安装时由浏览器和系统字体回退决定实际显示。Modern / VS Code 当前还将该字体
-  用作代码字体变量，因此代码显示不保证等宽。
-
-## 项目结构
-
-```text
-core/                 Python 调度、配置、目录和文档生成层
-gui/                  pywebview 桌面界面
-node_renderer/        Node Markdown 渲染器
-templates/default/    共享基础阅读器模板
-templates/Modern/     Modern 阅读主题
-templates/Office/     Office 正式文档主题
-templates/Vscode/     VS Code 预览主题
-templates/viewer.js   共用浏览器交互逻辑
-templates/print.css   共用打印样式
-packaging/            PyInstaller 配置与程序图标
-docs/                 设计、架构、路线图和截图
-tests/                转换清单、渲染链接、批量转换、demo 生成、转换边界、TOC 标题契约与 GUI 约定测试
-samples/              Markdown 测试样例
-```
-
-## 许可证
-
-当前项目暂不发布为开源项目，也暂未选择开源许可证。
-
-在没有明确许可证文件之前，代码、文档、图标和截图默认保留全部权利，仅供作者本人学习、使用和继续开发。
-
+项目面向个人使用与内部发布；暂未选择开源许可证，代码与资源保留全部权利。

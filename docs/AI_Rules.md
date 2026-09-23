@@ -1,125 +1,31 @@
-# AI 协作规则
+# 维护约定
 
-## 编码前
+给在本仓库工作的自动化助手与未来的自己：这里是容易踩的约定，不是教程。
+功能与操作见 [使用说明](USAGE.md)，环境与流程见 [开发与构建](DEVELOPMENT.md)。
 
-必须完整阅读：
+## 当前版本
 
-- `docs/DESIGN.md`
-- `docs/ARCHITECTURE.md`
-- `docs/ROADMAP.md`
+1.0.0-rc1，实机验收已通过；升为 1.0.0 待许可证与正式发布决定。
 
-如任务涉及打包，还应阅读：
+## 改动之后必须做的
 
-- `packaging/README.md`
+- 改模板或渲染输出：运行 `python tools/generate_demo.py` 并提交重新生成的 `samples/demo.html`
+  ——测试会比较它与当前源码的结果，不一致就是失败。
+- 改 `templates/`、`node_renderer/`、`core/`、`gui/`：至少运行 `python -m pytest -q`。
+- 改 GUI：确认 `python main.py` 能启动，GUI 资源路径没有被破坏。
+- 改打包配置：确认内置 Node 仍在，并运行 `python packaging/validate_release.py --mode both`。
 
-如任务涉及模板，还应阅读对应模板目录下的 `README.md` 和 `theme.css`。
+## 不要做
 
----
+- 不要在文档里写测试总数或契约条数：它们会随测试变化；真值由测试里的锁定常量与失败信息给出。
+- 不要把当前态文档当历史：`docs/CHANGELOG.md`、`docs/QA-CHECKLIST.md` 与 `release-readme.md` 是冻结证据，
+  不要为了描述现状去改它们。
+- 不要在 `samples/demo.md` 里解释「以前为什么这样」，也不要写尚未支持的语法：它是渲染标本。
+- 不要复制阅读器交互：交互只在 `templates/viewer.js`，主题只覆盖视觉。
+- 不要引用 CDN、外链字体或在线资源：生成的 HTML 必须离线自足。
 
-## 当前项目状态
+## 出口
 
-MarkdownReader 当前处于 1.0.0-rc1 阶段：发布工程已收敛，33 项实机验收已于 2026-09-23 通过（`docs/QA-CHECKLIST.md`），升为 1.0.0 待许可证与正式发布决定。
-
-本阶段优先：
-
-- 稳定
-- 收尾
-- 文档一致
-- 打包可用
-- 小范围修复
-- 回归验证
-
-避免：
-
-- 大重构
-- 重新设计交互
-- 新增非核心功能
-- 引入新技术栈
-
----
-
-## 职责边界
-
-不得混淆以下职责：
-
-- Python：调度、文件读写、模板组装、配置、批量索引。
-- Node：Markdown 和公式渲染。
-- HTML：结构。
-- CSS：布局、主题、打印。
-- JavaScript：阅读器交互。
-- GUI：选择文件、展示预览/日志、调用核心流程。
-- 提示与日志面向人，`href`/`src` 面向浏览器：前者显示可读路径，后者保持规范的百分号编码。
-
-不得让 GUI 复制 Markdown 渲染、TOC 生成或阅读器交互逻辑。
-
----
-
-## 禁止事项
-
-不得：
-
-- 随意改变项目架构。
-- 随意重命名模块。
-- 引入 React / Vue / jQuery / Bootstrap。
-- 复制 `templates/viewer.js` 到具体模板。
-- 让 Node 直接生成完整阅读器 HTML。
-- 让 Python 拼接大段新前端逻辑。
-- 修改无关文件。
-- 删除用户文件或构建资源而不确认。
-
----
-
-## 修改原则
-
-优先：
-
-- 小步修改
-- 复用现有结构
-- 保持单文件 HTML 输出
-- 保持模板继承
-- 保持 GUI 只调用核心流程
-- 保持 Windows 打包可用
-
-避免：
-
-- 难以理解的技巧性代码
-- 过大的函数继续膨胀
-- 不必要的硬编码
-- 为了“整洁”破坏稳定链路
-
----
-
-## 测试与验证
-
-如果修改核心生成流程，至少验证：
-
-- `core/config.py`
-- `core/converter.py`
-- `core/index_builder.py`
-- `node_renderer/render.js`
-
-如果修改模板，至少运行：
-
-python tools/generate_demo.py
-
-`samples/demo.html` 是入库的渲染标本：测试会把重新生成的结果与仓库内副本比较，
-因此渲染输出有变化时必须重新生成并提交；人工核对排版时也直接打开它。
-
-如果修改 GUI，优先确认 `main.py` 启动和 GUI 资源路径。
-
-如果修改打包配置，确认：
-
-- `packaging/MarkdownReader.spec`
-- `packaging/assets/`
-- `packaging/node/node.exe`
-
----
-
-## 完成说明
-
-完成后应说明：
-
-- 修改了哪些文件
-- 采用了哪些设计决策
-- 验证了什么
-- 哪些事项仍未完成
+- 模板或渲染有改动：Demo 重新生成并一起提交。
+- 行为契约有改动：同步契约与实现，不要只改一侧让测试变绿。
+- 版本与发布：先 `python packaging/release_freeze.py --check-only`，通过后再 `--tag`。

@@ -1,275 +1,58 @@
-# MarkdownReader 架构文档
+# 架构
 
-版本：1.0.0-rc1
-
----
-
-## 1. 总览
-
-MarkdownReader 由四层组成：
+## 分层与数据流
 
 ```text
-pywebview GUI
-    ↓
-Python 核心调度层
-    ↓
-Node Markdown 渲染层
-    ↓
-HTML / CSS / JS 阅读器模板
+core/           Python 调度：配置、转换计划、front matter、目录、渲染调度、索引生成
+gui/            pywebview 桌面界面与静态资源
+node_renderer/  Node 渲染服务：markdown-it 与插件、KaTeX
+templates/      阅读器外壳与主题、索引模板、共享交互与打印样式
+packaging/      打包配置、图标与发布脚本
 ```
-
-核心原则：
-
-- Python 负责流程和文件组织。
-- Node 负责 Markdown 到 HTML 片段的渲染。
-- 浏览器负责阅读器运行时交互。
-- 模板负责最终视觉和打印表现。
-
----
-
-## 2. 当前目录结构
 
 ```text
-core/                 Python 核心流程
-gui/                  pywebview 桌面 GUI
-node_renderer/        Node Markdown 渲染服务
-templates/            阅读器模板和索引模板
-packaging/            PyInstaller 打包配置与图标资源
-samples/              Markdown 示例与渲染标本（demo.md 与入库的 demo.html 成对维护）
-tools/                本地辅助脚本（不参与打包）
-docs/                 设计、架构、路线图、更新日志和截图
-tests/                pytest 自动化测试
-config.json           运行时生成（首次保存设置时写入，不进版本库；仓库只保留 config.example.json）
-main.py               GUI 启动入口
+Markdown 文件
+  → core/conversion_plan.py   只读预检：递归收集、去重、输出路径、冲突检查
+  → core/fm.py                front matter 解析（页面标题）
+  → core/renderer_node.py     子进程调用 Node，得到正文 HTML 与标题列表
+  → core/toc.py               由标题列表生成嵌套目录
+  → templates/                把正文、目录、样式与脚本组装成单文件 HTML
+  → 浏览器                    负责全部阅读交互
 ```
 
-`tests/` 包含当前 pytest 自动化测试，覆盖转换计划、跨文档链接与脚注渲染、
-批量转换集成、demo 生成结构、转换边界契约、TOC 标题契约、图片内嵌契约以及 GUI 资源/契约。渲染相关测试需要本机 Node.js 与
-`node_renderer/node_modules`。viewer 状态契约另有独立测试层：`tests/js/`（jsdom + Node 内置 test runner，由 `tests/test_viewer_state_contract.py` 调用），首次安装执行 `cd tests/js && npm ci`——jsdom 版本已精确锁定，以匹配 README 与 DESIGN 声明的 Node.js 18+ 基线。该层只用于测试、不进打包；未安装该层时对应模块显式 skip 而非静默通过。自动化测试目前不覆盖 GUI 运行时交互、
-浏览器打印和打包后 EXE 的完整实机行为。测试不长期保留已知缺陷：契约修复后即摘除对应的 `xfail` 标记。
+## 各层职责
 
----
+### Python（core、gui）
 
-## 3. Python 核心层
+- 只负责调度与组装：不做 Markdown 解析，不实现阅读器交互。
+- `conversion_plan.py` 在任何写入之前给出可预览、可校验的转换计划，冲突在写入前拦下。
+- `renderer_node.py` 每进程只解析一次 Node 命令；frozen 包只使用内置 Node，缺失即视为打包物损坏。
+- `gui/api.py` 把桥接方法暴露给界面；原生对话框一次只开一个，重叠请求被拒绝。
 
-主要模块：
+### Node（node_renderer）
 
-```text
-core/config.py          配置、路径、模板继承解析
-core/converter.py       单文件和批量转换流程
-core/conversion_plan.py 转换前输入展开、输出路径和冲突预检
-core/renderer_node.py   Node 渲染桥接
-core/toc.py             TOC HTML 生成（标题由 Node 渲染器提供）
-core/index_builder.py   批量索引页生成
-core/fm.py              Front Matter 解析
-core/logger.py          日志配置
-```
+- 从标准输入读 JSON，向标准输出写 JSON：正文 HTML、标题列表、警告，以及需要内联的 KaTeX 样式。
+- 负责 Markdown 解析、脚注、公式排版与本地图片内嵌，不生成完整阅读器页面。
+- 选项与插件范围见 [兼容范围](MARKDOWN.md)。
 
-Python 层负责：
+### 模板（templates）
 
-- 读取输入文件
-- 收集 Markdown 文件
-- 在写入前建立源 Markdown 到输出 HTML 的完整映射
-- 检测扁平输出的同名冲突
-- 调用 Node 渲染器
-- 接收 HTML 片段与标题列表
-- 生成 TOC
-- 拼装模板
-- 写出 HTML
-- 生成批量索引
+- `default` 提供阅读器外壳与可继承的排版结构；Modern、Office、VS Code 只覆盖视觉。
+- `viewer.js` 承载全部阅读交互：目录跳转与定位、折叠、状态持久化、代码复制、图片灯箱、主题、编号与打印。
+- `print.css` 负责共用打印机械项（隐藏交互控件、分页与缩放规则），纸面观感由各主题自己的打印规则决定。
+- `templates/index/` 是独立的索引页模板，读取三份资源后内嵌成单文件 HTML。
 
-### 转换清单来源模型
+### 打包（packaging）
 
-转换计划中的每篇文档记录其纳入方式。当前正式支持：
+- 同一 spec 支持 onefile 与 onedir；构建前做真实渲染器自检，产物由 `validate_release.py` 校验。
+- `release_freeze.py` 是发布门禁：先核对版本与验收证据，再重建产物、写校验和与构建记录、打并推送 tag。
 
-- `selected` → **直接加入**：用户通过 Windows 文件窗口或拖拽直接加入单个文件。
-- `directory` → **目录扫描**：用户选择或拖入文件夹后，由递归扫描发现。
+## 测试分层
 
-`dependency` → **链接依赖** 仅作为未来扩展标识保留。当前“显式转换清单”模式不会
-自动沿跨文档链接扩大转换范围，也不应在 GUI 中产生“链接依赖”项目。若以后实现依赖
-自动发现，应继续复用转换计划和清单界面，并明确区分用户直接指定的文档与自动加入的
-文档。
+- Python 单元与集成测试覆盖转换计划、链接重写、图片内嵌、front matter、模板样式与打包脚本。
+- `tests/js/` 是 jsdom 层：驱动真实生成的 viewer、GUI 与索引页，各自锁定契约条数与通过数。
+- harness 自检针对测试工具本身；文档契约校验 `samples/demo.html` 与当前源码一致。
+- 缺少 Node 或 jsdom 时相应层显式 skip 并说明原因，不会静默通过。
 
-Python 层不得复制浏览器交互逻辑。
-
----
-
-## 4. Node 渲染层
-
-位置：
-
-```text
-node_renderer/render.js
-```
-
-Node 负责：
-
-- Markdown 解析
-- 脚注解析
-- 按 Python 提供的转换清单重写跨文档 Markdown 链接
-- 行内公式和块级公式渲染
-- 按需内联 KaTeX 样式与字体：正文实际渲染出公式时才注入自包含资源，无公式的文档因此保持模板级体积
-- 区分显示层与 URL 语义层：提示与日志输出人类可读的路径，HTML 中的 `href`/`src` 保持规范的百分号编码
-- 将可解析的本地 Markdown 图片内嵌为 data URI；网络图片、未知 scheme 与 raw HTML 资源保持源行为
-- 输出 HTML 片段、标题信息和渲染资源
-
-Python 通过子进程调用 Node：
-
-```text
-Python stdin JSON → Node render.js → stdout JSON → Python
-```
-
-源码运行时可以使用系统 Node；正式包只使用内置 Node，缺失即视为打包物损坏：
-
-```text
-node/node.exe
-```
-
-Windows 下调用 Node 子进程时使用 `CREATE_NO_WINDOW`，避免 GUI EXE 转换过程中弹出额外控制台窗口。
-
----
-
-## 5. 模板层
-
-阅读器模板：
-
-```text
-templates/default/viewer.html
-templates/default/viewer.css
-templates/default/theme.css
-templates/viewer.js
-templates/print.css
-```
-
-个性化模板：
-
-```text
-templates/Modern/theme.css
-templates/Office/theme.css
-templates/Vscode/theme.css
-```
-
-索引模板：
-
-```text
-templates/index/index.html
-templates/index/theme.css
-templates/index/index.js
-```
-
-模板继承由 `metadata.json` 声明。基础与子模板的 `theme.css` 按继承链顺序加载，
-子模板通过 CSS 层叠覆盖基础变量和规则；`viewer.js` 为所有模板共享，不在子模板中复制。
-
----
-
-## 6. 浏览器交互层
-
-共享阅读器脚本：
-
-```text
-templates/viewer.js
-```
-
-负责：
-
-- TOC 点击跳转
-- Scroll Spy
-- TOC 折叠
-- 正文折叠
-- 展开/折叠按钮
-- 自动编号
-- 明暗模式
-- 图片放大（灯箱；滚轮可缩放到 6 倍，点击关闭）
-- 代码复制
-- 表格和代码块滚动包装
-- 打印触发（`window.print()`）；`print.css` 提供所有模板共用的 `@media print`（白纸、隐藏控件、解开滚动容器、分页规则），纸面观感由各模板自己的 `@media print` 决定——例如 Modern 把浅蓝底与左右框线画在正文列上，长度随正文
-
-JavaScript 不解析 Markdown。
-
----
-
-## 7. GUI 层
-
-GUI 文件：
-
-```text
-gui/app.py
-gui/api.py
-gui/assets/index.html
-gui/assets/gui.css
-gui/assets/gui.js
-```
-
-GUI 通过 `BridgeApi` 调用核心转换函数。GUI 不生成 Markdown HTML，也不复制 TOC、折叠或阅读器逻辑。
-
-GUI 配置写入：
-
-```text
-config.json
-```
-
----
-
-## 8. 打包层
-
-打包文件：
-
-```text
-packaging/MarkdownReader.spec
-packaging/assets/MarkdownReader.ico
-packaging/assets/MarkdownReader_splash.png
-```
-
-PyInstaller 打包内容：
-
-- Python 程序
-- GUI 静态资源
-- templates
-- node_renderer
-- 便携版 Node.js
-- 图标和启动图
-
----
-
-## 9. 配置
-
-主配置文件：
-
-```text
-config.json
-```
-
-分区：
-
-```json
-{
-  "build": {},
-  "document": {},
-  "features": {}
-}
-```
-
-优先级：
-
-```text
-运行时 overrides > config.json > 默认值
-```
-
----
-
-## 10. 扩展边界
-
-推荐扩展点：
-
-- 新增模板目录
-- 优化索引页模板
-- 增强打印 CSS
-- 补充测试
-- 完善打包发布流程
-
-不推荐扩展点：
-
-- 在 GUI 中复制渲染逻辑
-- 在 Python 中硬写浏览器交互
-- 为每个模板复制一套 `viewer.js`
-- 引入前端框架
+阅读器状态机为什么用行为契约而不是静态断言：折叠状态、阅读位置这类行为只有在真实页面上才能区分
+「保留了」与「悄悄丢了」，匹配源码文本做不到。运行方式见 [开发与构建](DEVELOPMENT.md)。
