@@ -54,6 +54,10 @@ def test_the_modern_print_frame_follows_the_text():
     assert "background: var(--color-bg) !important" in print_block
     assert "border-left: 2px solid var(--modern-guide-border) !important" in print_block
     assert "border-right: 2px solid var(--modern-guide-border) !important" in print_block
+    assert "body.theme-modern .content-area" not in print_block, (
+        "the print block must not add page padding: that narrows the text beyond the "
+        "browser's own page margins, which is what a reviewer saw as changed margins"
+    )
 
     shared = (TEMPLATES / "print.css").read_text(encoding="utf-8")
     assert "html{background:#fff!important}" in shared
