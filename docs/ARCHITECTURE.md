@@ -179,10 +179,10 @@ templates/viewer.js
 - 展开/折叠按钮
 - 自动编号
 - 明暗模式
-- 图片放大
+- 图片放大（灯箱；滚轮可缩放到 6 倍，点击关闭）
 - 代码复制
 - 表格和代码块滚动包装
-- 打印触发（`window.print()`）；打印版式由 `print.css` 的 `@media print` 提供
+- 打印触发（`window.print()`）；`print.css` 提供所有模板共用的 `@media print`（白纸、隐藏控件、解开滚动容器、分页规则），纸面观感由各模板自己的 `@media print` 决定——例如 Modern 把浅蓝底与左右框线画在正文列上，长度随正文
 
 JavaScript 不解析 Markdown。
 
