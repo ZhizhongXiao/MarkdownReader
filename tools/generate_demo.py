@@ -1,7 +1,8 @@
-"""Generate samples/demo.html from samples/demo.md for manual inspection.
+"""Generate samples/demo.html from samples/demo.md.
 
-The generated HTML is intentionally not tracked by Git (see .gitignore); it is
-only a local artifact used to eyeball template and styling changes.
+samples/demo.md is the specimen of what the reader supports and samples/demo.html
+is the committed result: the test suite compares a fresh render against it, so a
+change that alters the output has to be followed by rerunning this script.
 """
 
 import argparse

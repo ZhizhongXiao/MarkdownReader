@@ -1,8 +1,10 @@
 """Structural contracts for the generated demo document.
 
-These assertions replace the old hand-maintained samples/expected/demo.html
-snapshot: they describe the structure the demo must have without pinning the
-whole HTML, so styling tweaks no longer require refreshing a large fixture.
+samples/demo.md is the specimen of what the reader supports, and samples/demo.html
+is committed next to it, so a fresh render has to match the repository copy: a
+drift in the renderer, the templates or the demo source surfaces here instead of
+being reviewed away. The structural assertions describe landmarks the demo must
+keep, and the snapshot contract locks the rest.
 """
 
 import sys
@@ -52,3 +54,23 @@ def test_demo_inlines_katex_assets(demo_html: str):
 def test_demo_inlines_the_shared_viewer_javascript(demo_html: str):
     assert "markdownreader-theme" in demo_html
     assert "function applyTheme" in demo_html
+
+
+def test_demo_html_matches_the_committed_specimen(tmp_path: Path):
+    """A fresh render must equal samples/demo.html byte for byte, modulo newlines.
+
+    The committed page is the artifact readers open, so it is only useful as a
+    specimen while it is exactly what the current sources produce.
+    """
+    generated = tmp_path / "demo.html"
+    generate_demo(output=generated)
+
+    committed = ROOT / "samples" / "demo.html"
+    expected = committed.read_text(encoding="utf-8").replace("\r\n", "\n")
+    actual = generated.read_text(encoding="utf-8").replace("\r\n", "\n")
+
+    assert actual == expected, (
+        "samples/demo.html no longer matches the sources: run "
+        "`python tools/generate_demo.py` and commit the regenerated file "
+        "(or fix what changed in templates/, node_renderer/ or samples/demo.md)."
+    )

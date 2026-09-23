@@ -5,3 +5,8 @@ config.json text eol=crlf
 # LF in the repository while tolerating the worktree copy, the same way
 # config.json is handled above.
 tests/js/package-lock.json text eol=lf
+
+# samples/demo.html is the committed specimen of what the reader renders. The
+# suite compares a fresh render against it after normalising newlines, so LF is
+# pinned here to keep the worktree, Windows Python and the remote blob agreeing.
+samples/demo.html text eol=lf linguist-generated=true

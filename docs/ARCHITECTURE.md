@@ -35,7 +35,7 @@ gui/                  pywebview 桌面 GUI
 node_renderer/        Node Markdown 渲染服务
 templates/            阅读器模板和索引模板
 packaging/            PyInstaller 打包配置与图标资源
-samples/              Markdown 示例（输出本地生成，不纳入版本控制）
+samples/              Markdown 示例与渲染标本（demo.md 与入库的 demo.html 成对维护）
 tools/                本地辅助脚本（不参与打包）
 docs/                 设计、架构、路线图、更新日志和截图
 tests/                pytest 自动化测试

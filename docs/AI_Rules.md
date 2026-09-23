@@ -102,7 +102,8 @@ MarkdownReader 当前处于 1.0.0-rc1 阶段：发布工程已收敛，33 项实
 
 python tools/generate_demo.py
 
-然后人工查看生成的 `samples/demo.html`（该文件不纳入版本控制）。
+`samples/demo.html` 是入库的渲染标本：测试会把重新生成的结果与仓库内副本比较，
+因此渲染输出有变化时必须重新生成并提交；人工核对排版时也直接打开它。
 
 如果修改 GUI，优先确认 `main.py` 启动和 GUI 资源路径。
 
