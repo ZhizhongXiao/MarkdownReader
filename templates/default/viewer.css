@@ -58,7 +58,11 @@ html,body{height:100%;overflow:hidden;font-family:var(--font-sans);font-size:var
 body.resizing{user-select:none;cursor:col-resize}
 body.resizing .toc-sidebar,body.resizing .content-area{pointer-events:none}
 .content-area{overflow-y:auto;overflow-x:hidden;scroll-behavior:smooth;padding:40px 48px 80px 48px}
-.markdown-body{max-width:var(--content-max-width);margin:0 auto;text-align:justify}
+.markdown-body{max-width:var(--content-max-width);margin:0 auto;text-align:left}
+/* Justified CJK text has no word spaces to stretch, so it widens the gaps
+   between characters. Left alignment keeps the text even; the wrap rule keeps a
+   long URL or file name inside the content area, which clips on overflow. */
+.markdown-body a,.markdown-body :not(pre) > code,.markdown-body p{overflow-wrap:anywhere}
 .heading-toggle{display:inline-flex;align-items:center;justify-content:center;width:calc(var(--toggle-size) + 4px);height:calc(var(--toggle-size) + 4px);margin-right:6px;border:none;background:transparent;cursor:pointer;font-size:10px;color:var(--color-text-light);border-radius:3px;transition:transform .2s ease,background-color .15s ease;vertical-align:middle;flex-shrink:0}
 .heading-toggle:hover{background-color:var(--color-toc-hover-bg)}
 .heading-toggle.collapsed{transform:none}

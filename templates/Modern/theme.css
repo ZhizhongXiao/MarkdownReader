@@ -93,7 +93,7 @@ body.theme-modern .markdown-body {
     padding: 18px 0 18px 28px;
     background: transparent;
     border-left: 2px solid var(--modern-guide-border);
-    text-align: justify;
+    text-align: left;
 }
 
 @media (max-width: 720px) {
