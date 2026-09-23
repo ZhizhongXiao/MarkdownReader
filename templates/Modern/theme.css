@@ -107,9 +107,18 @@ body.theme-modern .markdown-body {
 }
 
 @media print {
+    /* The theme canvas moves inside the column: the paper stays white, while the
+       tinted block and its two guide borders follow the text from its first line to
+       its last. The frame is drawn with borders on purpose - a border prints even
+       when background graphics are switched off, and only the tint depends on it. */
+    body.theme-modern .content-area {
+        padding: 0 10mm !important;
+    }
+
     body.theme-modern .markdown-body {
-        padding: 0 !important;
-        background: #ffffff !important;
-        border: none !important;
+        padding: 12px 18px !important;
+        background: var(--color-bg) !important;
+        border-left: 2px solid var(--modern-guide-border) !important;
+        border-right: 2px solid var(--modern-guide-border) !important;
     }
 }

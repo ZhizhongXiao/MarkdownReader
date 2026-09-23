@@ -39,3 +39,21 @@ def test_an_over_long_token_may_wrap_in_the_content_area():
     # name would be cut off instead of wrapping onto the next line.
     assert "overflow-x:hidden" in shared
     assert "overflow-wrap:anywhere" in shared
+
+
+def test_the_modern_print_frame_follows_the_text():
+    """The tint belongs to the text column, never to the paper.
+
+    The canvas stays white, and the column carries the theme tint plus two guide
+    borders. The frame is drawn with borders on purpose: a border prints even when
+    background graphics are switched off, so only the tint depends on that switch.
+    """
+    modern = (TEMPLATES / "Modern" / "theme.css").read_text(encoding="utf-8")
+    print_block = modern.split("@media print", 1)[1]
+
+    assert "background: var(--color-bg) !important" in print_block
+    assert "border-left: 2px solid var(--modern-guide-border) !important" in print_block
+    assert "border-right: 2px solid var(--modern-guide-border) !important" in print_block
+
+    shared = (TEMPLATES / "print.css").read_text(encoding="utf-8")
+    assert "html{background:#fff!important}" in shared
