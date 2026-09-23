@@ -12,9 +12,10 @@
 - 关闭 UPX；同一 spec 支持 `onefile`（默认）与 `onedir`（`MR_BUILD_MODE=onedir`）。
 - `config.json` 退出版本库，改为 `config.example.json` 与 `.gitignore`。
 - 启动日志同时写入 EXE 同级目录的 `MarkdownReader.log`。
-- 测试增至 108 项：三层行为契约（viewer 21 / GUI 8 / index 9）、harness 自检 5 条，以及前后端单元与集成用例。
+- 测试增至 130 项：三层行为契约（viewer 22 / GUI 9 / index 9）、harness 自检 5 条，以及前后端单元与集成用例。
 - 仓库文档（README、DESIGN、ARCHITECTURE、ROADMAP、release-readme）与上述实现对齐。
 - 验收门禁读取勾选框时不再区分大小写与空格：手写的 `- [X]`、`- [ x ]`、缩进形式都按已勾计。括号内非 `x` 的标记仍算未勾，笔误不会缩小分母，也不会让记录悄悄变成「未完成」以外的结果。
+- 1.0.0-rc1 实机验收 33 项全部通过，机器信息与结论记录在 `docs/QA-CHECKLIST.md`；tag `v1.0.0-rc1` 已推送。
 
 ### 修复
 
@@ -33,7 +34,7 @@
 
 ### 版本
 
-- 版本收敛为 1.0.0-rc1（`pyproject.toml` 记为 `1.0.0rc1`）；1.0.0 待实机 QA 通过后发布。
+- 版本收敛为 1.0.0-rc1（`pyproject.toml` 记为 `1.0.0rc1`）；33 项实机验收已于 2026-09-23 通过并记录在 `docs/QA-CHECKLIST.md`，1.0.0 待许可证与正式发布决定。
 - 本版本包含下方两个原 `[未发布]` 区块的全部内容。
 
 ---

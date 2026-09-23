@@ -20,7 +20,7 @@ Windows 便携式 Markdown 转 HTML 阅读器生成工具，无需安装器。
 - 同名输出 HTML 会被覆盖。
 - 阅读器样式、脚本和公式资源内置于 HTML；标准 Markdown 引用的本地图片会自动内嵌为 data URI，网络图片与原始 HTML 中的资源仍按源文档引用，需保证输出环境能访问它们。
 - 打印分页和字体效果取决于浏览器及本机环境。
-- 本版本通过 130 项自动化测试（含三套行为契约层与 harness 自检），并由 `packaging/validate_release.py` 对打包产物做启动与资源校验；真实 GUI、打印与目标机器表现仍需实机验收。
+- 本版本通过 130 项自动化测试（三层行为契约 viewer 22 / GUI 9 / index 9，harness 自检 5 条，其余为前后端单元与集成用例），并由 `packaging/validate_release.py` 对打包产物做启动与资源校验；本版本已在目标机器完成 33 项实机验收（见 `docs/QA-CHECKLIST.md`）并通过。
 
 本次发布统一项目名称、更新示例文档和明暗模式截图。可使用随附的 `SHA256SUMS.txt` 核验发布物（EXE 与可选 ZIP 均在其内）。
 

@@ -8,13 +8,15 @@
 
 项目已完成最终打包前标准回归，当前可视为个人正式版候选 / 内部发布候选。
 
+1.0.0-rc1 的 33 项实机验收已于 2026-09-23 通过，见 [QA-CHECKLIST.md](QA-CHECKLIST.md)。
+
 建议版本标记：
 
 ```text
 MarkdownReader 1.0.0-rc1
 ```
 
-实机 QA 通过、许可证确认后，可升为：
+许可证确认后，可升为：
 
 ```text
 MarkdownReader 1.0.0
@@ -134,11 +136,11 @@ MarkdownReader 1.0.0
 - Python 依赖已迁移到 `pyproject.toml` 与 `uv.lock`，由 `uv` 管理项目专用环境与可复现构建。
 - 保留无安装器的 PyInstaller `onefile` 发布形态，关闭 UPX，并支持 `onedir` 备选形态。
 - 构建前做真实渲染器自检；发布产物由 `packaging/validate_release.py` 校验。
+- 1.0.0-rc1 实机验收 33 项通过：真 GUI、真浏览器与 Edge 打印、便携配置、含 SmartScreen 的首启表现，记录见 [QA-CHECKLIST.md](QA-CHECKLIST.md)。
 
 ### 仍待办
 
-- 1.0.0-rc1 实机 QA：真 GUI、真浏览器、真打印、便携配置与 Defender 表现。
-- 实机 QA 通过后把版本从 `1.0.0-rc1` 升为 `1.0.0`，并冻结 release notes。
+- 正式版发布决定：把版本从 `1.0.0-rc1` 升为 `1.0.0`，并冻结 release notes。
 - 明确许可证，或继续保留全部权利声明。
 - WebView2 Runtime 启动前检测与原生失败提示（当前要求目标机器已安装 Runtime）。
 - 每次维护更新发布新的完整 EXE，不引入安装器、自更新器或增量补丁，并保留上一版用于回退。

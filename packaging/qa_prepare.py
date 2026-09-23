@@ -206,7 +206,8 @@ GUIDE = """# MarkdownReader 1.0.0-rc1 实机验收操作指引
 - B2 把 `根文档.md` 拖入窗口；再把「甲组」目录拖入窗口。
 - B3 只保留 `根文档.md` 做单文件转换；它引用的 `甲组/一号.md`、`乙组/YAML 全类型.md`
   不在本次清单内，因此日志里出现「Markdown 链接目标未加入转换清单」提示属于预期，
-  且提示里应是可读路径（`甲组/一号.md`），不是 `%E7%94%B2…` 这样的编码。
+  且提示里应是可读路径（`甲组/一号.md`），不是 `%E7%94%B2…` 这样的编码；
+  这是源文档写下的相对路径，不要求显示盘符。
 - B4 整个本目录做批量转换（含子目录），勾选 preserve structure：整套产物落在
   「输出目录/源目录名-HTML/」下，其中应出现 `甲组/一号.html`、`乙组/YAML 全类型.html`、
   `中文 空格 目录/文档 一.html`；不勾选则全部平铺在输出根目录，同名文件会在预检阶段被拦下。
@@ -254,9 +255,10 @@ GUIDE = """# MarkdownReader 1.0.0-rc1 实机验收操作指引
 
 ## G 安全
 
-- G1 首次双击 onefile 时观察 Defender：是否拦截、是否需要放行。
+- G1 首次双击 onefile 时观察 Defender / SmartScreen：是否拦截、是否需要放行。
 
-全部通过后，把 `docs/QA-CHECKLIST.md` 里的全部条目勾选，并写下结论行「QA 结论：通过」，然后：
+全部通过后，把 `docs/QA-CHECKLIST.md` 里的全部条目勾选，并写下结论行「QA 结论：通过」
+（`release_freeze.py` 按字面量匹配，这七个字必须完整出现），然后：
 
     git add docs/QA-CHECKLIST.md
     git commit -m "docs: record the 1.0.0-rc1 acceptance run"
