@@ -20,7 +20,9 @@
  *   --repo-root <path>   覆盖仓库根（默认本文件所在仓库）；主要供测试注入 fixture
  */
 
+const fs = require("fs");
 const path = require("path");
+const { extractCssReferences } = require("../resources/css_resolver");
 const paths = require("../upstream/paths.js");
 
 const RENDERER_ROOT = path.resolve(__dirname, "..");
@@ -36,6 +38,28 @@ function parseArgs(argv) {
     }
   }
   return options;
+}
+
+// Phase 5A：把 KaTeX 样式与它引用的字体复制到 dist/katex/，作为受管理的 companion runtime asset。
+// 这样 renderer 执行时**不依赖 renderer/node_modules**；npm run build 只读取与复制，不联网。
+function copyKatexAssets(outDirectory) {
+  const sourceDirectory = path.join(RENDERER_ROOT, "node_modules", "katex", "dist");
+  const css = fs.readFileSync(path.join(sourceDirectory, "katex.min.css"), "utf8");
+  const targetDirectory = path.join(outDirectory, "katex");
+  fs.mkdirSync(targetDirectory, { recursive: true });
+  fs.writeFileSync(path.join(targetDirectory, "katex.min.css"), css);
+  let files = 1;
+  let bytes = Buffer.byteLength(css);
+  for (const reference of extractCssReferences(css)) {
+    const source = path.join(sourceDirectory, reference);
+    const target = path.join(targetDirectory, reference);
+    const content = fs.readFileSync(source);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, content);
+    files += 1;
+    bytes += content.length;
+  }
+  return { files: files, bytes: bytes, directory: targetDirectory };
 }
 
 function reportFailure(provenance) {
@@ -111,9 +135,13 @@ async function main() {
 
   const outputs = Object.keys(result.metafile.outputs);
   const bytes = outputs.length ? result.metafile.outputs[outputs[0]].bytes : 0;
+  // companion runtime asset：KaTeX 样式与字体（使运行期不依赖 node_modules）。
+  const katexAssets = copyKatexAssets(path.dirname(outFile));
   process.stdout.write(
     "[renderer] built " + path.relative(layout.repoRoot, outFile).replace(/\\/g, "/") +
       " (" + bytes + " bytes) from " + paths.REUSED_SOURCES.length + " pinned upstream source(s)\n" +
+      "[renderer] katex assets: " + katexAssets.files + " file(s), " + katexAssets.bytes + " bytes -> " +
+      path.relative(layout.repoRoot, katexAssets.directory).replace(/\\/g, "/") + "\n" +
       "[renderer] pinned_commit = " + provenance.pinned_commit +
       "  checkout_commit = " + provenance.checkout_commit + "  (verified equal)\n",
   );

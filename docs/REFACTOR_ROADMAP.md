@@ -245,6 +245,19 @@ Markdown
 
 每迁移一种能力都增加测试。
 
+## 状态
+
+```text
+Phase 4A  PASS  checkbox / mark / callout / wikilink / obsidian-tag
+Phase 4B  PASS  footnote / extra math delimiters / document links
+parity     PASS  old/new 语义对照（D1 = 唯一接受的旧/新 parser 语义差异）
+Phase 4C  PASS  Mermaid recognition/容器 + PlantUML 语义层（D2 = intentional export hardening）
+adapter 覆盖：KEEP 15/15、TARGET 7/7、pending 0
+production renderer 仍未切换（cutover 依赖 Phase 5 的 standalone resource closure）
+```
+
+证据：docs/MARKDOWN_COMPATIBILITY.md 的对应套件数字与 changelog。
+
 ## 验收
 
 旧 MarkdownReader 已支持的 Markdown 不得出现功能倒退。
@@ -286,6 +299,28 @@ warning
 Mermaid runtime 只有实际使用时加入。
 
 PlantUML 当前只使用联网 server。
+
+## 子阶段
+
+```text
+5A  静态资源 collector：protocol v2 + resource manifest、Markdown 本地图片、通用 CSS url() resolver、
+    KaTeX CSS/fonts（自包含 build artifact）、failure warnings（不联网）
+5B  Mermaid runtime：vendored runtime 按需注入 + 离线可用（opt-in 浏览器自动验收）
+5C  Remote / network：remote images 与 PlantUML 抓取、超时/失败保留 URL + warning、断网仍转换
+5D  standalone closure gate：外部子资源扫描 + 载荷纪律 + 体积报告
+```
+
+## 状态
+
+```text
+5A  PASS  protocol v2（resources 必在）+ `resources.items` manifest、Markdown 本地图片、
+          通用 CSS url() resolver、KaTeX CSS/fonts 自包含 build artifact（dist/katex）、
+          failure warnings；raw HTML 引用不内嵌；**仍不联网**
+5B  pending   vendored Mermaid runtime 按需注入 + opt-in 浏览器自动验收
+5C  pending   remote image 与 PlantUML 抓取、超时/失败保留 URL + warning、断网仍转换
+5D  pending   standalone closure gate（外部子资源扫描 + 载荷纪律 + 体积报告）
+production renderer 仍未切换：cutover 依赖 5B–5D 的 standalone 闭包
+```
 
 ## 验收
 

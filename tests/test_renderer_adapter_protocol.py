@@ -1,4 +1,4 @@
-"""新 renderer 的协议契约（Phase 3）。
+"""新 renderer 的协议契约（Phase 3 建立 v1，Phase 5A 起为 v2：resources 是必在字段）。
 
 证明 adapter 的 JSON 契约本身稳定、可诊断、可独立运行；Markdown 语义对照在
  test_renderer_adapter_keep.py。产物缺失 = 明确失败 + 构建提示；缺 node = 平台工具缺失才 skip。
@@ -26,7 +26,7 @@ from renderer_adapter import (  # noqa: E402
     run_adapter,
 )
 
-PROTOCOL_VERSION = 1
+PROTOCOL_VERSION = 2
 FEATURE_KEYS = (
     "katex",
     "mermaid",
@@ -65,12 +65,16 @@ def test_stdout_is_exactly_one_json_object():
 def test_required_keys_and_types():
     envelope = render(SAMPLE)
 
-    for key in ("protocol_version", "ok", "html", "headings", "features", "warnings"):
+    for key in ("protocol_version", "ok", "html", "headings", "features", "warnings", "resources"):
         assert key in envelope, key
     assert isinstance(envelope["html"], str) and envelope["html"]
     assert isinstance(envelope["headings"], list)
     assert isinstance(envelope["features"], dict)
     assert isinstance(envelope["warnings"], list)
+    # v2：resources 必在；资源细节契约见 tests/test_renderer_adapter_resources.py。
+    assert set(envelope["resources"]) == {"items", "styles"}
+    assert isinstance(envelope["resources"]["items"], list)
+    assert isinstance(envelope["resources"]["styles"], list)
 
 
 def test_features_schema_is_complete_and_boolean():

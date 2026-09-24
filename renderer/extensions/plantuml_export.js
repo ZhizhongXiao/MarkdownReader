@@ -56,6 +56,11 @@ function fenceWords(info) {
   return { language: match[1], params: match[2] };
 }
 
+// 契约边界（不要在这里扩大 grammar）：
+//   plantuml / puml fence → MarkdownReader adapter extension
+//   body 是完整 PlantUML source
+//   不定义缺失 @startuml/@enduml 时自动补齐
+// 未来若要支持「省略标记」的写法，应作为独立产品能力：带自己的 fixture 与 contract。
 function diagramTokenForFence(state, token, pluginOptions) {
   const words = fenceWords(token.info);
   if (FENCE_LANGUAGES.indexOf(words.language) < 0) {

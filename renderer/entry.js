@@ -24,6 +24,7 @@ const { createRenderer } = require("./upstream/create_renderer");
 const { collectHeadings, headingAnchorFallback } = require("./document/headings");
 const { detectFeatures } = require("./document/features");
 const { transformDocumentLinks } = require("./document/links");
+const { collectResources } = require("./resources/collector");
 const upstreamPaths = require("./upstream/paths");
 
 function emit(text, code) {
@@ -53,15 +54,19 @@ function renderRequest(request) {
   // document 层（Phase 4B）：parse 之后、render 之前只跑一次 —— `.md → .html` 重写与
   // WikiLink 目标解析都写进 token，避免 heading metadata + 正文两次 inline 渲染造成重复 warning。
   const documentLinks = transformDocumentLinks(tokens, request.context);
+  // 资源层（Phase 5A）：同样在 parse 后、render 前只跑一次；只处理 Markdown image token
+  // （raw HTML 里的引用保持原样），并把需要 assembler 注入的 CSS 放进 resources.styles。
+  const resources = collectResources(tokens, request.context);
   const headings = collectHeadings(renderer.md, tokens, env);
   const html = renderer.md.renderer.render(tokens, renderer.md.options, env);
 
-  // features 由 token 语义驱动（Phase 4A/4B），不再依赖 HTML substring。
+  // features 由 token 语义驱动（Phase 4A/4B/4C），不再依赖 HTML substring。
   return {
     html: html,
     headings: headings,
     features: detectFeatures(html, tokens),
-    warnings: warnings.concat(documentLinks.warnings),
+    warnings: warnings.concat(documentLinks.warnings, resources.warnings),
+    resources: { items: resources.items, styles: resources.styles },
   };
 }
 

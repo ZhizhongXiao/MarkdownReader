@@ -59,7 +59,7 @@
 | T4 | `samples/demo.html` 必须等于当前源码的输出 | Phase 4/6 输出必然变化：重新生成并在提交说明里解释 | `test_demo_generation.py::test_demo_html_matches_the_committed_specimen` |
 | T5 | 标题 slug 的**精确值**（今天由 `slugifyUnicode` 给出） | Phase 4：允许按 vscode-office / markdown-it-anchor 对齐 | **不作断言**；诊断记录见下表 |
 | T6 | Python TOC → Viewer 的 DOM contract：`data-explicit-number`（Viewer 据此标记“已编号”标题） | Phase 6：可以重新设计，但必须同步修改 producer（core/toc.py）、consumer（templates/viewer.js）与相关测试，并在本表登记 | Viewer NUM1/NUM2、`test_toc_heading_contract.py` |
-| T7 | KaTeX 资产以单个 `assets.css` 全量内联 | Phase 3 adapter 可能改为更细的资源协议 | 断言只锁“有公式才有载荷、离线可用” |
+| T7 | KaTeX 资产以单个 `assets.css` 全量内联 | **Phase 5A 已改**：adapter v2 用 `resources.styles` + `resources.items`（通用 CSS `url()` resolver）；旧 production renderer 仍是 `assets.css` | 断言只锁“有公式才有载荷、离线可用”；adapter 侧见 `tests/test_renderer_adapter_resources.py` |
 
 ### T5 诊断记录（当前输出，仅供对照）
 
@@ -78,13 +78,14 @@
 | G6 | mermaid | `features.mermaid` 为真，且出现 `class="mermaid"` 运行时容器 | **Phase 4C 已实现语义层**（`renderer/extensions/mermaid_export.js`：复刻 pinned 上游 recognition + 容器，内容按 D2 escape）；**Phase 5 仍 pending**：浏览器 runtime 注入 |
 | G7 | plantuml | `features.plantuml` 为真，且进入图像资源流程（出现 `<img`） | **Phase 4C 已实现语义层**（`markdown-it-plantuml@1.4.1`：`uml_diagram` token + `<img src="server/svg/…">`，只构造 URL）；**Phase 5 仍 pending**：抓图与内嵌 |
 
-**Phase 4C 的 PlantUML 形式记录**：pinned 上游的**导出**路径（`markdown-pdf.js` → `markdown-it-plantuml`）只识别**裸 `@startuml` 块**；以围栏代码块（语言标记 `plantuml`）写图表只存在于 vditor 编辑器子系统，不属于导出语义。Phase 1 语料 `target/plantuml.md` 用的是围栏形式，因此 Phase 4C 增加了一条明确的 **adapter 附加**：语言标记为 `plantuml` / `puml` 的围栏会转成同一个 `uml_diagram` token（围栏 body 视为作者写的完整图源，原样编码，不删标记也不重新包装）。两条路径共用同一个 URL 构造实现，`<img>` 渲染与 feature 判断仍只有插件一个来源。
+**Phase 4C 的 PlantUML 形式记录**：pinned 上游的**导出**路径（`markdown-pdf.js` → `markdown-it-plantuml`）只识别**裸 `@startuml` 块**；以围栏代码块（语言标记 `plantuml`）写图表只存在于 vditor 编辑器子系统，不属于导出语义。Phase 1 语料 `target/plantuml.md` 用的是围栏形式，因此 Phase 4C 增加了一条明确的 **adapter 附加**：语言标记为 `plantuml` / `puml` 的围栏会转成同一个 `uml_diagram` token（围栏 body 视为作者写的完整图源，原样编码，不删标记也不重新包装）。两条路径共用同一个 URL 构造实现，`<img>` 渲染与 feature 判断仍只有插件一个来源。**契约边界**：围栏契约只覆盖 『body 内含 `@startuml` / `@enduml`』的写法；不定义缺失标记时自动补齐（未来若要支持，须作为独立产品能力自带 fixture 与 contract）。
 
+**Phase 5A 的协议记录（v2）**：adapter 的成功 envelope 升到 `protocol_version = 2`，新增**必在**字段 `resources` —— `items` 是资源 manifest（`{ kind, source, ref, status }`，内嵌时另有 `mime` / `resolved`），`styles` 是交给 assembler 注入的 CSS（目前只有 `katex`）。协议版本描述 wire schema，不表示哪个 renderer 已成为 production；v1 的 `assets.css` 只属于旧 production renderer。`warnings` 仍是**用户可读字符串数组**：成功内嵌不产生 warning（状态记在 manifest），只有降级、缺失、不可读等需要作者注意的情况才进入 warnings。资源层边界：只处理 **Markdown image token** 与**明确交给资源层的 CSS**；raw HTML 里的图片标签与 `style` 属性里的 `url(...)` 一律不参与内嵌（K13 边界不得扩大）。KaTeX 的样式与字体由 `npm run build` 复制到 `dist/katex/`（companion runtime asset），运行期不依赖 `renderer/node_modules`；通用 CSS `url()` resolver（`renderer/resources/css_resolver.js`）与 Theme 无关，Phase 6/7 直接复用。远程抓取（T1）与 Mermaid runtime（G6）仍待 5B/5C。
 Phase 1 **只锁产品级语义，不锁尚未 pin 住的上游 DOM**。Callout 与 Obsidian tag 先接受一个允许集合（`callout`/`admonition`/`markdown-alert`/`alert`/`note`；tag 类名或 `tag` 链接）；Phase 2 固定 vscode-office commit、Phase 3 adapter 定型之后，再补确实需要的上游 DOM contract。
 
 ## IMPLEMENTATION DETAIL：允许重构
 
-`render.js` 的文件布局与内部函数名（`installHeadingIds`、`slugifyUnicode`、`resolveImageSource`、`rewriteDocumentHref`、`decodeForDisplay`…）、`assets.css` 信封键名、`warnings` 文案（除“路径可读”这一产品要求）、CSS/JS 注入位置、`linkify.set()` 的调用形式、`templates/Modern` 目录名与 id `modern` 的大小写依赖、`_theme_body_class` 的具体类名、每文档一个 Node 进程。
+`render.js` 的文件布局与内部函数名（`installHeadingIds`、`slugifyUnicode`、`resolveImageSource`、`rewriteDocumentHref`、`decodeForDisplay`…）、旧 renderer 的 `assets.css` 键名（v2 的 `resources` 形状才是契约，见 Phase 5A 协议记录）、`warnings` 文案（除“路径可读”这一产品要求）、CSS/JS 注入位置、`linkify.set()` 的调用形式、`templates/Modern` 目录名与 id `modern` 的大小写依赖、`_theme_body_class` 的具体类名、每文档一个 Node 进程。
 
 本清单只包含拼写、序列化与组织方式；它们的**语义**属于 KEEP（`headings` 通道见 K14、运行时归属见 K18、KaTeX 载荷见 K21）。进程粒度只在这里出现一次。
 
@@ -165,13 +166,13 @@ KEEP 契约未受影响：`keep/plain-text-no-math` 用的是单个未配对 `$`
 | E document link（K12） | `test_document_link_href_parity`、`test_unlisted_target_warning_parity` | 5 类输入 href 完全一致；warning 数量·类别·可读路径一致；heading 内链接只警告一次 |
 | F footnote + document link | `test_footnote_with_document_link_matches` | 脚注定义内链接被改写、fragment 保留、warning 为 0 |
 | G math | `test_math_capability_matrix_matches_except_the_accepted_difference` | 16 个样本（`$`、`$$`、`\(\)`、`\[\]`、`equation`、`align` 与全部负例）一致；唯一差异是 D1 |
-| H/I/J 注册表与范围 | `test_migrated_and_pending_registries_are_locked`、`test_features_are_adapter_only`、`test_resource_layer_differences_are_phase5_pending` | KEEP 15/15、Phase 4A 五项已迁移、Mermaid / PlantUML 仍 pending、features 只属 adapter、资源层记为 Phase 5 pending |
+| H/I/J 注册表与范围 | `test_migrated_and_pending_registries_are_locked`、`test_features_are_adapter_only`、`test_resource_layer_channel_differs_by_design_after_phase5a` | KEEP 15/15、Phase 4A 五项已迁移、Mermaid / PlantUML 仍 pending、features 只属 adapter、资源交付通道 old/new 形状不同（Phase 5A 登记，不做 equality） |
 
-比较范围之外（Phase 5）：local image data URI、remote image、KaTeX CSS/fonts 载荷、`assets.css`、Mermaid runtime、PlantUML 图像、standalone 资源闭包。old renderer 在这些项上更完整，属 expected pending，**不算** Phase 4A/4B regression。
+比较范围之外：local image data URI 与 KaTeX CSS/fonts 载荷（**Phase 5A 已在 adapter 侧完成**，但通道形状与 old 的 `assets.css` 不同，仍不做 equality）、remote image 与抓取、Mermaid runtime、PlantUML 图像、standalone 资源闭包（属 5B/5C）。
 
-当前数字（按套件）：`test_renderer_semantic_parity.py` 12、`test_renderer_adapter_keep.py` 20、`test_renderer_adapter_targets.py` 14（4A 条目里的 13 项是那次提交当时的计数）、`test_renderer_adapter_compat.py` 35、`test_renderer_adapter_diagrams.py` 27。
+当前数字（按套件）：`test_renderer_semantic_parity.py` 12、`test_renderer_adapter_keep.py` 20、`test_renderer_adapter_targets.py` 14（4A 条目里的 13 项是那次提交当时的计数）、`test_renderer_adapter_compat.py` 35、`test_renderer_adapter_diagrams.py` 27、`test_renderer_adapter_protocol.py` 11、`test_renderer_adapter_resources.py` 26（Phase 5A 新增）。
 
-全套：`uv run pytest -q` → 293 passed, 7 xfailed；renderer `npm test` → 9 passed；`uv run pytest -q --runxfail tests/test_markdown_compat_target.py` → `7 failed, 2 passed`（TARGET 门禁仍是 strict xfail）；`uv run ruff check .` → All checks passed。
+全套：`uv run pytest -q` → 319 passed, 7 xfailed（Phase 5A 新增 26 项）；renderer `npm test` → 15 passed；`uv run pytest -q --runxfail tests/test_markdown_compat_target.py` → `7 failed, 2 passed`（TARGET 门禁仍是 strict xfail）；`uv run ruff check .` → All checks passed。
 
 ## AGENTS §25 必测项覆盖映射
 
@@ -185,7 +186,7 @@ KEEP 契约未受影响：`keep/plain-text-no-math` 用的是单个未配对 `$`
 | Mermaid / PlantUML（adapter 侧） | Phase 4C：`tests/test_renderer_adapter_diagrams.py`（27 项）+ `renderer/test/mermaid_predicate.test.js`（node:test） |
 | KaTeX | K9 |
 | Mermaid / PlantUML | TARGET G6–G7（旧 production 仍 7 strict xfail）；adapter 侧 Phase 4C：`tests/test_renderer_adapter_diagrams.py`（27 项） |
-| local image / remote image | K13（remote 同时登记为 T1） |
+| local image / remote image | K13（remote 同时登记为 T1）；adapter 侧 Phase 5A：`tests/test_renderer_adapter_resources.py`（26 项） |
 | `.md → .html` | K12 |
 | Front Matter | K10 |
 | heading anchor | K1 |
@@ -257,7 +258,18 @@ samples/demo.html                         → 未改动，快照契约仍成立
   * 发现的差异（已登记）：pinned 上游导出路径只识别**裸 `@startuml` 块**，而 Phase 1 语料用的是围栏形式 → Phase 4C 增加明确的 adapter 附加（`plantuml` / `puml` 围栏 → 同一个 `uml_diagram` token）。
   * D2（新增）：Mermaid 容器内容在 serialization 时 escape，登记为 **INTENTIONAL EXPORT HARDENING**，不变式是「DOM 文本 == 作者原文」。
   * features：mermaid 由 fence token 的语义标记驱动，plantuml 由 `uml_diagram` token 驱动；两项的 raw HTML lookalike 都不误报。
+  * **Phase 4C — PASS**（用户确认）：PlantUML 围栏附加保留为 adapter extension，不改 Phase 1 fixture；D1 / D2 分类维持不变。commit `0eeaf1a`。
   证据：`tests/test_renderer_adapter_diagrams.py`（27 项）+ `tests/test_renderer_adapter_targets.py`（14 项，MIGRATED 7 / PENDING 0）+ `renderer/test/mermaid_predicate.test.js`（node:test，合计 9 项）；bundle 1,063,499 → 1,107,699 B；全套 `293 passed, 7 xfailed`。
+
+- 2026-09-24（Phase 5A）：adapter 资源层落地（**仅静态资源，不联网**）：
+  * **协议升到 v2**：成功 envelope 新增**必在**字段 `resources`（`items` manifest + `styles` 待注入 CSS）。不采用「v1 + 可选 resources」：版本号描述 wire schema，而不是哪个 renderer 已成为 production；v1 的 `assets.css` 只留在旧 production renderer 的历史测试与文档里。
+  * **Markdown 本地图片**：`renderer/resources/local_file.js`（唯一的 data URI 实现）+ `renderer/resources/collector.js`（parse 后、render 前只处理 image token）。K13 的既有语义逐条重放：相对路径、Windows 绝对路径（`C:/…`，判断顺序必须先于通用 scheme）、中文与空格路径、重复引用、链接内图片、TOC 侧仍只留 alt 文本、`data:` 与远程与其它 scheme 不碰、读不到时保留原引用 + 可读路径 warning、源文件与源图片不被修改。
+  * **不得扩大的边界**：raw HTML 里的图片标签与 `style` 属性里的 `url(...)` **不参与**内嵌 —— collector 只看 token，不扫描最终 HTML；专门测试锁定「同一文件的 raw 写法与 Markdown 写法结果不同」。
+  * **通用 CSS `url()` resolver**（`renderer/resources/css_resolver.js`）：输入 CSS + base directory，输出内联后的 CSS 与 manifest；外部 URL、fragment、`data:` 与其它 scheme 原样保留，读不到则保留引用并报可读路径。本阶段只接到 KaTeX，**不建 Theme Registry**；Phase 6/7 的 theme CSS 复用同一模块。
+  * **KaTeX 自包含 build artifact**：`npm run build` 把 `node_modules/katex/dist` 的样式与它引用的字体复制到 `dist/katex/`（只读、不联网），运行期只用该目录，**不依赖 `renderer/node_modules`**；有测试把 `renderer.cjs` + `katex/` 拷到临时目录（旁边没有 node_modules）运行并断言字体仍内嵌。K21 载荷纪律不变：无数学 token 时 `resources.styles` 为空。
+  * warnings 仍是**用户可读字符串数组**：成功内嵌不产生 warning（状态记在 manifest），`resource-*` 之类的成功提示被明确排除，K15 不被无意义改写。
+  * 明说未做的事：HTTP、remote image、PlantUML 抓图、Mermaid runtime、Theme Registry、standalone 终检、production renderer 切换（分别留给 5B / 5C 与后续阶段）。
+  证据：`tests/test_renderer_adapter_resources.py`（26 项，新增）+ `renderer/test/css_resolver.test.js`（node:test 5 项）+ `renderer/test/protocol.test.js`（v2 断言）；全套 `319 passed, 7 xfailed`；renderer `npm test` 15 passed；bundle 1,107,699 → 1,118,095 B，companion asset 61 文件 / 1,100,399 B；`--runxfail` 反证仍 `7 failed, 2 passed`。
 
 ## texmath 审计记录（Phase 4B，为什么不复用 `markdown-it-texmath`）
 

@@ -10,9 +10,15 @@
  * 输入（stdin）：
  *   { "markdown": "...", "options": {}, "context": { "source_path": "",
  *     "output_path": "", "document_map": {} } }
+ *
+ * v2 成功 envelope 始终带 resources（无资源时是空结构，不存在「有时有、有时没有」）：
+ *   resources.items  = 资源 manifest：[{ kind, source, ref, status, mime?, resolved? }]
+ *   resources.styles = 需要 assembler 注入的 CSS：[{ id, css }]（目前只有 katex）
+ * warnings 仍是**用户可读字符串数组**，只承载降级/缺失/不可读等需要用户注意的情况；
+ * 成功内嵌不产生 warning —— 状态记在 manifest 里（v1 的 envelope 属旧 production renderer）。
  */
 
-const PROTOCOL_VERSION = 1;
+const PROTOCOL_VERSION = 2;
 
 const FEATURE_KEYS = [
   "katex",
@@ -63,6 +69,21 @@ function validateRequest(value) {
   return { markdown: value.markdown, options, context };
 }
 
+function emptyResources() {
+  return { items: [], styles: [] };
+}
+
+// v2：resources 是**必在**字段；缺失或形状不对时归一成空结构，而不是让字段忽隐忽现。
+function normalizeResources(value) {
+  if (!isPlainObject(value)) {
+    return emptyResources();
+  }
+  return {
+    items: Array.isArray(value.items) ? value.items : [],
+    styles: Array.isArray(value.styles) ? value.styles : [],
+  };
+}
+
 function okEnvelope(payload) {
   return {
     protocol_version: PROTOCOL_VERSION,
@@ -71,6 +92,7 @@ function okEnvelope(payload) {
     headings: payload.headings,
     features: payload.features,
     warnings: payload.warnings,
+    resources: normalizeResources(payload.resources),
   };
 }
 
@@ -91,6 +113,7 @@ module.exports = {
   FEATURE_KEYS,
   ProtocolError,
   emptyFeatures,
+  emptyResources,
   validateRequest,
   okEnvelope,
   errorEnvelope,

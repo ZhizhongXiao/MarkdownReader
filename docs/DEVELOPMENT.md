@@ -85,7 +85,7 @@ pwsh tools/update_vscode_office.ps1 -ExpectCommit <sha>     # 断言当前 check
 ```powershell
 cd renderer
 npm ci          # 只安装 renderer 自己的依赖；绝不在 upstream 内安装任何东西
-npm run build   # esbuild 打包到 renderer/dist/renderer.cjs（不入库，可重复构建）
+npm run build   # esbuild 打包到 renderer/dist/renderer.cjs，并复制 dist/katex/（均不入库，可重复构建）
 npm test        # node:test 冒烟
 cd ..
 uv run pytest -q
@@ -99,8 +99,13 @@ uv run pytest -q
 - sibling module resolution 由 `renderer/build/build.js` 的 `nodePaths` 指向 renderer/node_modules 解决；
   不使用全局 `NODE_PATH`、junction，也不修改或复制上游文件。
 - `renderer/dist/` 不入库：先构建再跑 pytest；产物缺失时测试会**失败并给出构建提示**（不 skip、不假绿）。
-- 协议：`{ "protocol_version": 1, "ok": true, "html", "headings", "features", "warnings" }`；
-  失败同样是单个 JSON envelope + 退出码 1，诊断只走 stderr。
+- `renderer/dist/katex/` 是 companion runtime asset（Phase 5A）：构建把 `node_modules/katex/dist` 的样式与它引用的字体
+  复制过去（只读、不联网），使 renderer 运行期不依赖 `renderer/node_modules`；因此 `dist/` 单独拷出去也能产出带公式的 HTML。
+- 协议：v2（Phase 5A）——
+  `{ "protocol_version": 2, "ok": true, "html", "headings", "features", "warnings", "resources": { "items": [], "styles": [] } }`；
+  `resources` 是**必在**字段（没有资源时也是空结构）：`items` 是资源 manifest，`styles` 是交给 assembler 注入的 CSS；
+  `warnings` 保持用户可读字符串数组，成功内嵌不产生 warning（状态记在 manifest）。
+  失败同样是单个 JSON envelope + 退出码 1，诊断只走 stderr。v1 的 `assets.css` 只属于旧 production renderer。
 
 ## 命名与路径约定
 

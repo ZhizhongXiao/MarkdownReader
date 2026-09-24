@@ -13,9 +13,10 @@ Phase 4A/4C 新语法（checkbox / mark / callout / wikilink / obsidian-tag / me
 tests/test_renderer_adapter_diagrams.py 证明「已实现」。features 通道只有新 adapter 有，
 同样不做 equality（见 test_features_are_adapter_only）。
 
-资源层（local/remote image、KaTeX CSS/fonts、assets.css、Mermaid runtime、PlantUML 图像、
-standalone 资源闭包）属于 Phase 5，明确排除在 parity 之外：old 更完整时记为 expected
-pending，不算 Phase 4A/4B regression（见 test_resource_layer_differences_are_phase5_pending）。
+资源交付通道自 Phase 5A 起形状不同：old 是 `assets.css`，new 是 v2 的 `resources`，因此仍不做
+equality，只锁「各自通道成立、引用不丢」（见
+ test_resource_layer_channel_differs_by_design_after_phase5a）。远程抓取、Mermaid runtime、
+PlantUML 图像与 standalone 闭包仍属 5B/5C。
 
 已接受的差异只有一条：D1，由 test_accepted_dollar_pair_difference_is_explicit 显式表达；
 其余 math 能力必须一致。
@@ -405,13 +406,21 @@ def test_features_are_adapter_only():
     assert render_old(markdown)["features"] is None, "旧 renderer 没有 features 通道"
 
 
-def test_resource_layer_differences_are_phase5_pending():
-    """资源层属 Phase 5：old 已有 assets 通道、new 尚无 —— expected pending，不是 regression。"""
+def test_resource_layer_channel_differs_by_design_after_phase5a():
+    """Phase 5A 登记：old 用 `assets.css`、new 用 v2 `resources`，形状不同，不做 equality。
+
+    本测试只锁「通道各自成立 + 引用不丢」；本地内嵌与 manifest 的细节契约在
+    tests/test_renderer_adapter_resources.py。远程抓取与 Mermaid runtime 仍是 5B/5C。
+    """
     markdown = "![图](missing.png)\n"
 
     old = render_old(markdown)
     new = render_new(markdown)
 
-    assert "assets" in old
-    assert "assets" not in new, "新 adapter 的资源层属于 Phase 5，不在 parity 范围内"
-    assert "missing.png" in new["html"], "资源层缺失不得导致引用丢失"
+    assert "assets" in old, "旧 renderer 的 KaTeX 载荷通道"
+    assert "assets" not in new, "v2 用 resources 取代 assets.css（T7 已登记）"
+    assert set(new["resources"]) == {"items", "styles"}
+    assert new["resources"] == {"items": [], "styles": []}, (
+        "没有 source_path 上下文时不做本地资源解析"
+    )
+    assert "missing.png" in new["html"], "资源层不得导致引用丢失"

@@ -3,6 +3,9 @@
 /**
  * renderer 冒烟测试（node:test）：只验证构建产物能否按协议工作。
  * 契约级检查在 Python 侧（tests/test_renderer_adapter_*.py）。
+ *
+ * Phase 5A：协议为 v2，成功 envelope 始终带 resources（没有资源时也是空结构）；
+ * v1 的 assets.css 只属于旧 production renderer，不再是 adapter 契约。
  */
 
 const assert = require("node:assert");
@@ -18,22 +21,30 @@ const REQUEST = {
   context: { source_path: "", output_path: "", document_map: {} },
 };
 
+// v2 的 resources.styles 携带内嵌字体的 KaTeX 样式（约 1.4 MB），超过 spawnSync 默认 1 MiB buffer。
+const MAX_BUFFER = 32 * 1024 * 1024;
+
 function run(input) {
   return spawnSync(process.execPath, [ARTIFACT], {
     input: typeof input === "string" ? input : JSON.stringify(input),
     encoding: "utf8",
+    maxBuffer: MAX_BUFFER,
   });
+}
+
+function describe(result) {
+  return (result.error ? "spawn error: " + result.error.message + "\n" : "") + result.stderr;
 }
 
 test("build artifact exists (run npm run build first)", function () {
   assert.ok(fs.existsSync(ARTIFACT), "缺少构建产物：请运行 npm run build");
 });
 
-test("stdout is one JSON envelope with protocol_version, features and headings", function () {
+test("stdout is one JSON v2 envelope with features, headings and resources", function () {
   const result = run(REQUEST);
-  assert.strictEqual(result.status, 0, result.stderr);
+  assert.strictEqual(result.status, 0, describe(result));
   const envelope = JSON.parse(result.stdout);
-  assert.strictEqual(envelope.protocol_version, 1);
+  assert.strictEqual(envelope.protocol_version, 2);
   assert.strictEqual(envelope.ok, true);
   assert.ok(envelope.html.includes('class="katex"'), envelope.html);
   assert.strictEqual(envelope.features.katex, true);
@@ -42,6 +53,18 @@ test("stdout is one JSON envelope with protocol_version, features and headings",
   assert.strictEqual(envelope.features.plantuml, false);
   assert.ok(envelope.headings[0].anchor.length > 0, JSON.stringify(envelope.headings));
   assert.ok(Array.isArray(envelope.warnings));
+  assert.ok(!Object.prototype.hasOwnProperty.call(envelope, "assets"), "v1 的 assets.css 不属于 v2");
+  assert.strictEqual(envelope.resources.styles.length, 1, JSON.stringify(Object.keys(envelope)));
+  assert.strictEqual(envelope.resources.styles[0].id, "katex");
+  assert.ok(envelope.resources.styles[0].css.includes("data:font/woff2;base64,"));
+});
+
+test("resources is present and empty when the document has none", function () {
+  const result = run({ markdown: "只有普通文本。\n" });
+  assert.strictEqual(result.status, 0, describe(result));
+  const envelope = JSON.parse(result.stdout);
+  assert.deepStrictEqual(envelope.resources, { items: [], styles: [] });
+  assert.deepStrictEqual(envelope.warnings, []);
 });
 
 test("malformed input fails with an error envelope on stdout and diagnostics on stderr", function () {
@@ -50,5 +73,6 @@ test("malformed input fails with an error envelope on stdout and diagnostics on 
   const envelope = JSON.parse(result.stdout);
   assert.strictEqual(envelope.ok, false);
   assert.strictEqual(envelope.error.code, "invalid_json");
+  assert.strictEqual(envelope.protocol_version, 2);
   assert.ok(result.stderr.length > 0);
 });

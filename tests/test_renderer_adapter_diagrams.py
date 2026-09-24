@@ -8,6 +8,8 @@
 
 runtime 注入、抓图、内嵌、data URI 全部属于 Phase 5，本套件对它们有显式断言（本模块完全离线）。
 旧 production renderer 两项都不支持，因此这里没有 old/new 对照（见 semantic parity 套件的 scope）。
+PlantUML 围栏契约只覆盖「body 内含 @startuml/@enduml」的写法；缺标记的 body 未定义，
+本套件刻意不锁定。
 """
 
 import json
@@ -272,14 +274,14 @@ def test_raw_html_plantuml_lookalike_is_not_a_feature():
 
 
 def test_plantuml_rendering_never_carries_resources_or_fetch_results():
-    """Phase 5 的边界：不放 data URI、不注入 runtime、信封里没有资源字段，也没有网络 warning。"""
+    """Phase 5C 的边界：图上抓取与内嵌尚未实现，资源层也不收集它（不是 Markdown image token）。"""
     options = {"plantuml_server": CUSTOM_PLANTUML_SERVER}
     envelope = render("@startuml\nA -> B\n@enduml\n", options=options)
     html = envelope["html"]
 
     assert "data:image" not in html and "base64" not in html
     assert "<script" not in html
-    assert "assets" not in envelope, "抓图与内嵌属于 Phase 5"
+    assert envelope["resources"] == {"items": [], "styles": []}, "抓图与内嵌属于 Phase 5C"
     assert envelope["warnings"] == []
 
 
