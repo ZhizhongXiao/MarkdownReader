@@ -1,13 +1,15 @@
 """renderer build 的 upstream provenance gate（Phase 3 closeout）。
 
-证明 `npm run build` 不会在「checkout 不等于 pinned gitlink」时仍然成功并谎报来源：
+证明 `npm run build` 只在「pin manifest == authoritative gitlink == checkout HEAD **且**
+upstream worktree clean」时才打包：
 
-  * 正常 pinned 状态：--check-provenance 通过，pin manifest == gitlink == checkout；
-  * 未 pin 的 checkout：build 失败、不写 dist、给可操作提示；
+  * 正常 pinned + clean：--check-provenance 通过；
+  * checkout 不等于 gitlink：build 失败；
+  * checkout 正确但 tracked 文件被改 / 出现 untracked 文件：build 同样失败；
   * git 缺失：明确失败，不猜 commit。
 
-fixture 是临时目录里的真实（嵌套）git 仓库：不联网、不改动当前工作区、不对任何分支做
-force/reset。真实仓库的 renderer/dist 只读取哈希，本模块从不写入它。
+所有失败都必须不覆盖 dist。fixture 是临时目录里的真实（嵌套）git 仓库：不联网、不改动当前
+工作区、不对任何分支 force/reset；真实仓库的 renderer/dist 只读取哈希，本模块从不写入它。
 """
 
 import hashlib
@@ -65,9 +67,10 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else ""
 
 
-@pytest.fixture()
-def mismatched_layout(tmp_path: Path) -> Path:
-    """构造 checkout != authoritative gitlink 的真实 git 布局（离线）。"""
+def _layout(
+    tmp_path: Path, *, mismatch: bool = False, dirty_tracked: bool = False, untracked: bool = False
+) -> Path:
+    """构造 tmp_path 里的真实 git 布局（离线）：可注入不匹配 checkout / 脏文件。"""
     _require_git()
     repo = tmp_path / "repo"
     sub = repo / "upstream" / "vscode-office"
@@ -81,11 +84,15 @@ def mismatched_layout(tmp_path: Path) -> Path:
     _git(["commit", "-q", "-m", "pinned state"], sub)
     pinned = _git(["rev-parse", "HEAD"], sub).stdout.strip()
 
-    (sub / "source.js").write_text("// not pinned\n", encoding="utf-8")
-    _git(["add", "-A"], sub)
-    _git(["commit", "-q", "-m", "later state"], sub)
-    checkout = _git(["rev-parse", "HEAD"], sub).stdout.strip()
-    assert pinned and checkout and pinned != checkout
+    if mismatch:
+        (sub / "source.js").write_text("// not pinned\n", encoding="utf-8")
+        _git(["add", "-A"], sub)
+        _git(["commit", "-q", "-m", "later state"], sub)
+        assert _git(["rev-parse", "HEAD"], sub).stdout.strip() != pinned
+    if dirty_tracked:
+        (sub / "source.js").write_text("// locally modified\n", encoding="utf-8")
+    if untracked:
+        (sub / "scratch.txt").write_text("untracked\n", encoding="utf-8")
 
     _git(["init", "-q"], repo)
     gitlink = "160000," + pinned + ",upstream/vscode-office"
@@ -100,6 +107,35 @@ def mismatched_layout(tmp_path: Path) -> Path:
     return repo
 
 
+@pytest.fixture()
+def mismatched_layout(tmp_path: Path) -> Path:
+    return _layout(tmp_path, mismatch=True)
+
+
+@pytest.fixture()
+def dirty_layout(tmp_path: Path) -> Path:
+    return _layout(tmp_path, dirty_tracked=True)
+
+
+@pytest.fixture()
+def untracked_layout(tmp_path: Path) -> Path:
+    return _layout(tmp_path, untracked=True)
+
+
+def _assert_build_refused(layout: Path, *, expect: str) -> None:
+    real_before = _sha256(ARTIFACT)
+    sentinel = layout / "renderer" / "dist" / "renderer.cjs"
+
+    completed = _run_build(("--repo-root", str(layout)))
+
+    assert completed.returncode != 0, completed.stdout
+    assert "拒绝构建" in completed.stderr
+    assert "git submodule update --init --recursive" in completed.stderr
+    assert expect in completed.stderr, completed.stderr
+    assert sentinel.read_text(encoding="utf-8") == SENTINEL
+    assert _sha256(ARTIFACT) == real_before, "真实 renderer/dist 不得被改写"
+
+
 def test_check_provenance_passes_on_the_pinned_checkout():
     completed = _run_build(("--check-provenance",))
 
@@ -107,21 +143,22 @@ def test_check_provenance_passes_on_the_pinned_checkout():
     report = json.loads(completed.stdout)
     assert report["ok"] is True
     assert report["pinned_commit"] == report["gitlink_commit"] == report["checkout_commit"]
+    assert report["worktree_clean"] is True
+    assert report["worktree_changes"] == []
     manifest = json.loads(PIN_MANIFEST.read_text(encoding="utf-8"))
     assert report["pinned_commit"] == manifest["pinned_commit"]
 
 
 def test_mismatched_checkout_fails_build_and_keeps_dist_untouched(mismatched_layout: Path):
-    real_before = _sha256(ARTIFACT)
-    sentinel = mismatched_layout / "renderer" / "dist" / "renderer.cjs"
+    _assert_build_refused(mismatched_layout, expect="不等于 pinned gitlink")
 
-    completed = _run_build(("--repo-root", str(mismatched_layout)))
 
-    assert completed.returncode != 0, completed.stdout
-    assert "拒绝构建" in completed.stderr
-    assert "git submodule update --init --recursive" in completed.stderr
-    assert sentinel.read_text(encoding="utf-8") == SENTINEL
-    assert _sha256(ARTIFACT) == real_before, "真实 renderer/dist 不得被改写"
+def test_dirty_upstream_worktree_fails_build_and_keeps_dist_untouched(dirty_layout: Path):
+    _assert_build_refused(dirty_layout, expect="upstream working tree is dirty")
+
+
+def test_untracked_file_in_upstream_also_fails_build(untracked_layout: Path):
+    _assert_build_refused(untracked_layout, expect="upstream working tree is dirty")
 
 
 def test_mismatched_checkout_reports_both_commits(mismatched_layout: Path):
@@ -171,6 +208,7 @@ def test_info_reports_provenance_fields():
     assert info["ok"] is True
     assert info["provenance_ok"] is True
     assert info["provenance_problems"] == []
+    assert info["worktree_clean"] is True
     assert info["pinned_commit"] == info["gitlink_commit"] == info["checkout_commit"]
     entry = _git(["ls-files", "-s", "upstream/vscode-office"], ROOT)
     assert entry.stdout.split()[1] == info["gitlink_commit"]

@@ -94,6 +94,8 @@ uv run pytest -q
 - 构建输入：`renderer/entry.js` + 静态引用的 pinned 上游扩展 + `renderer/node_modules`。
 - 构建前校验 upstream provenance：pin manifest == authoritative gitlink == checkout HEAD；
   三者不一致时**拒绝构建**（不写 dist、不谎报来源）；只读检查用 `node build/build.js --check-provenance`。
+  同时要求 upstream worktree 干净（`git -C upstream/vscode-office status --porcelain` 为空，含 untracked）；
+  检查只验证不修复，不会 restore / reset / checkout 或删除文件。
 - sibling module resolution 由 `renderer/build/build.js` 的 `nodePaths` 指向 renderer/node_modules 解决；
   不使用全局 `NODE_PATH`、junction，也不修改或复制上游文件。
 - `renderer/dist/` 不入库：先构建再跑 pytest；产物缺失时测试会**失败并给出构建提示**（不 skip、不假绿）。

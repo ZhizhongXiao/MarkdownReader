@@ -37,11 +37,21 @@ function downgradeInlineHtml(html) {
   });
 }
 
+// 上游 obsidian 扩展产出两个自定义 inline token：wikilink / wikilink_embed。
+// 它们的 renderer 会生成 <a> 或 <span data-href>，不能放进 TOC 导航链接（会形成 nested
+// anchor 或交互元素），因此 TOC 版本只保留可见文本（token.content = alias || dest，由上游设置）。
+// 正文 inline_html 不受影响。
+const TOC_TEXT_ONLY_TOKENS = ["wikilink", "wikilink_embed"];
+
 function renderTocInline(md, children, env) {
   let result = "";
   for (let index = 0; index < children.length; index += 1) {
     const token = children[index];
     if (token.type === "link_open" || token.type === "link_close") {
+      continue;
+    }
+    if (TOC_TEXT_ONLY_TOKENS.indexOf(token.type) >= 0) {
+      result += md.utils.escapeHtml(token.content || "");
       continue;
     }
     if (token.type === "image") {

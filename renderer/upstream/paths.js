@@ -84,11 +84,22 @@ function readCheckoutCommit(layout) {
   return { commit: result.stdout, error: "" };
 }
 
+function readWorktreeStatus(layout) {
+  const target = layout || DEFAULT_LAYOUT;
+  const result = runGit(["status", "--porcelain"], target.upstreamRoot);
+  if (!result.ok) {
+    return { clean: false, changes: [], error: result.error };
+  }
+  const changes = result.stdout ? result.stdout.split(/\r?\n/).filter(Boolean) : [];
+  return { clean: changes.length === 0, changes: changes, error: "" };
+}
+
 function checkProvenance(options) {
   const layout = resolveLayout(options && options.repoRoot);
   const pin = readPinManifest(layout);
   const gitlink = readGitlink(layout);
   const checkout = readCheckoutCommit(layout);
+  const worktree = readWorktreeStatus(layout);
   const problems = [];
 
   if (!pin.commit) {
@@ -109,6 +120,14 @@ function checkProvenance(options) {
     problems.push("upstream checkout(" + checkout.commit + ") 不等于 pinned gitlink(" + gitlink.commit + ")");
   }
 
+  if (!worktree.clean) {
+    const summary = worktree.changes.slice(0, 5).join(" | ");
+    problems.push(
+      "upstream working tree is dirty（" + worktree.changes.length + " 项改动）：" + summary +
+        (worktree.changes.length > 5 ? " …" : ""),
+    );
+  }
+
   return {
     ok: problems.length === 0,
     repo_root: layout.repoRoot,
@@ -116,10 +135,13 @@ function checkProvenance(options) {
     pinned_commit: pin.commit,
     gitlink_commit: gitlink.commit,
     checkout_commit: checkout.commit,
+    worktree_clean: worktree.clean,
+    worktree_changes: worktree.changes,
     problems: problems,
     guidance: problems.length
-      ? "请恢复 pinned 状态：" + RECOVERY_COMMAND +
-        "；若这是有意的 upstream 更新，请先完成 Phase 2 流程（" + UPDATE_COMMAND + " 并同步 upstream/pin.json）。"
+      ? "请恢复 pinned 状态：" + RECOVERY_COMMAND + " 并检查 git -C " + UPSTREAM_RELATIVE + " status" +
+        "；若这是有意的 upstream 更新，请先完成 Phase 2 流程（" + UPDATE_COMMAND + " 并同步 upstream/pin.json）。" +
+        "本检查只验证、不修复：不会 restore / reset / checkout / 删除任何文件。"
       : "",
   };
 }
@@ -143,6 +165,8 @@ function describe(options) {
     pinned_commit: provenance.pinned_commit,
     gitlink_commit: provenance.gitlink_commit,
     checkout_commit: provenance.checkout_commit,
+    worktree_clean: provenance.worktree_clean,
+    worktree_changes: provenance.worktree_changes,
     provenance_ok: provenance.ok,
     provenance_problems: provenance.problems,
     reused_sources: REUSED_SOURCES.slice(),
@@ -159,6 +183,7 @@ module.exports = {
   readPinManifest: readPinManifest,
   readGitlink: readGitlink,
   readCheckoutCommit: readCheckoutCommit,
+  readWorktreeStatus: readWorktreeStatus,
   checkProvenance: checkProvenance,
   missingSources: missingSources,
   pinnedCommit: pinnedCommit,

@@ -115,3 +115,55 @@ def test_phase3_scope_leaves_phase4_features_off():
         features = render(read_fixture(case))["features"]
         for key in PHASE4_FEATURE_KEYS:
             assert features[key] is False, (case["id"], key)
+
+# K14 回归：TOC-safe 表示。正文 inline_html 保留链接，TOC metadata 只保留可见、非交互内容。
+LINK_SAFE_DOCUMENT = (
+    "# 普通 [链接](https://example.com)\n"
+    "\n"
+    "# Wiki [[第二章]]\n"
+    "\n"
+    "# 别名 [[第二章|别名显示]]\n"
+    "\n"
+    "# 嵌入 ![[图]]\n"
+    "\n"
+    "# 原始 <a href=\"https://x\">raw</a> 与 ![图](x.png)\n"
+)
+
+
+def test_toc_inline_metadata_never_embeds_links():
+    """TOC 标题可以保留行内格式，但链接必须降级为可见文本。
+
+    上游 obsidian 扩展的 wikilink / wikilink_embed 是自定义 token，其 renderer 会产出
+    <a> / <span data-href>；放进 TOC 导航链接会形成 nested anchor，因此 TOC 版本只保留
+    可见、非交互内容。
+    """
+    headings = render(LINK_SAFE_DOCUMENT)["headings"]
+    toc_texts = [heading["toc_inline_html"] for heading in headings]
+
+    assert len(headings) == 5
+    assert all("<" not in text for text in toc_texts), toc_texts
+    assert toc_texts == [
+        "普通 链接",
+        "Wiki 第二章",
+        "别名 别名显示",
+        "嵌入 图",
+        "原始 raw 与 图",
+    ]
+
+
+def test_body_inline_html_keeps_links_and_anchors_stay_sound():
+    """TOC 侧降级不得影响正文 inline_html，也不得破坏 heading anchor 关系。"""
+    envelope = render(LINK_SAFE_DOCUMENT)
+    body = [heading["inline_html"] for heading in envelope["headings"]]
+    anchors = [heading["anchor"] for heading in envelope["headings"]]
+
+    assert "<a" in body[0] and "链接" in body[0]
+    assert "<a" in body[1] and "第二章" in body[1]
+    assert "别名显示" in body[2]
+    assert "<" in body[3] and "图" in body[3]
+    assert "<img" in body[4]
+
+    assert all(anchors)
+    assert len(set(anchors)) == len(anchors)
+    for heading in envelope["headings"]:
+        assert 'id="' + heading["anchor"] + '"' in envelope["html"], heading["anchor"]

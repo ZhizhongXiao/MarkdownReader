@@ -40,13 +40,15 @@ function parseArgs(argv) {
 
 function reportFailure(provenance) {
   process.stderr.write(
-    "[renderer] 拒绝构建：upstream provenance 校验失败（继续构建会打包未 pin 的源码）。\n" +
+    "[renderer] 拒绝构建：upstream provenance 校验失败" +
+      "（继续构建会打包与 pin 不一致或已被本地修改的源码）。\n" +
       provenance.problems.map(function (item) {
         return "  - " + item;
       }).join("\n") +
       "\n  pinned_commit   = " + (provenance.pinned_commit || "(未知)") +
       "\n  gitlink_commit  = " + (provenance.gitlink_commit || "(未知)") +
       "\n  checkout_commit = " + (provenance.checkout_commit || "(未知)") +
+      "\n  worktree_clean  = " + (provenance.worktree_clean ? "true" : "false") +
       "\n  " + provenance.guidance + "\n",
   );
   process.exitCode = 1;
@@ -71,6 +73,8 @@ async function main() {
         pinned_commit: provenance.pinned_commit,
         gitlink_commit: provenance.gitlink_commit,
         checkout_commit: provenance.checkout_commit,
+        worktree_clean: provenance.worktree_clean,
+        worktree_changes: provenance.worktree_changes,
         output_file: outFile,
       }) + "\n",
     );
