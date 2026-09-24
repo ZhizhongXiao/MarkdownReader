@@ -93,8 +93,9 @@ def manifest(envelope: dict, kind: str) -> list[dict]:
 
 def assert_manifest_shape(envelope: dict) -> None:
     resources = envelope["resources"]
-    assert set(resources) == {"items", "styles"}, resources
+    assert set(resources) == {"items", "styles", "scripts"}, resources
     assert isinstance(resources["items"], list) and isinstance(resources["styles"], list)
+    assert isinstance(resources["scripts"], list)
     for item in resources["items"]:
         keys = set(item)
         assert BASE_ITEM_KEYS <= keys, item
@@ -104,6 +105,10 @@ def assert_manifest_shape(envelope: dict) -> None:
     for style in resources["styles"]:
         assert set(style) == {"id", "css"}, style
         assert isinstance(style["id"], str) and isinstance(style["css"], str)
+    # scripts 是 5B 的 additive 通道：形状同样是契约（细节见 mermaid runtime 套件）。
+    for script in resources["scripts"]:
+        assert set(script) == {"id", "version", "script", "boot"}, script
+        assert all(isinstance(value, str) for value in script.values()), script
 
 
 # --- envelope 形状 ---------------------------------------------------------
@@ -112,8 +117,8 @@ def assert_manifest_shape(envelope: dict) -> None:
 def test_resources_channel_is_always_present_even_when_empty():
     envelope = render("只有普通文本。\n")
 
-    assert set(envelope["resources"]) == {"items", "styles"}
-    assert envelope["resources"] == {"items": [], "styles": []}
+    assert set(envelope["resources"]) == {"items", "styles", "scripts"}
+    assert envelope["resources"] == {"items": [], "styles": [], "scripts": []}
     assert "assets" not in envelope, "v1 的 assets.css 不属于 v2"
     assert envelope["warnings"] == []
 
@@ -271,7 +276,7 @@ def test_image_without_source_context_is_not_resolved():
     envelope = render("![a](pic.png)\n")
 
     assert img_source(envelope["html"]) == "pic.png"
-    assert envelope["resources"] == {"items": [], "styles": []}
+    assert envelope["resources"] == {"items": [], "styles": [], "scripts": []}
     assert envelope["warnings"] == []
 
 
@@ -295,7 +300,7 @@ def test_raw_html_style_url_is_not_resolved(tmp_path: Path):
     envelope = render_doc("<div style=\"background-image:url('./pic.png')\">raw</div>\n", tmp_path)
 
     assert "url('./pic.png')" in envelope["html"]
-    assert envelope["resources"] == {"items": [], "styles": []}
+    assert envelope["resources"] == {"items": [], "styles": [], "scripts": []}
 
 
 def test_raw_html_and_markdown_images_of_the_same_file_differ(tmp_path: Path):

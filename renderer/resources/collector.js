@@ -10,11 +10,16 @@
  *   - 读不到的本地文件：保留原引用 + 可读路径 warning。
  *
  * KaTeX（K21）：只有出现数学 token 时才把样式（字体已内嵌）放进 resources.styles。
+ * Mermaid（5B/AGENTS §9）：只有文档真的含 Mermaid 时才把 vendored runtime 放进 resources.scripts。
+ *   识别复用 4C 的唯一 predicate（extensions/mermaid_export.js::isMermaidFence）；不能用 token.meta
+ *   标记，因为那个标记是 fence **renderer** 在 render 阶段写上的，而 collector 跑在 render 之前。
  */
 
 const path = require("path");
+const { isMermaidFence } = require("../extensions/mermaid_export");
 const { createLocalFileReader } = require("./local_file");
 const { loadKatexStyle } = require("./katex_assets");
+const { loadMermaidRuntime } = require("./mermaid_runtime");
 
 const IMAGE_KIND = "image";
 const MATH_TOKEN_TYPES = ["math_inline", "math_block"];
@@ -81,6 +86,7 @@ function collectImageToken(token, baseDirectory, reader, warnings, items) {
 function collectResources(tokens, context) {
   const items = [];
   const styles = [];
+  const scripts = [];
   const warnings = [];
   const settings = context || {};
   const sourcePath = settings.source_path || "";
@@ -88,6 +94,7 @@ function collectResources(tokens, context) {
   // 相对图片路径需要有源文件上下文；没有上下文时不做解析（也不报 warning）。
   const baseDirectory = sourcePath ? path.dirname(sourcePath) : "";
   let hasMathTokens = false;
+  let hasMermaidFence = false;
 
   walkTokens(tokens, function (token) {
     if (token.type === "image" && baseDirectory) {
@@ -95,6 +102,9 @@ function collectResources(tokens, context) {
     }
     if (MATH_TOKEN_TYPES.indexOf(token.type) >= 0) {
       hasMathTokens = true;
+    }
+    if (token.type === "fence" && isMermaidFence(token.info, token.content)) {
+      hasMermaidFence = true;
     }
   });
 
@@ -109,7 +119,21 @@ function collectResources(tokens, context) {
     }
   }
 
-  return { items: items, styles: styles, warnings: warnings };
+  // Mermaid 载荷只取决于 fence 识别（AGENTS §9），与源文件上下文无关。
+  if (hasMermaidFence) {
+    const runtime = loadMermaidRuntime(warnings);
+    if (runtime) {
+      scripts.push({
+        id: runtime.id,
+        version: runtime.version,
+        script: runtime.script,
+        boot: runtime.boot,
+      });
+      items.push(runtime.item);
+    }
+  }
+
+  return { items: items, styles: styles, scripts: scripts, warnings: warnings };
 }
 
 module.exports = {

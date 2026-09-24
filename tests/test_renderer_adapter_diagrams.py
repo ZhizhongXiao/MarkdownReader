@@ -150,14 +150,22 @@ def test_invalid_mermaid_is_not_validated_in_phase4c():
     assert text == "this is not a diagram"
 
 
-def test_mermaid_container_carries_no_runtime():
-    """AGENTS §9：runtime 按需加入生成物，属 Phase 5；Phase 4C 不得出现任何加载器。"""
-    html = _mermaid("```mermaid\ngraph LR\nA --> B\n```\n")["html"]
+def test_mermaid_container_keeps_the_runtime_out_of_the_html():
+    """5B 登记改写：runtime 由 resources.scripts 交付，adapter 不自己注入脚本。
+
+    4C 时的断言是「html 里完全没有 runtime」；5B 起 Mermaid 文档会**通过资源通道**交付 vendored
+    runtime（按需，AGENTS §9），但页面装配仍属 assembler，因此 html 依旧没有任何 <script>。
+    """
+    envelope = _mermaid("```mermaid\ngraph LR\nA --> B\n```\n")
+    html = envelope["html"]
 
     assert "<script" not in html
     assert "mermaid.min.js" not in html
     assert "mermaid.initialize" not in html and "mermaid.run" not in html
     assert "cdn" not in html.lower()
+    assert [script["id"] for script in envelope["resources"]["scripts"]] == ["mermaid"], (
+        "runtime 只走资源通道"
+    )
 
 
 def test_mermaid_container_escapes_but_round_trips_the_author_source():
@@ -281,7 +289,9 @@ def test_plantuml_rendering_never_carries_resources_or_fetch_results():
 
     assert "data:image" not in html and "base64" not in html
     assert "<script" not in html
-    assert envelope["resources"] == {"items": [], "styles": []}, "抓图与内嵌属于 Phase 5C"
+    assert envelope["resources"] == {"items": [], "styles": [], "scripts": []}, (
+        "抓图与内嵌属于 Phase 5C"
+    )
     assert envelope["warnings"] == []
 
 

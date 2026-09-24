@@ -57,14 +57,29 @@ test("stdout is one JSON v2 envelope with features, headings and resources", fun
   assert.strictEqual(envelope.resources.styles.length, 1, JSON.stringify(Object.keys(envelope)));
   assert.strictEqual(envelope.resources.styles[0].id, "katex");
   assert.ok(envelope.resources.styles[0].css.includes("data:font/woff2;base64,"));
+  assert.deepStrictEqual(envelope.resources.scripts, [], "没有 Mermaid 就不带 runtime");
 });
 
 test("resources is present and empty when the document has none", function () {
   const result = run({ markdown: "只有普通文本。\n" });
   assert.strictEqual(result.status, 0, describe(result));
   const envelope = JSON.parse(result.stdout);
-  assert.deepStrictEqual(envelope.resources, { items: [], styles: [] });
+  assert.deepStrictEqual(envelope.resources, { items: [], styles: [], scripts: [] });
   assert.deepStrictEqual(envelope.warnings, []);
+});
+
+test("the mermaid runtime is delivered only for mermaid documents", function () {
+  const withMermaid = JSON.parse(run({ markdown: "```mermaid\ngraph LR\nA --> B\n```\n" }).stdout);
+
+  assert.strictEqual(withMermaid.resources.scripts.length, 1);
+  assert.strictEqual(withMermaid.resources.scripts[0].id, "mermaid");
+  assert.strictEqual(withMermaid.resources.scripts[0].version, "11.15.0");
+  assert.ok(withMermaid.resources.scripts[0].script.includes('globalThis["mermaid"]'));
+  assert.ok(withMermaid.resources.scripts[0].boot.includes("mermaid.run"));
+  assert.ok(!withMermaid.html.includes("<script"), "adapter 不自己注入脚本：注入属 assembler");
+
+  const without = JSON.parse(run({ markdown: "只有普通文本。\n" }).stdout);
+  assert.deepStrictEqual(without.resources.scripts, []);
 });
 
 test("malformed input fails with an error envelope on stdout and diagnostics on stderr", function () {

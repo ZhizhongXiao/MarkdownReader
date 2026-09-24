@@ -66,7 +66,11 @@ function renderRequest(request) {
     headings: headings,
     features: detectFeatures(html, tokens),
     warnings: warnings.concat(documentLinks.warnings, resources.warnings),
-    resources: { items: resources.items, styles: resources.styles },
+    resources: {
+      items: resources.items,
+      styles: resources.styles,
+      scripts: resources.scripts,
+    },
   };
 }
 

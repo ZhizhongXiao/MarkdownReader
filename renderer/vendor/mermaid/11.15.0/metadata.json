@@ -1,0 +1,15 @@
+{
+  "name": "mermaid",
+  "version": "11.15.0",
+  "source": "npm",
+  "package": "mermaid@11.15.0",
+  "tarball": "https://registry.npmjs.org/mermaid/-/mermaid-11.15.0.tgz",
+  "tarball_sha1": "b485c13ea5e1e74f3328c4bb00427bda87fa1c1e",
+  "artifact": "dist/mermaid.min.js",
+  "artifact_sha256": "70137e77bb273bb2ef972b86e8b0400cca8be53cb25bfc45911a186dc98665de",
+  "artifact_bytes": 3312967,
+  "license": "MIT",
+  "license_file": "LICENSE",
+  "upstream_declaration": "upstream/vscode-office/package.json declares ^11.15.0 (Phase 2 pin 908258d)",
+  "retrieved": "2026-09-24"
+}

@@ -85,10 +85,11 @@ pwsh tools/update_vscode_office.ps1 -ExpectCommit <sha>     # 断言当前 check
 ```powershell
 cd renderer
 npm ci          # 只安装 renderer 自己的依赖；绝不在 upstream 内安装任何东西
-npm run build   # esbuild 打包到 renderer/dist/renderer.cjs，并复制 dist/katex/（均不入库，可重复构建）
-npm test        # node:test 冒烟
+npm run build   # esbuild 打包到 renderer/dist/renderer.cjs，并发布 dist/katex/ 与 dist/mermaid/（均不入库）
+npm test        # node:test（协议冒烟 + 资源与资产逻辑单测）
 cd ..
 uv run pytest -q
+pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 Mermaid（默认 pytest 不含）
 ```
 
 - 构建输入：`renderer/entry.js` + 静态引用的 pinned 上游扩展 + `renderer/node_modules`。
@@ -101,6 +102,14 @@ uv run pytest -q
 - `renderer/dist/` 不入库：先构建再跑 pytest；产物缺失时测试会**失败并给出构建提示**（不 skip、不假绿）。
 - `renderer/dist/katex/` 是 companion runtime asset（Phase 5A）：构建把 `node_modules/katex/dist` 的样式与它引用的字体
   复制过去（只读、不联网），使 renderer 运行期不依赖 `renderer/node_modules`；因此 `dist/` 单独拷出去也能产出带公式的 HTML。
+- `renderer/vendor/mermaid/<version>/` 是 vendored 的正式 browser 构建（产物 + MIT LICENSE + metadata.json，含 SHA-256）。
+  `npm run build` 只**校验**并复制到 `dist/mermaid/`，不联网、不更新；升级只走
+  `pwsh tools/update_mermaid_runtime.ps1 -Version <version>`（唯一联网入口，见 `renderer/vendor/mermaid/README.md`）。
+- 资产发布是**事务式**的（Phase 5B）：`renderer.cjs` / `katex/` / `mermaid/` 先写进 `dist/.staging/` 并复验
+  （含 vendored runtime 的 SHA-256），全部成功才替换 dist 里这三个受管名字；任何失败都发生在替换之前，
+  因此不会留下「看起来可用、实际不同步」的 runtime set，也不会残留旧版本字体。
+- 浏览器验收（Phase 5B，opt-in）：`tests/browser` 用真实 adapter 渲染 → 自装配页面 → 拦截所有非 `file://` 请求
+  → 断言 `.mermaid` 容器内真的生成 `<svg>`，并锁定 D2 不变式（DOM 文本 == 作者原文）。默认 pytest **不依赖浏览器**。
 - 协议：v2（Phase 5A）——
   `{ "protocol_version": 2, "ok": true, "html", "headings", "features", "warnings", "resources": { "items": [], "styles": [] } }`；
   `resources` 是**必在**字段（没有资源时也是空结构）：`items` 是资源 manifest，`styles` 是交给 assembler 注入的 CSS；

@@ -1,0 +1,13 @@
+{
+  "name": "markdownreader-browser-acceptance",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Opt-in browser acceptance for the standalone HTML (Phase 5B): opens a generated Mermaid document offline, blocks every network request and asserts the runtime really produced an SVG. Not part of the default pytest run and not shipped: packaging/MarkdownReader.spec bundles only gui/assets, templates and node_renderer.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test --test-reporter spec \"*.test.mjs\""
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

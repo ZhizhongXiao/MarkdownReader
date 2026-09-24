@@ -419,8 +419,8 @@ def test_resource_layer_channel_differs_by_design_after_phase5a():
 
     assert "assets" in old, "旧 renderer 的 KaTeX 载荷通道"
     assert "assets" not in new, "v2 用 resources 取代 assets.css（T7 已登记）"
-    assert set(new["resources"]) == {"items", "styles"}
-    assert new["resources"] == {"items": [], "styles": []}, (
+    assert set(new["resources"]) == {"items", "styles", "scripts"}
+    assert new["resources"] == {"items": [], "styles": [], "scripts": []}, (
         "没有 source_path 上下文时不做本地资源解析"
     )
     assert "missing.png" in new["html"], "资源层不得导致引用丢失"
