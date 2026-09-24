@@ -127,15 +127,46 @@ manifest 只是索引：schema 版本、case id、分组、fixture 路径、简�
 
 语料只补“今天仅由 demo 快照隐式覆盖”的语法。本地图片、跨文档 `.md` 链接与 Front Matter 已有专门模块（K10–K13），这里不重复造语料。
 
-## 已知差异（Phase 4B 迁移审计发现）
+## 已知迁移差异
 
-这些差异**本阶段不修改**：它们都落在所有权属于 pinned 上游的 `$` 路径，修改需要第二套 `$…$` parser（AGENTS §6 明确禁止），因此只记录、不顺手改。
+差异分三类处理：**expected**（路线图已预计）／**harmless**（实现差异，用户看不出）／**regression**（真实产品回退）。只有 regression 会阻断 closeout；登记在此的差异都是**有决策的**，不是测试遗漏。
 
-| # | 差异 | 旧 production（texmath） | pinned upstream | 现状 |
+| # | 差异 | 旧 production（texmath） | pinned upstream | 决策 |
 | --- | --- | --- | --- | --- |
-| D1 | 行内 `$` 的空白保护 | `dollars` 规则要求 `$…$` 内容不以空白结尾，因此「价格 $100 与 $200 之间。」不是公式 | `math_inline` 只跳过转义 `$` 与空的 `$$`，同一句会被配成公式 | 记录，不修；行为由 `test_renderer_adapter_compat.py::test_a_dollar_pair_across_prose_is_a_recorded_upstream_difference` 锁定，决策留待后续阶段 |
+| D1 | 行内 `$` 的空白保护 | `dollars` 规则要求 `$…$` 内容不以空白结尾，因此「价格 $100 与 $200 之间。」不是公式 | `math_inline` 只跳过转义 `$` 与空的 `$$`，同一句会被配成公式 | **ACCEPTED UPSTREAM DIFFERENCE** |
+
+**D1 决策理由**（Phase 4A+4B closeout 明确接受，不修改）：
+
+- `$…$` / `$$…$$` 的 ownership 已归 pinned vscode-office；
+- 不在 MarkdownReader 内创建第二套 dollar parser，也不加 before-rule guard 去重新解释 `$`；
+- 后续如需改变，应优先通过 upstream issue / contribution / upstream commit 更新解决。
+
+行为由 `tests/test_renderer_adapter_compat.py::test_a_dollar_pair_across_prose_is_a_recorded_upstream_difference` 锁定（**不得**改回「旧行为必须保持」），并由 `tests/test_renderer_semantic_parity.py::test_accepted_dollar_pair_difference_is_explicit` 同时锁定「它已被登记」。
 
 KEEP 契约未受影响：`keep/plain-text-no-math` 用的是单个未配对 `$` 与转义 `\$`，adapter 上仍然不产生公式（该 case 由 `test_renderer_adapter_keep.py` 覆盖）。
+
+除 D1 之外，本次 closeout 未发现其它 old/new 语义差异：math 能力矩阵的其余 16 个样本（含全部负例）两边一致（`test_math_capability_matrix_matches_except_the_accepted_difference`）。
+
+## Phase 4A+4B Semantic Parity Closeout（2026-09-24）
+
+在进入 Mermaid / PlantUML 之前建立的一层 **old production renderer ↔ new adapter** 语义对照证据（`tests/test_renderer_semantic_parity.py`）。比较的是**产品级语义**，不是 HTML 字节：不比较属性顺序、空白、heading slug 精确值、upstream class 细节、KaTeX MathML 字节、token 顺序。
+
+| 场景 | 证据 | 结果 |
+| --- | --- | --- |
+| A 基础 Markdown | `test_basic_markdown_semantics_match` | strong / em / strike / inline code / 转义 / 软换行 / 嵌套列表 / 表格对齐 / 围栏语言 / 引用 / raw HTML 共 13 项语义标记两侧一致 |
+| B heading relationship（K1） | `test_heading_relationship_holds_in_both_renderers` | 两边 id 非空唯一、与各自正文 id 对应；(level, text) 一致；anchor **文本**不作比较（T5） |
+| C linkify | `test_linkify_contract_holds_in_both_renderers` | 真实 URL 仍可点；裸文件名与版本号不被 fuzzy linkify |
+| D footnote（K8） | `test_footnote_structure_matches` | ref / 脚注区块 / backref / 字面消失 两侧一致（不锁编号字符串） |
+| E document link（K12） | `test_document_link_href_parity`、`test_unlisted_target_warning_parity` | 5 类输入 href 完全一致；warning 数量·类别·可读路径一致；heading 内链接只警告一次 |
+| F footnote + document link | `test_footnote_with_document_link_matches` | 脚注定义内链接被改写、fragment 保留、warning 为 0 |
+| G math | `test_math_capability_matrix_matches_except_the_accepted_difference` | 16 个样本（`$`、`$$`、`\(\)`、`\[\]`、`equation`、`align` 与全部负例）一致；唯一差异是 D1 |
+| H/I/J 注册表与范围 | `test_migrated_and_pending_registries_are_locked`、`test_features_are_adapter_only`、`test_resource_layer_differences_are_phase5_pending` | KEEP 15/15、Phase 4A 五项已迁移、Mermaid / PlantUML 仍 pending、features 只属 adapter、资源层记为 Phase 5 pending |
+
+比较范围之外（Phase 5）：local image data URI、remote image、KaTeX CSS/fonts 载荷、`assets.css`、Mermaid runtime、PlantUML 图像、standalone 资源闭包。old renderer 在这些项上更完整，属 expected pending，**不算** Phase 4A/4B regression。
+
+当前数字（按套件）：`test_renderer_semantic_parity.py` 12、`test_renderer_adapter_keep.py` 20、`test_renderer_adapter_targets.py` 14（4A 条目里的 13 项是那次提交当时的计数）、`test_renderer_adapter_compat.py` 35。
+
+全套：`uv run pytest -q` → 266 passed, 7 xfailed；renderer `npm test` → 6 passed；`uv run pytest -q --runxfail tests/test_markdown_compat_target.py` → `7 failed, 2 passed`（TARGET 门禁仍是 strict xfail）；`uv run ruff check .` → All checks passed。
 
 ## AGENTS §25 必测项覆盖映射
 
@@ -186,6 +217,7 @@ samples/demo.html                         → 未改动，快照契约仍成立
 4. `packaging/node/` 不入库，本机无法构建发布物（spec 会显式失败）。
 5. `AGENTS.md` §24 要求 `core/paths.py`，今天路径判定仍在 `core/config.py`。
 6. 裸邮箱 `qa@example.com` 不被 linkify，与 `fuzzyLink:false` 相邻但未在 `MARKDOWN.md` 说明；本轮刻意不写成契约。
+7. `docs/DEVELOPMENT.md` 的 `cd tests/js; npm test` 直接运行会因缺 `MR_VIEWER_JS` 失败（该变量由 pytest wrapper 注入，pytest 路径正常）；命令说明需要修正，本轮只记录不修。
 
 ## 变更记录
 
@@ -203,6 +235,14 @@ samples/demo.html                         → 未改动，快照契约仍成立
   * 语法与旧 renderer 的差异由 characterization 决定并锁定：`align*`、大写 env、不配对 env、段中 `\[`、跨行 `\(`、4 空格缩进都不构成公式；
   * 新发现的上游差异记入「已知差异」D1（不修，需 §6 决策）。
   证据：`tests/test_renderer_adapter_compat.py`（35 项）+ `tests/test_renderer_adapter_keep.py`（20 项）；全套 `uv run pytest -q` → `254 passed, 7 xfailed`；renderer `npm test` → 6 passed；旧 production TARGET 门禁仍 7 strict xfail。
+- 2026-09-24（Phase 4A+4B Semantic Parity Closeout）：建立 old production renderer ↔ new adapter 的语义对照层（`tests/test_renderer_semantic_parity.py`，12 项，比较产品级语义而非 HTML 字节）：
+  * 基础 Markdown（13 项标记）、heading relationship、linkify、footnote、document link（5 类 href + warning 数量·类别·可读路径）、footnote+link 联合场景，两类 renderer 逐项一致；
+  * math 能力矩阵 16 个样本（`$`、`$$`、`\(\)`、`\[\]`、`equation`、`align` 与全部负例）两侧一致，**唯一差异是 D1**；
+  * D1 正式登记为 **ACCEPTED UPSTREAM DIFFERENCE**（理由与「不修改」的边界见上一节）；
+  * KEEP 15/15、Phase 4A 五项已迁移、Mermaid / PlantUML 仍 pending、features 只属 adapter、资源层 Phase 5 pending，由注册表断言锁定；
+  * 纯文档修正：`docs/MARKDOWN.md` 补上已 characterization 的 begin/end 数学环境（小写环境名、`\begin`/`\end` 同名）；
+  * 未切换 production、未迁移任何资源层代码、未新增 protocol 字段。
+  证据：`uv run pytest -q` → `266 passed, 7 xfailed`；renderer `npm test` → 6 passed；`--runxfail` 反证仍 `7 failed, 2 passed`。
 
 ## texmath 审计记录（Phase 4B，为什么不复用 `markdown-it-texmath`）
 
