@@ -16,6 +16,8 @@ venv/
 output/
 dist/
 build/
+# renderer/build/ 是构建脚本源码，不是产物：重新纳入（dist/ 仍是产物，继续忽略）
+!renderer/build/
 *.spec
 !packaging/MarkdownReader.spec
 packaging/.pyinstaller-build/
