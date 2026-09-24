@@ -3,6 +3,8 @@
 本页说明当前版本对 Markdown 与原始 HTML 的处理范围。它描述的是**已经实现**的行为，不是路线图；
 能力变化时同步更新本页与 [samples/demo.md](../samples/demo.md)。
 
+迁移期间的能力分类、测试证据与新增语法门禁见 [迁移兼容矩阵](MARKDOWN_COMPATIBILITY.md)。
+
 ## 解析器与选项
 
 渲染由本地 Node 完成，使用 markdown-it，配置为：

@@ -58,6 +58,23 @@ MarkdownReader
 
 ---
 
+## Phase 0 基线记录（2026-09-24 实测）
+
+```text
+baseline code commit   : d28f92394963a5f02e8d227667e1cd985afd0e9e
+baseline tag           : pre-vscode-office-refactor-2026-09-24
+refactor bootstrap HEAD: f37c8a2（AGENTS.md + docs/REFACTOR_ROADMAP.md）
+Python                 : 3.12.10
+Node                   : v24.20.0
+npm                    : 11.19.0
+uv run pytest -q       : 131 passed / 0 failed
+node_renderer npm test : PASS（node --check render.js）
+GUI 实机转换 smoke     : PASS（MarkdownReader.log 有真实生成记录）
+demo baseline          : samples/demo.html 已入库
+```
+
+---
+
 # Phase 1 — 建立迁移测试
 
 在修改 renderer 前，增加兼容 fixture。

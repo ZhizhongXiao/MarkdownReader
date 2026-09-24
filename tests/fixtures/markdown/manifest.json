@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "description": "Markdown 迁移 fixture 索引：只登记 case（id/group/file/note），断言写在 Python 测试中。分类、来源与门禁规则见 docs/MARKDOWN_COMPATIBILITY.md。",
+  "groups": {
+    "keep": "必须保持的 Markdown 语义（KEEP）",
+    "target": "本次升级要从 vscode-office 新增的语义（TARGET，当前 strict xfail）",
+    "anchor": "heading/TOC 关系契约（KEEP：只锁关系，不锁 slug 文本）"
+  },
+  "cases": [
+    {"id": "inline-basic", "group": "keep", "file": "keep/inline-basic.md", "note": "行内元素与文本转义（MARKDOWN.md『行内』『原始 HTML』）"},
+    {"id": "paragraph-breaks-off", "group": "keep", "file": "keep/paragraph-breaks-off.md", "note": "breaks:false：单个换行不产生 <br>（MARKDOWN.md『解析器与选项』）"},
+    {"id": "typographer-off", "group": "keep", "file": "keep/typographer-off.md", "note": "typographer:false：引号与破折号不被替换（MARKDOWN.md『解析器与选项』）"},
+    {"id": "heading-levels", "group": "keep", "file": "keep/heading-levels.md", "note": "H1–H6 与 level metadata（MARKDOWN.md『标题』）"},
+    {"id": "heading-trailing-hash", "group": "keep", "file": "keep/heading-trailing-hash.md", "note": "ATX 尾随 # 不进入标题正文（MARKDOWN.md『标题』）"},
+    {"id": "code-fence-heading-text", "group": "keep", "file": "keep/code-fence-heading-text.md", "note": "围栏代码内的类标题文本不得进入 headings/TOC（MARKDOWN.md『代码』）"},
+    {"id": "table-alignment", "group": "keep", "file": "keep/table-alignment.md", "note": "GFM 表格与列对齐（MARKDOWN.md『列表与表格』）"},
+    {"id": "code-fence-language", "group": "keep", "file": "keep/code-fence-language.md", "note": "围栏代码块保留语言标注（MARKDOWN.md『代码』）"},
+    {"id": "blockquote-and-hr", "group": "keep", "file": "keep/blockquote-and-hr.md", "note": "引用与分隔线（MARKDOWN.md『引用与分隔线』）"},
+    {"id": "list-nested", "group": "keep", "file": "keep/list-nested.md", "note": "有序/无序与嵌套列表（MARKDOWN.md『列表与表格』）"},
+    {"id": "raw-inline-html", "group": "keep", "file": "keep/raw-inline-html.md", "note": "原始 HTML 行内与块级原样保留（MARKDOWN.md『原始 HTML』）"},
+    {"id": "link-and-autolink", "group": "keep", "file": "keep/link-and-autolink.md", "note": "显式链接、自动链接、裸 URL 与邮箱（MARKDOWN.md『链接与图片』）"},
+    {"id": "footnote", "group": "keep", "file": "keep/footnote.md", "note": "脚注引用与脚注区块（MARKDOWN.md『脚注』）"},
+    {"id": "math-inline-display", "group": "keep", "file": "keep/math-inline-display.md", "note": "KaTeX 行内与块级公式（MARKDOWN.md『公式』）"},
+    {"id": "plain-text-no-math", "group": "keep", "file": "keep/plain-text-no-math.md", "note": "无公式的文档不携带 KaTeX/Mermaid/PlantUML 载荷（AGENTS §9）"},
+    {"id": "checkbox", "group": "target", "file": "target/checkbox.md", "note": "任务列表：Phase 4 由 vscode-office 提供"},
+    {"id": "mark", "group": "target", "file": "target/mark.md", "note": "高亮标记：Phase 4 由 vscode-office 提供"},
+    {"id": "callout", "group": "target", "file": "target/callout.md", "note": "Callout/Admonition：Phase 4 由 vscode-office 提供"},
+    {"id": "wikilink", "group": "target", "file": "target/wikilink.md", "note": "WikiLink：Phase 4 由 vscode-office 提供"},
+    {"id": "obsidian-tag", "group": "target", "file": "target/obsidian-tag.md", "note": "Obsidian tag：Phase 4 由 vscode-office 提供"},
+    {"id": "mermaid", "group": "target", "file": "target/mermaid.md", "note": "Mermaid：runtime 按需（AGENTS §9）"},
+    {"id": "plantuml", "group": "target", "file": "target/plantuml.md", "note": "PlantUML：当前仅网络 server，失败保留 URL（AGENTS §10）"},
+    {"id": "anchor-relationship", "group": "anchor", "file": "anchor/anchor-relationship.md", "note": "heading/TOC 关系契约语料：只锁关系，不锁 slug 文本"}
+  ]
+}
