@@ -36,6 +36,8 @@ target-version = ["py312"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# upstream/ 是第三方源码（submodule）：不改它，也不用我们的 lint 规则检查它。
+exclude = ["upstream"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]

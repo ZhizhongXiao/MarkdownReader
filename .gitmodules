@@ -1,0 +1,3 @@
+[submodule "upstream/vscode-office"]
+	path = upstream/vscode-office
+	url = https://github.com/cweijan/vscode-office.git

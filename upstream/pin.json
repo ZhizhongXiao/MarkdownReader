@@ -1,0 +1,194 @@
+{
+  "schema": 1,
+  "repo": "https://github.com/cweijan/vscode-office.git",
+  "path": "upstream/vscode-office",
+  "default_branch": "main",
+  "pinned_commit": "908258dafc827ce0475fe7671d414914fbd3867b",
+  "commit_date": "2026-08-16T08:01:41Z",
+  "commit_subject": "Merge branch 'dev'",
+  "package_version": "4.2.0",
+  "license": "MIT",
+  "recorded_at": "2026-09-24",
+  "recorded_by_phase": "Phase 2",
+  "why_this_commit": "上游无 tag（git ls-remote --tags 为空），main 的当前 tip 即 package.json 4.2.0 的已发布版本；pin 的是 commit SHA 而不是分支，因此不跟随 main。",
+  "verify": {
+    "paths": [
+      "package.json",
+      "src/service/markdownService.ts",
+      "src/service/markdown/markdown-pdf.js",
+      "src/service/markdown/html-export.js",
+      "src/service/markdown/outline.js",
+      "src/service/markdown/holder.ts",
+      "src/service/markdown/yamlProperties.js",
+      "src/service/markdown/wikilink/index.ts",
+      "src/service/markdown/ext",
+      "template/styles/markdown-pdf.css",
+      "template/styles/markdown.css",
+      "template/styles/arduino-light.css",
+      "template/template/template.html",
+      "test/markdown/Callouts.md"
+    ],
+    "dependencies": {
+      "markdown-it": "^14.1.0",
+      "markdown-it-anchor": "^9.2.0",
+      "markdown-it-checkbox": "^1.1.0",
+      "markdown-it-front-matter": "^0.2.4",
+      "markdown-it-mark": "^4.0.0",
+      "markdown-it-obsidian-callouts": "^0.3.4",
+      "markdown-it-plantuml": "^1.4.1",
+      "markdown-it-toc-done-right": "^4.2.0",
+      "katex": "^0.16.2",
+      "mermaid": "^11.15.0",
+      "highlight.js": "^11.10.0"
+    },
+    "absent_dependencies": [
+      "markdown-it-footnote"
+    ]
+  },
+  "capabilities": [
+    {
+      "id": "markdown-it-base",
+      "present": true,
+      "evidence": [
+        "package.json",
+        "src/service/markdown/markdown-pdf.js"
+      ],
+      "note": "markdown-it html:true / breaks 由配置传入（markdownService getConfig 为 breaks:false），与 docs/MARKDOWN.md 一致"
+    },
+    {
+      "id": "checkbox",
+      "present": true,
+      "evidence": [
+        "package.json",
+        "src/service/markdown/markdown-pdf.js"
+      ],
+      "note": "markdown-it-checkbox ^1.1.0（Phase 4 目标 G1）"
+    },
+    {
+      "id": "mark",
+      "present": true,
+      "evidence": [
+        "package.json",
+        "src/service/markdown/markdown-pdf.js"
+      ],
+      "note": "markdown-it-mark ^4.0.0（Phase 4 目标 G2）"
+    },
+    {
+      "id": "callout",
+      "present": true,
+      "evidence": [
+        "package.json",
+        "src/service/markdown/markdown-pdf.js",
+        "template/styles/markdown-pdf.css"
+      ],
+      "note": "markdown-it-obsidian-callouts ^0.3.4；CSS 用 .callout[data-callout=...]（note/tip/important/warning/caution/danger 等）（Phase 4 目标 G3）"
+    },
+    {
+      "id": "wikilink",
+      "present": true,
+      "evidence": [
+        "src/service/markdown/wikilink/index.ts",
+        "src/service/markdown/markdown-pdf.js",
+        "template/styles/markdown-pdf.css"
+      ],
+      "note": "上游自实现（src/service/markdown/wikilink/）+ ext/markdown-it-obsidian；CSS .obsidian-wikilink（Phase 4 目标 G4）"
+    },
+    {
+      "id": "obsidian-tag",
+      "present": true,
+      "evidence": [
+        "src/service/markdown/markdown-pdf.js",
+        "template/styles/markdown-pdf.css"
+      ],
+      "note": "CSS .obsidian-tag 与 .vditor-properties__key-icon[data-icon=tag]（Phase 4 目标 G5）"
+    },
+    {
+      "id": "katex",
+      "present": true,
+      "evidence": [
+        "package.json",
+        "src/service/markdown/markdown-pdf.js"
+      ],
+      "note": "katex ^0.16.2 + ext/markdown-it-katex；readStyles() 内联 resource/markdown/dist/js/katex/katex.min.css"
+    },
+    {
+      "id": "mermaid",
+      "present": true,
+      "evidence": [
+        "package.json",
+        "src/service/markdown/markdown-pdf.js"
+      ],
+      "note": "mermaid ^11.15.0 + ext/markdown-it-mermaid；仅当渲染结果含 .mermaid 时才注入 runtime（AGENTS 9 的按需行为上游自带）；html 导出用 CDN，pdf/docx 用本地文件（Phase 4/5 目标 G6）"
+    },
+    {
+      "id": "plantuml",
+      "present": true,
+      "evidence": [
+        "package.json",
+        "src/service/markdown/markdown-pdf.js"
+      ],
+      "note": "markdown-it-plantuml ^1.4.1（server 型）（Phase 4/5 目标 G7）"
+    },
+    {
+      "id": "anchor",
+      "present": true,
+      "evidence": [
+        "package.json",
+        "src/service/markdown/markdown-pdf.js"
+      ],
+      "note": "markdown-it-anchor ^9.2.0；与 K14 的 headings 通道对齐属于 Phase 4 的工作"
+    },
+    {
+      "id": "toc",
+      "present": true,
+      "evidence": [
+        "package.json",
+        "src/service/markdown/markdown-pdf.js",
+        "src/service/markdown/outline.js"
+      ],
+      "note": "markdown-it-toc-done-right ^4.2.0；只有 pdf 导出自动注入 [toc]，html 导出需要正文写 [toc]（与 MarkdownReader 的 TOC 行为不同，Phase 3/4 决策）"
+    },
+    {
+      "id": "front-matter",
+      "present": true,
+      "evidence": [
+        "package.json",
+        "src/service/markdown/yamlProperties.js",
+        "template/styles/markdown-pdf.css"
+      ],
+      "note": "markdown-it-front-matter ^0.2.4 + 属性面板 CSS；AGENTS 6 明确不启用正文 Properties 面板，MarkdownReader 只用 front matter 做 metadata（K10）"
+    },
+    {
+      "id": "highlight.js",
+      "present": true,
+      "evidence": [
+        "package.json",
+        "template/styles/arduino-light.css"
+      ],
+      "note": "服务端高亮；MarkdownReader 目前不预高亮，是否采用属于 Phase 4 决策"
+    },
+    {
+      "id": "image-path-rewrite",
+      "present": true,
+      "evidence": [
+        "src/service/markdown/markdown-pdf.js"
+      ],
+      "note": "html 导出把图片 src 重写为 file:// URL，不是 data URI；standalone 内嵌仍由 MarkdownReader 负责（K13）"
+    },
+    {
+      "id": "export-types",
+      "present": true,
+      "evidence": [
+        "src/service/markdownService.ts",
+        "src/service/markdown/html-export.js"
+      ],
+      "note": "pdf / html / docx；pdf 与 docx 依赖 puppeteer-core 与本机 Chromium/Edge，MarkdownReader 只用 html 路径"
+    },
+    {
+      "id": "footnote",
+      "present": false,
+      "evidence": [],
+      "reason": "该 commit 没有 footnote 实现：package.json 无 markdown-it-footnote，src 与 template 中检索 footnote 命中 0 处。footnote 继续由 MarkdownReader 拥有（K8）"
+    }
+  ]
+}

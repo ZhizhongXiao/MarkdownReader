@@ -10,6 +10,7 @@
 - `uv`：创建项目专用 `.venv` 并锁定依赖
 
 ```powershell
+git submodule update --init --recursive
 uv sync
 cd node_renderer; npm install; cd ..
 cd tests/js; npm ci; cd ..
@@ -55,8 +56,24 @@ templates/print.css   共享打印样式
 packaging/            打包配置、图标、启动图与发布脚本
 samples/              示例与渲染标本（demo.md 与入库的 demo.html）
 tests/                自动化测试（tests/js 为 jsdom 层，不进打包）
-tools/                辅助脚本（不参与打包）
+tools/                辅助脚本（generate_demo.py、update_vscode_office.ps1；不参与打包）
+upstream/             vscode-office 上游源码（submodule，只读；见 upstream/README.md）
 ```
+
+## 上游 vscode-office
+
+MarkdownReader 把 Markdown 语义交给 `vscode-office`：其源码以 **submodule** 放在 `upstream/vscode-office/`，
+并 pin 在一个明确 commit 上（记录见 [upstream/pin.json](../upstream/pin.json)，说明见 [upstream/README.md](../upstream/README.md)）。
+
+```powershell
+pwsh tools/update_vscode_office.ps1 -Check                  # 只读检查：pin 一致性、上游是否被改动、结构证据
+pwsh tools/update_vscode_office.ps1 -Update <ref>           # 显式更新到某个 commit / tag / 分支
+pwsh tools/update_vscode_office.ps1 -ExpectCommit <sha>     # 断言当前 checkout
+```
+
+规则：不修改上游源码、不打 patch、不跟随 upstream `main`、不在 `upstream/` 内执行 `npm install`。
+更新上游是显式操作：更新后同步 `upstream/pin.json` 并重新跑完整测试。
+`tests/test_upstream_pin.py` 校验 `.gitmodules`、pin commit、上游工作区是否干净，以及 pin 记录里的证据路径与依赖版本是否仍然成立。
 
 ## 命名与路径约定
 
@@ -78,3 +95,4 @@ python -m PyInstaller --clean --noconfirm --workpath "packaging\.pyinstaller-bui
 - 发布冻结：`python packaging/release_freeze.py --check-only` 校验版本与验收证据，`--tag` 在证据齐全后重建产物并打 tag。
 
 细节见 [打包说明](../packaging/README.md)。
+
