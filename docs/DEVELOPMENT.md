@@ -12,8 +12,9 @@
 ```powershell
 git submodule update --init --recursive
 uv sync
-cd node_renderer; npm install; cd ..
+cd node_renderer; npm ci; cd ..
 cd tests/js; npm ci; cd ..
+cd renderer; npm ci; npm run build; cd ..
 ```
 
 ## 运行
@@ -47,7 +48,8 @@ skip 并说明原因，不会静默通过。自动化测试不覆盖 GUI 运行�
 ```text
 core/                 转换计划、front matter、TOC、渲染调度、索引生成
 gui/                  pywebview 界面与静态资源（gui/assets/）
-node_renderer/        Node Markdown 渲染器（markdown-it、footnote、texmath、KaTeX）
+node_renderer/        当前生产 renderer（markdown-it、footnote、texmath、KaTeX）
+renderer/             新 renderer adapter（Phase 3，与 node_renderer 并存，尚未接入生产）
 templates/default/    共享阅读器外壳
 templates/Modern|Office|Vscode/   视觉主题（继承 default）
 templates/index/      批量索引模板
@@ -75,6 +77,27 @@ pwsh tools/update_vscode_office.ps1 -ExpectCommit <sha>     # 断言当前 check
 更新上游是显式操作：更新后同步 `upstream/pin.json` 并重新跑完整测试。
 `tests/test_upstream_pin.py` 校验 `.gitmodules`、pin commit、上游工作区是否干净，以及 pin 记录里的证据路径与依赖版本是否仍然成立。
 
+## 新 renderer（renderer/，Phase 3）
+
+`renderer/` 是 MarkdownReader-owned 的新 adapter：复用 pinned vscode-office 的 Markdown 实现，
+与生产路径 `node_renderer/` **并存**，尚未接入 GUI 或转换流程。
+
+```powershell
+cd renderer
+npm ci          # 只安装 renderer 自己的依赖；绝不在 upstream 内安装任何东西
+npm run build   # esbuild 打包到 renderer/dist/renderer.cjs（不入库，可重复构建）
+npm test        # node:test 冒烟
+cd ..
+uv run pytest -q
+```
+
+- 构建输入：`renderer/entry.js` + 静态引用的 pinned 上游扩展 + `renderer/node_modules`。
+- sibling module resolution 由 `renderer/build/build.js` 的 `nodePaths` 指向 renderer/node_modules 解决；
+  不使用全局 `NODE_PATH`、junction，也不修改或复制上游文件。
+- `renderer/dist/` 不入库：先构建再跑 pytest；产物缺失时测试会**失败并给出构建提示**（不 skip、不假绿）。
+- 协议：`{ "protocol_version": 1, "ok": true, "html", "headings", "features", "warnings" }`；
+  失败同样是单个 JSON envelope + 退出码 1，诊断只走 stderr。
+
 ## 命名与路径约定
 
 - 项目名、窗口标题与产物统一 `MarkdownReader`；npm 包标识为小写 `markdownreader-node-renderer`。
@@ -95,4 +118,5 @@ python -m PyInstaller --clean --noconfirm --workpath "packaging\.pyinstaller-bui
 - 发布冻结：`python packaging/release_freeze.py --check-only` 校验版本与验收证据，`--tag` 在证据齐全后重建产物并打 tag。
 
 细节见 [打包说明](../packaging/README.md)。
+
 

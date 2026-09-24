@@ -1,0 +1,117 @@
+"""新 renderer 与 Phase 1 KEEP 语料的语义对照（Phase 3）。
+
+不要求新旧 HTML 字节一致，只按语义断言（期望表直接复用 Phase 1 的 KEEP_EXPECTATIONS）。
+每个 KEEP case 必须被显式分类：
+
+  * ADAPTER_CASES —— 新 adapter 已负责，逐条对照；
+  * PENDING_CASES  —— Phase 3 尚未迁移，写明理由；不伪造通过、不改 Phase 1 契约。
+
+分类表由测试锁定：出现未分类的 case 即失败，避免静默缩小对照范围。
+Phase 1 的 7 个 TARGET xfail 属于旧 renderer 的门禁，本阶段不改动它们。
+"""
+
+import sys
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from markdown_fixtures import load_cases, read_fixture  # noqa: E402
+from renderer_adapter import render  # noqa: E402
+from test_markdown_compat_keep import KEEP_EXPECTATIONS  # noqa: E402
+
+EXPECTED_KEEP_CASES = 15
+
+ADAPTER_CASES = (
+    "inline-basic",
+    "paragraph-breaks-off",
+    "typographer-off",
+    "heading-levels",
+    "heading-trailing-hash",
+    "code-fence-heading-text",
+    "table-alignment",
+    "code-fence-language",
+    "blockquote-and-hr",
+    "list-nested",
+    "raw-inline-html",
+    "link-and-autolink",
+    "math-inline-display",
+    "plain-text-no-math",
+)
+
+PENDING_CASES = {
+    "footnote": (
+        "上游 pinned commit 没有 footnote 实现；作为 MarkdownReader-owned extension"
+        " 在 Phase 4 迁移，Phase 1 的 KEEP 契约保持不变。"
+    ),
+}
+
+# Phase 3 只接 base engine + anchor + obsidian 扩展 + katex 扩展；下面这些按计划留给
+# Phase 4，所以此处断言它们仍为 false。Phase 4 真正接入时必须显式更新本表。
+PHASE4_FEATURE_KEYS = ("mermaid", "plantuml", "checkbox", "callout", "mark")
+
+
+def _case(case_id: str) -> dict:
+    cases = {case["id"]: case for case in load_cases("keep")}
+    assert case_id in cases, case_id
+    return cases[case_id]
+
+
+def test_keep_coverage_table_is_complete_and_locked():
+    case_ids = sorted(case["id"] for case in load_cases("keep"))
+    covered = sorted(ADAPTER_CASES)
+    pending = sorted(PENDING_CASES)
+
+    assert len(case_ids) == EXPECTED_KEEP_CASES
+    assert sorted(covered + pending) == case_ids, (covered, pending)
+    assert all(PENDING_CASES.values()), "pending 必须写明理由"
+    assert all(case_id in KEEP_EXPECTATIONS for case_id in covered), "对照必须复用 Phase 1 的期望表"
+
+
+@pytest.mark.parametrize("case_id", ADAPTER_CASES)
+def test_adapter_satisfies_covered_keep_case(case_id: str):
+    envelope = render(read_fixture(_case(case_id)))
+    html = envelope["html"]
+    expected = KEEP_EXPECTATIONS[case_id]
+
+    for fragment in expected.get("must_contain", []):
+        assert fragment in html, (case_id, fragment)
+    for alternatives in expected.get("must_contain_any", []):
+        assert any(option in html for option in alternatives), (case_id, alternatives)
+    for fragment in expected.get("must_absent", []):
+        assert fragment not in html, (case_id, fragment)
+    if "headings_levels" in expected:
+        levels = [item["level"] for item in envelope["headings"]]
+        assert levels == expected["headings_levels"], case_id
+    if "headings_texts" in expected:
+        texts = [item["text"] for item in envelope["headings"]]
+        assert texts == expected["headings_texts"], case_id
+
+
+def test_heading_relationship_contract_holds_for_the_anchor_fixture():
+    """K14 的关系契约：只锁「链路不断」，不锁精确 slug 文本。"""
+    anchor_cases = load_cases("anchor")
+    assert len(anchor_cases) == 1
+    envelope = render(read_fixture(anchor_cases[0]))
+    html = envelope["html"]
+    headings = envelope["headings"]
+
+    anchors = [item["anchor"] for item in headings]
+    assert len(anchors) == 8
+    assert all(anchors), "每个 heading 都必须有非空 id"
+    assert len(set(anchors)) == len(anchors), "id 必须唯一"
+    for heading in headings:
+        assert 'id="' + heading["anchor"] + '"' in html, heading["anchor"]
+    assert [item["level"] for item in headings] == [1, 2, 3, 2, 2, 2, 2, 2]
+    assert "围栏里的标题" not in [item["text"] for item in headings]
+
+
+def test_phase3_scope_leaves_phase4_features_off():
+    for case in sorted(load_cases("target"), key=lambda item: item["id"]):
+        features = render(read_fixture(case))["features"]
+        for key in PHASE4_FEATURE_KEYS:
+            assert features[key] is False, (case["id"], key)

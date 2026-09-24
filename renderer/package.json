@@ -1,0 +1,20 @@
+{
+  "name": "markdownreader-renderer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MarkdownReader renderer adapter (Phase 3): consumes the pinned vscode-office source and speaks the MarkdownReader renderer protocol.",
+  "main": "entry.js",
+  "scripts": {
+    "build": "node build/build.js",
+    "pretest": "node build/build.js",
+    "test": "node --test \"test/*.test.js\""
+  },
+  "dependencies": {
+    "katex": "^0.16.2",
+    "markdown-it": "^14.1.0",
+    "markdown-it-anchor": "^9.2.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1"
+  }
+}
