@@ -6,6 +6,10 @@
 
 断言只使用 docs/MARKDOWN.md 描述的产品语义。凡文档没有固定标签形式的（例如删除线
 渲染成 <s> 还是 <del>），断言接受任一等价形式，不冻结渲染器实现。
+
+资产载荷契约（有公式才携带 KaTeX 资产、无公式不携带）不由本语料承担：它由现有的
+tests/test_renderer_katex_assets.py 与 tests/test_converter_integration.py 锁定；语料只
+断言 Markdown 语义（有公式得到 KaTeX HTML、无公式不出现公式标记）。
 """
 
 import sys
@@ -28,8 +32,6 @@ EXPECTED_KEEP_CASES = 15
 #   must_contain       html 中必须出现的片段
 #   must_contain_any   每组至少出现一个（用于文档未固定具体标签的等价形式）
 #   must_absent        html 中不得出现的片段
-#   assets_contain     内联资产 CSS 中必须出现的片段
-#   assets_empty       内联资产必须为空（体积纪律）
 #   headings_levels    headings[].level 的完整序列
 #   headings_texts     headings[].text 的完整序列
 #   source             期望值的来源（文档或既有契约）
@@ -37,8 +39,6 @@ ASSERTION_KEYS = (
     "must_contain",
     "must_contain_any",
     "must_absent",
-    "assets_contain",
-    "assets_empty",
     "headings_levels",
     "headings_texts",
 )
@@ -135,13 +135,13 @@ KEEP_EXPECTATIONS: dict[str, dict] = {
     },
     "math-inline-display": {
         "must_contain": ['class="katex"', 'class="katex-display"'],
-        "assets_contain": ["KaTeX_AMS", "data:font/woff2"],
-        "source": "MARKDOWN.md『公式』：公式由 KaTeX 预渲染，样式与字体随 HTML 内联",
+        "source": "MARKDOWN.md『公式』：公式由 KaTeX 预渲染"
+        "（载荷契约见 test_renderer_katex_assets.py）",
     },
     "plain-text-no-math": {
-        "assets_empty": True,
         "must_absent": ['class="katex', "mermaid", "plantuml"],
-        "source": "MARKDOWN.md『公式』与 AGENTS §9：只有真的出现公式才携带 KaTeX 载荷",
+        "source": "MARKDOWN.md『公式』与 AGENTS §9：无公式的文档不出现公式标记"
+        "（载荷契约见 test_renderer_katex_assets.py）",
     },
 }
 
@@ -173,10 +173,6 @@ def test_keep_case_keeps_its_documented_markdown_semantics(case_id: str):
         assert any(option in html for option in alternatives), (case_id, alternatives)
     for fragment in expected.get("must_absent", []):
         assert fragment not in html, (case_id, fragment)
-    for fragment in expected.get("assets_contain", []):
-        assert fragment in result["assets"]["css"], (case_id, fragment)
-    if expected.get("assets_empty"):
-        assert result["assets"]["css"] == "", case_id
     if "headings_levels" in expected:
         levels = [heading["level"] for heading in result["headings"]]
         assert levels == expected["headings_levels"], case_id

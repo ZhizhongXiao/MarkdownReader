@@ -9,8 +9,11 @@ Phase 1 只锁产品级语义，不锁尚未 pin 住的上游 DOM：Phase 2 固�
 commit、Phase 3 adapter 定型以后，再补确实需要的上游 DOM contract。
 """
 
+import re
 import sys
+from html import unescape
 from pathlib import Path
+from urllib.parse import unquote
 
 import pytest
 
@@ -29,6 +32,18 @@ CALLOUT_MARKERS = ("callout", "admonition", "markdown-alert", "alert", "note")
 # Obsidian 标签同理：类名或链接形式任一即可。
 OBSIDIAN_TAG_MARKERS = ('class="tag', "tag-", "obsidian-tag", "/tags/", 'href="#tag')
 
+# WikiLink 断言只要求“指向目标”：不锁精确 URL 格式，也不锁 DOM class。
+_ANCHOR_RE = re.compile(r'<a\b[^>]*href="([^"]*)"[^>]*>(.*?)</a>', re.S | re.I)
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _anchors(html: str) -> list[tuple[str, str]]:
+    """返回 (href, 可见文本) 列表，可见文本已去标签。"""
+    return [
+        (match.group(1), _TAG_RE.sub("", match.group(2)).strip())
+        for match in _ANCHOR_RE.finditer(html)
+    ]
+
 
 def _expect_checkbox(result: dict) -> None:
     """任务列表必须成为 checkbox 语义，而不是字面文本。"""
@@ -44,15 +59,27 @@ def _expect_mark(result: dict) -> None:
 
 
 def _expect_callout(result: dict) -> None:
+    """两个 marker 都必须消失：只做 NOTE 而把 WARNING 留成普通文本不算通过。"""
     html = result["html"]
     assert "[!NOTE]" not in html, html
+    assert "[!WARNING]" not in html, html
+    assert "这是一个提示块。" in html, html
+    assert "这是一个警告块。" in html, html
     assert any(marker in html for marker in CALLOUT_MARKERS), html
 
 
 def _expect_wikilink(result: dict) -> None:
+    """链接不仅出现，还要指向目标：alias 显示别名，两点都指向「第二章」。"""
     html = result["html"]
     assert "[[" not in html, html
-    assert ">第二章</a>" in html, html
+
+    labelled = {text: href for href, text in _anchors(html)}
+    assert "第二章" in labelled, labelled
+    assert "别名显示" in labelled, labelled
+    for label in ("第二章", "别名显示"):
+        href = labelled[label]
+        assert href, (label, labelled)
+        assert "第二章" in unquote(unescape(href)), (label, href)
 
 
 def _expect_obsidian_tag(result: dict) -> None:

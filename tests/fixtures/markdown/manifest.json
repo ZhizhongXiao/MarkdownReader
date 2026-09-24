@@ -21,7 +21,7 @@
     {"id": "link-and-autolink", "group": "keep", "file": "keep/link-and-autolink.md", "note": "显式链接、自动链接、裸 URL 与邮箱（MARKDOWN.md『链接与图片』）"},
     {"id": "footnote", "group": "keep", "file": "keep/footnote.md", "note": "脚注引用与脚注区块（MARKDOWN.md『脚注』）"},
     {"id": "math-inline-display", "group": "keep", "file": "keep/math-inline-display.md", "note": "KaTeX 行内与块级公式（MARKDOWN.md『公式』）"},
-    {"id": "plain-text-no-math", "group": "keep", "file": "keep/plain-text-no-math.md", "note": "无公式的文档不携带 KaTeX/Mermaid/PlantUML 载荷（AGENTS §9）"},
+    {"id": "plain-text-no-math", "group": "keep", "file": "keep/plain-text-no-math.md", "note": "无公式的文档不出现公式标记（载荷契约见 test_renderer_katex_assets.py；AGENTS §9）"},
     {"id": "checkbox", "group": "target", "file": "target/checkbox.md", "note": "任务列表：Phase 4 由 vscode-office 提供"},
     {"id": "mark", "group": "target", "file": "target/mark.md", "note": "高亮标记：Phase 4 由 vscode-office 提供"},
     {"id": "callout", "group": "target", "file": "target/callout.md", "note": "Callout/Admonition：Phase 4 由 vscode-office 提供"},

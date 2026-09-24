@@ -35,18 +35,19 @@
 | K6 | 围栏代码块与语言标注 | `keep/code-fence-language` |
 | K7 | 原始 HTML 行内与块级原样保留 | `keep/raw-inline-html` |
 | K8 | 脚注（引用、脚注区块、返回链接） | `keep/footnote` + `test_renderer_links.py` |
-| K9 | KaTeX 预渲染；**无公式的文档不携带公式载荷** | `keep/math-inline-display`、`keep/plain-text-no-math` + `test_renderer_katex_assets.py` |
+| K9 | KaTeX 预渲染：出现公式时得到 KaTeX HTML | `keep/math-inline-display` + `test_renderer_katex_assets.py` |
 | K10 | Front Matter 只作 metadata，默认不进正文 | `test_front_matter.py`、`test_conversion_edge_cases.py` + `keep` 语料不含 front matter 的保证 |
 | K11 | `fuzzyLink:false` 的既有语义：裸文件名与版本号保持文本 | `test_renderer_linkify.py` |
 | K12 | `.md` / `.markdown` → `.html` 文档关系（含 fragment/query、未入清单 warning、消息可读） | `test_renderer_links.py`、`test_converter_integration.py` |
 | K13 | local image standalone（data URI；失败保留原引用；`data:`、`file:`、原始 HTML 资源的既有策略） | `test_image_embedding.py`（14 项） |
-| K14 | heading metadata 通道存在并被 TOC 消费；编号识别只有一个来源 | `test_toc_heading_contract.py`（45 项）+ Viewer NUM1/NUM2 |
+| K14 | **adapter contract（renderer → core）**：`headings` 保留顺序，并保留 `level`、`anchor`、`text`、`inline_html`、`toc_inline_html` 的语义；TOC 与 Viewer 只消费这套结果，编号识别只有一个来源。字段名与序列化形式可以迁移，但必须 producer、consumer、tests 同步改并在本文件登记 | `test_toc_heading_contract.py`（45 项）+ `test_markdown_anchor_contract.py` + Viewer NUM1/NUM2 |
 | K15 | warning 通道（可读路径、不阻断转换） | `test_renderer_links.py`、`test_conversion_edge_cases.py` |
 | K16 | standalone HTML 装配（自包含、标题转义、无 CDN） | `test_demo_generation.py`、`test_converter_integration.py` |
 | K17 | Viewer / 索引页 / GUI 行为契约 | `tests/js` 层：viewer 22、index 9、GUI 9、selfcheck 5 |
-| K18 | 运行时归属：打包物不借 PATH 的 Node、渲染器冒烟自检 | `test_node_runtime.py`（5 项） |
+| K18 | 运行时归属与可靠调用：打包物只使用内置 Node（不借 PATH）、渲染前冒烟自检。**进程粒度不是契约**（见 IMPLEMENTATION DETAIL） | `test_node_runtime.py`（5 项） |
 | K19 | 覆盖语义：`overwrite=false` 跳过并保留原文件 | `test_conversion_edge_cases.py` |
 | K20 | 发布门禁与产物校验 | `test_release_freeze.py`、`test_release_validation.py` |
+| K21 | 按需载荷：有公式才携带 KaTeX 资产，无公式不携带（体积纪律）。**具体信封键名不是契约** | `test_renderer_katex_assets.py`、`test_converter_integration.py` |
 
 ## TRANSITIONAL：记录现状，路线图已定要改
 
@@ -57,20 +58,22 @@
 | T3 | `config.json` 的 `build.template`，配置与日志位于 EXE 同级 | Phase 8 / Phase 10：`external_themes` + `profile/` | 配置 schema 与 `test_gui_state_contract.py` |
 | T4 | `samples/demo.html` 必须等于当前源码的输出 | Phase 4/6 输出必然变化：重新生成并在提交说明里解释 | `test_demo_generation.py::test_demo_html_matches_the_committed_specimen` |
 | T5 | 标题 slug 的**精确值**（今天由 `slugifyUnicode` 给出） | Phase 4：允许按 vscode-office / markdown-it-anchor 对齐 | **不作断言**；诊断记录见下表 |
-| T6 | 每文档启动一个 Node 进程 | 允许变（常驻进程或池），只要不比今天更慢更脆 | 无断言；`test_node_runtime.py` 只锁“每进程校验一次 + 不借 PATH” |
+| T6 | Python TOC → Viewer 的 DOM contract：`data-explicit-number`（Viewer 据此标记“已编号”标题） | Phase 6：可以重新设计，但必须同步修改 producer（core/toc.py）、consumer（templates/viewer.js）与相关测试，并在本表登记 | Viewer NUM1/NUM2、`test_toc_heading_contract.py` |
 | T7 | KaTeX 资产以单个 `assets.css` 全量内联 | Phase 3 adapter 可能改为更细的资源协议 | 断言只锁“有公式才有载荷、离线可用” |
 
 ### T5 诊断记录（当前输出，仅供对照）
 
 锚点语料在 2026-09-24 的输出：`中文标题`、`带标点的标题`（标点被剥离）、`emoji-标题`（emoji 变分隔符）、重复标题后缀为 `2`、空标题为 `_1`、`A` → `a`。
-这些值**不是契约**：Phase 4 允许改变，只要 K1 的关系成立。## TARGET：本次升级新增（Phase 1 迁移门禁）
+这些值**不是契约**：Phase 4 允许改变，只要 K1 的关系成立。
+
+## TARGET：本次升级新增（Phase 1 迁移门禁）
 
 | # | case | Phase 1 断言（今天必须失败） | 完成的 Phase |
 | --- | --- | --- | --- |
 | G1 | checkbox | `type="checkbox"` 恰好 2 个，字面 `[ ] 未完成事项` 消失 | Phase 4 |
 | G2 | mark | 出现 `<mark>`，字面 `==高亮文本==` 消失 | Phase 4 |
-| G3 | callout | 字面 `[!NOTE]` 消失，且出现可识别的提示块类名 | Phase 4 |
-| G4 | wikilink | 字面 `[[` 消失，且生成指向目标名的链接 | Phase 4 |
+| G3 | callout | `[!NOTE]` 与 `[!WARNING]` 两个字面 marker 都消失、两段正文都保留，且出现可识别的提示块类名（只做 NOTE 不算通过） | Phase 4 |
+| G4 | wikilink | 字面 `[[` 消失；`[[第二章]]` 与 `[[第二章\|别名显示]]` 都成为链接，可见文本分别为「第二章」「别名显示」，两个 href 均非空且 decode 后能识别目标「第二章」（不锁精确 URL 格式与 class） | Phase 4 |
 | G5 | obsidian-tag | 标签带语义（`tag` 类名或 tag 链接），不再是纯文本 | Phase 4 |
 | G6 | mermaid | `features.mermaid` 为真，且出现 `class="mermaid"` 运行时容器 | Phase 4/5 |
 | G7 | plantuml | `features.plantuml` 为真，且进入图像资源流程（出现 `<img`） | Phase 4/5 |
@@ -79,7 +82,9 @@ Phase 1 **只锁产品级语义，不锁尚未 pin 住的上游 DOM**。Callout 
 
 ## IMPLEMENTATION DETAIL：允许重构
 
-`render.js` 的文件布局与内部函数名（`installHeadingIds`、`slugifyUnicode`、`resolveImageSource`、`rewriteDocumentHref`、`decodeForDisplay`…）、`assets.css` 信封键名、`headings[]` 字段名与顺序、`warnings` 文案（除“路径可读”这一产品要求）、CSS/JS 注入位置、`linkify.set()` 的调用形式、`data-explicit-number` 属性名、`templates/Modern` 目录名与 id `modern` 的大小写依赖、`_theme_body_class` 的具体类名、每文档一个 Node 进程。
+`render.js` 的文件布局与内部函数名（`installHeadingIds`、`slugifyUnicode`、`resolveImageSource`、`rewriteDocumentHref`、`decodeForDisplay`…）、`assets.css` 信封键名、`warnings` 文案（除“路径可读”这一产品要求）、CSS/JS 注入位置、`linkify.set()` 的调用形式、`templates/Modern` 目录名与 id `modern` 的大小写依赖、`_theme_body_class` 的具体类名、每文档一个 Node 进程。
+
+本清单只包含拼写、序列化与组织方式；它们的**语义**属于 KEEP（`headings` 通道见 K14、运行时归属见 K18、KaTeX 载荷见 K21）。进程粒度只在这里出现一次。
 
 ## 迁移 fixture 语料
 
