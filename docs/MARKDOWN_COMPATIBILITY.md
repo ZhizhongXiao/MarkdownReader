@@ -75,8 +75,10 @@
 | G3 | callout | `[!NOTE]` 与 `[!WARNING]` 都消失、正文保留；已收窄到 pinned 上游输出 `class="callout"` + `data-callout="note|warning"` | **Phase 4A 已在 adapter 实现**（`markdown-it-obsidian-callouts`） |
 | G4 | wikilink | 字面 `[[` 消失；parser/alias 仍来自 pinned 上游，adapter 只把编辑器用的 `href="#"` 换成静态 export href。可见文本「第二章」「别名显示」，两个 href 非空且 decode 后识别目标「第二章」 | **Phase 4A 已在 adapter 实现**（`renderer/extensions/obsidian_wikilink_export.js`）；**Phase 4B 已接入 document_map**：源文件同目录下唯一的 `.md` / `.markdown` 目标 → 对应 `.html`（可带 fragment），解析不出唯一目标时保留 Phase 4A 的 fragment fallback，且不新增 warning |
 | G5 | obsidian-tag | ASCII 与 Unicode 标签（`#note`/`#项目/子项`）都成 tag；`# 标题`/URL fragment/孤立 `#` 不误报 | **Phase 4A 已在 adapter 实现**（上游 obsidian token + MarkdownReader Unicode 字符集扩展） |
-| G6 | mermaid | `features.mermaid` 为真，且出现 `class="mermaid"` 运行时容器 | **仍 pending**（Phase 4C/5）：features 恒 false，未注入 runtime |
-| G7 | plantuml | `features.plantuml` 为真，且进入图像资源流程（出现 `<img`） | **仍 pending**（Phase 4C/5）：features 恒 false，不建网络资源层 |
+| G6 | mermaid | `features.mermaid` 为真，且出现 `class="mermaid"` 运行时容器 | **Phase 4C 已实现语义层**（`renderer/extensions/mermaid_export.js`：复刻 pinned 上游 recognition + 容器，内容按 D2 escape）；**Phase 5 仍 pending**：浏览器 runtime 注入 |
+| G7 | plantuml | `features.plantuml` 为真，且进入图像资源流程（出现 `<img`） | **Phase 4C 已实现语义层**（`markdown-it-plantuml@1.4.1`：`uml_diagram` token + `<img src="server/svg/…">`，只构造 URL）；**Phase 5 仍 pending**：抓图与内嵌 |
+
+**Phase 4C 的 PlantUML 形式记录**：pinned 上游的**导出**路径（`markdown-pdf.js` → `markdown-it-plantuml`）只识别**裸 `@startuml` 块**；以围栏代码块（语言标记 `plantuml`）写图表只存在于 vditor 编辑器子系统，不属于导出语义。Phase 1 语料 `target/plantuml.md` 用的是围栏形式，因此 Phase 4C 增加了一条明确的 **adapter 附加**：语言标记为 `plantuml` / `puml` 的围栏会转成同一个 `uml_diagram` token（围栏 body 视为作者写的完整图源，原样编码，不删标记也不重新包装）。两条路径共用同一个 URL 构造实现，`<img>` 渲染与 feature 判断仍只有插件一个来源。
 
 Phase 1 **只锁产品级语义，不锁尚未 pin 住的上游 DOM**。Callout 与 Obsidian tag 先接受一个允许集合（`callout`/`admonition`/`markdown-alert`/`alert`/`note`；tag 类名或 `tag` 链接）；Phase 2 固定 vscode-office commit、Phase 3 adapter 定型之后，再补确实需要的上游 DOM contract。
 
@@ -134,6 +136,7 @@ manifest 只是索引：schema 版本、case id、分组、fixture 路径、简�
 | # | 差异 | 旧 production（texmath） | pinned upstream | 决策 |
 | --- | --- | --- | --- | --- |
 | D1 | 行内 `$` 的空白保护 | `dollars` 规则要求 `$…$` 内容不以空白结尾，因此「价格 $100 与 $200 之间。」不是公式 | `math_inline` 只跳过转义 `$` 与空的 `$$`，同一句会被配成公式 | **ACCEPTED UPSTREAM DIFFERENCE** |
+| D2 | Mermaid 容器内容 | 不适用（旧 renderer 无 Mermaid） | 未转义插值：`<div class="mermaid">${code}</div>` | **INTENTIONAL EXPORT HARDENING** |
 
 **D1 决策理由**（Phase 4A+4B closeout 明确接受，不修改）：
 
@@ -145,7 +148,9 @@ manifest 只是索引：schema 版本、case id、分组、fixture 路径、简�
 
 KEEP 契约未受影响：`keep/plain-text-no-math` 用的是单个未配对 `$` 与转义 `\$`，adapter 上仍然不产生公式（该 case 由 `test_renderer_adapter_keep.py` 覆盖）。
 
-除 D1 之外，本次 closeout 未发现其它 old/new 语义差异：math 能力矩阵的其余 16 个样本（含全部负例）两边一致（`test_math_capability_matrix_matches_except_the_accepted_difference`）。
+**D2 不变式**（与 D1 不同类：它不是语义差异，而是有意的输出加固）：upstream 把 Mermaid source 未转义地插入容器 HTML；MarkdownReader 在 serialization 时 HTML-escape，使其在 runtime 处理之前保持惰性文档文本。**Required invariant**：交给 Mermaid 的 DOM 文本表示必须能 round-trip 回原始图源（证据：`test_mermaid_container_escapes_but_round_trips_the_author_source` 与 `test_mermaid_container_preserves_author_entities` —— 作者写 `&amp;` 时上游会被浏览器先解码，本 adapter 保持作者原文）。
+
+除 D1、D2 之外，本次 closeout 未发现其它 old/new 语义差异：math 能力矩阵的其余 16 个样本（含全部负例）两边一致（`test_math_capability_matrix_matches_except_the_accepted_difference`）。
 
 ## Phase 4A+4B Semantic Parity Closeout（2026-09-24）
 
@@ -164,9 +169,9 @@ KEEP 契约未受影响：`keep/plain-text-no-math` 用的是单个未配对 `$`
 
 比较范围之外（Phase 5）：local image data URI、remote image、KaTeX CSS/fonts 载荷、`assets.css`、Mermaid runtime、PlantUML 图像、standalone 资源闭包。old renderer 在这些项上更完整，属 expected pending，**不算** Phase 4A/4B regression。
 
-当前数字（按套件）：`test_renderer_semantic_parity.py` 12、`test_renderer_adapter_keep.py` 20、`test_renderer_adapter_targets.py` 14（4A 条目里的 13 项是那次提交当时的计数）、`test_renderer_adapter_compat.py` 35。
+当前数字（按套件）：`test_renderer_semantic_parity.py` 12、`test_renderer_adapter_keep.py` 20、`test_renderer_adapter_targets.py` 14（4A 条目里的 13 项是那次提交当时的计数）、`test_renderer_adapter_compat.py` 35、`test_renderer_adapter_diagrams.py` 27。
 
-全套：`uv run pytest -q` → 266 passed, 7 xfailed；renderer `npm test` → 6 passed；`uv run pytest -q --runxfail tests/test_markdown_compat_target.py` → `7 failed, 2 passed`（TARGET 门禁仍是 strict xfail）；`uv run ruff check .` → All checks passed。
+全套：`uv run pytest -q` → 293 passed, 7 xfailed；renderer `npm test` → 9 passed；`uv run pytest -q --runxfail tests/test_markdown_compat_target.py` → `7 failed, 2 passed`（TARGET 门禁仍是 strict xfail）；`uv run ruff check .` → All checks passed。
 
 ## AGENTS §25 必测项覆盖映射
 
@@ -177,8 +182,9 @@ KEEP 契约未受影响：`keep/plain-text-no-math` 用的是单个未配对 `$`
 | footnote | K8 |
 | footnote / 额外数学分隔符 / 文档链接（adapter 侧） | Phase 4B：`tests/test_renderer_adapter_compat.py`（35 项） |
 | KEEP 语料在 adapter 上的对照 | `tests/test_renderer_adapter_keep.py`（20 项，15/15 KEEP case 全覆盖，footnote 于 Phase 4B 补齐） |
+| Mermaid / PlantUML（adapter 侧） | Phase 4C：`tests/test_renderer_adapter_diagrams.py`（27 项）+ `renderer/test/mermaid_predicate.test.js`（node:test） |
 | KaTeX | K9 |
-| Mermaid / PlantUML | TARGET G6–G7 |
+| Mermaid / PlantUML | TARGET G6–G7（旧 production 仍 7 strict xfail）；adapter 侧 Phase 4C：`tests/test_renderer_adapter_diagrams.py`（27 项） |
 | local image / remote image | K13（remote 同时登记为 T1） |
 | `.md → .html` | K12 |
 | Front Matter | K10 |
@@ -243,6 +249,15 @@ samples/demo.html                         → 未改动，快照契约仍成立
   * 纯文档修正：`docs/MARKDOWN.md` 补上已 characterization 的 begin/end 数学环境（小写环境名、`\begin`/`\end` 同名）；
   * 未切换 production、未迁移任何资源层代码、未新增 protocol 字段。
   证据：`uv run pytest -q` → `266 passed, 7 xfailed`；renderer `npm test` → 6 passed；`--runxfail` 反证仍 `7 failed, 2 passed`。
+
+- 2026-09-24（Phase 4C）：新 renderer adapter 接入 **Mermaid recognition/容器** 与 **PlantUML 语义层**：
+  * Mermaid：**不引入 `mermaid` 依赖**，只复刻 pinned 上游的 recognition predicate（exact `mermaid`、首行 `gantt` / `sequenceDiagram` / `graph TB|BT|RL|LR|TD`（可带 `;`），且**不看围栏语言**）与容器 HTML。
+    实测证据：mermaid 11 的 `parse()` 是 Promise（非法输入 reject `UnknownDiagramError`；未捕获时 node **exit 1**），上游的同步 try/catch 捕获不到，且打包上游插件 + mermaid 会让 renderer.cjs 从 1,063,499 B 涨到 **7,170,453 B / 1929 modules**。语法校验与浏览器 runtime 全部留给 Phase 5（G6 的 runtime 部分仍 pending）。
+  * PlantUML：新增 `markdown-it-plantuml@^1.4.1`（lockfile 精确版本 1.4.1，与 pinned 上游声明一致；无 runtime 依赖，只生成 server URL）。`uml_diagram` token 与 `<img>` 渲染都归插件；URL 构造集中在一个实现，通过插件的 `generateSource` 使用；server 由 `options.plantuml_server` 配置并有默认值。**不做任何网络访问**（抓图与内嵌属 Phase 5，G7 的资源部分仍 pending）。
+  * 发现的差异（已登记）：pinned 上游导出路径只识别**裸 `@startuml` 块**，而 Phase 1 语料用的是围栏形式 → Phase 4C 增加明确的 adapter 附加（`plantuml` / `puml` 围栏 → 同一个 `uml_diagram` token）。
+  * D2（新增）：Mermaid 容器内容在 serialization 时 escape，登记为 **INTENTIONAL EXPORT HARDENING**，不变式是「DOM 文本 == 作者原文」。
+  * features：mermaid 由 fence token 的语义标记驱动，plantuml 由 `uml_diagram` token 驱动；两项的 raw HTML lookalike 都不误报。
+  证据：`tests/test_renderer_adapter_diagrams.py`（27 项）+ `tests/test_renderer_adapter_targets.py`（14 项，MIGRATED 7 / PENDING 0）+ `renderer/test/mermaid_predicate.test.js`（node:test，合计 9 项）；bundle 1,063,499 → 1,107,699 B；全套 `293 passed, 7 xfailed`。
 
 ## texmath 审计记录（Phase 4B，为什么不复用 `markdown-it-texmath`）
 

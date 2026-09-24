@@ -49,9 +49,17 @@ ADAPTER_CASES = (
 # 写明理由，而不是让对照范围悄悄变小。
 PENDING_CASES: dict[str, str] = {}
 
-# Phase 4A 已接入 checkbox / mark / callout（证据在 tests/test_renderer_adapter_targets.py）；
-# 这里只保留仍然 pending 的项：Phase 4C/5 完成前它们必须恒为 false。
-PENDING_FEATURE_KEYS = ("mermaid", "plantuml")
+# Phase 4C 起七项 TARGET 全部由 adapter 承担，不再有“必须恒为 false”的 feature：每个 TARGET
+# case 对应的 feature 必须为真（见下面的 registry 测试）。
+TARGET_FEATURE_KEYS = {
+    "checkbox": "checkbox",
+    "mark": "mark",
+    "callout": "callout",
+    "wikilink": "wikilink",
+    "obsidian-tag": "obsidian_tag",
+    "mermaid": "mermaid",
+    "plantuml": "plantuml",
+}
 
 
 def _case(case_id: str) -> dict:
@@ -109,12 +117,11 @@ def test_heading_relationship_contract_holds_for_the_anchor_fixture():
     assert "围栏里的标题" not in [item["text"] for item in headings]
 
 
-def test_pending_features_stay_off_in_phase4a():
-    """Phase 4A 只迁移了五项；mermaid / plantuml 在 Phase 4C/5 之前必须仍然关闭。"""
+def test_every_target_case_turns_its_feature_on():
+    """Phase 4C：不再有 pending feature；七项 TARGET 的 feature 必须为真。"""
     for case in sorted(load_cases("target"), key=lambda item: item["id"]):
         features = render(read_fixture(case))["features"]
-        for key in PENDING_FEATURE_KEYS:
-            assert features[key] is False, (case["id"], key)
+        assert features[TARGET_FEATURE_KEYS[case["id"]]] is True, case["id"]
 
 # K14 回归：TOC-safe 表示。正文 inline_html 保留链接，TOC metadata 只保留可见、非交互内容。
 LINK_SAFE_DOCUMENT = (

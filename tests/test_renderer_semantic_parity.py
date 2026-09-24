@@ -7,10 +7,11 @@ compatibility」建立一层明确的 old/new 语义对照证据。这不是新�
 （TRANSITIONAL T5）、我们没有依赖的 upstream class 细节、KaTeX 内部 MathML 字节、
 renderer 内部 token 顺序。
 
-Phase 4A 新语法（checkbox / mark / callout / wikilink / obsidian-tag）在 old renderer 上本就
-不支持，因此**不做** old == new：old 侧由 Phase 1 的 7 个 strict xfail 证明「仍不支持」，
-new 侧由 tests/test_renderer_adapter_targets.py 证明「已实现」。features 通道只有新 adapter
-有，同样不做 equality（见 test_features_are_adapter_only）。
+Phase 4A/4C 新语法（checkbox / mark / callout / wikilink / obsidian-tag / mermaid / plantuml）
+在 old renderer 上本就不支持，因此**不做** old == new：old 侧由 Phase 1 的 7 个 strict xfail
+证明「仍不支持」，new 侧由 tests/test_renderer_adapter_targets.py 与
+tests/test_renderer_adapter_diagrams.py 证明「已实现」。features 通道只有新 adapter 有，
+同样不做 equality（见 test_features_are_adapter_only）。
 
 资源层（local/remote image、KaTeX CSS/fonts、assets.css、Mermaid runtime、PlantUML 图像、
 standalone 资源闭包）属于 Phase 5，明确排除在 parity 之外：old 更完整时记为 expected
@@ -364,9 +365,17 @@ def test_accepted_dollar_pair_difference_is_explicit():
 
 
 def test_migrated_and_pending_registries_are_locked():
-    """KEEP 15/15 由 adapter 覆盖；Phase 4A 五项已迁移；Mermaid / PlantUML 仍 pending。"""
-    assert tuple(MIGRATED) == ("checkbox", "mark", "callout", "wikilink", "obsidian-tag")
-    assert tuple(PENDING) == ("mermaid", "plantuml")
+    """KEEP 15/15 由 adapter 覆盖；七项 TARGET 全部迁移，不再有 pending。"""
+    assert tuple(MIGRATED) == (
+        "checkbox",
+        "mark",
+        "callout",
+        "wikilink",
+        "obsidian-tag",
+        "mermaid",
+        "plantuml",
+    )
+    assert tuple(PENDING) == ()
     assert not set(MIGRATED) & set(PENDING)
 
     assert len(ADAPTER_CASES) == EXPECTED_KEEP_CASES == 15

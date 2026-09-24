@@ -1,8 +1,9 @@
-"""新 adapter 的 Phase 4A target 套件：checkbox / mark / Callout / WikiLink / Obsidian tag。
+"""新 adapter 的 TARGET 七项套件：checkbox / mark / callout / wikilink / obsidian-tag /
+mermaid / plantuml。
 
 与 Phase 1 的 tests/test_markdown_compat_target.py 并存：那份门禁跑的是**旧生产 renderer**，
-仍是 7 个 strict xfail；本模块不碰它，只证明新 adapter 已经承担这五项语义，并明确
-mermaid / plantuml 仍 pending。
+仍是 7 个 strict xfail；本模块不改变它，只证明新 adapter 已承担这七项语义（Phase 4A 五项 +
+Phase 4C 两项；图表细节见 tests/test_renderer_adapter_diagrams.py）。
 
 feature 必须来自 token 语义：本模块用 raw HTML 反例（<mark>、<input type=checkbox>、
 <div class="callout">、<a class="obsidian-wikilink">、<span class="obsidian-tag">）证明
@@ -22,8 +23,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from markdown_fixtures import load_cases, read_fixture  # noqa: E402
 from renderer_adapter import render  # noqa: E402
 
-MIGRATED = ("checkbox", "mark", "callout", "wikilink", "obsidian-tag")
-PENDING = ("mermaid", "plantuml")
+MIGRATED = (
+    "checkbox",
+    "mark",
+    "callout",
+    "wikilink",
+    "obsidian-tag",
+    "mermaid",
+    "plantuml",
+)
+# Phase 4C 起没有 pending：七项 TARGET 全部由新 adapter 承担。
+PENDING: tuple[str, ...] = ()
 
 # features 里的键名（注意 obsidian-tag 的键是 obsidian_tag）
 MIGRATED_FEATURE_KEYS = ("checkbox", "mark", "callout", "wikilink", "obsidian_tag")
@@ -55,8 +65,8 @@ def _render_case(case_id: str) -> dict:
     return render(read_fixture(_case(case_id)))
 
 
-def test_phase4a_coverage_is_locked():
-    """7 个 target case 必须全部被分类为已迁移或 pending，不留静默空缺。"""
+def test_target_coverage_is_locked():
+    """7 个 target case 必须全部登记为已迁移，不留静默空缺。"""
     ids = sorted(case["id"] for case in load_cases("target"))
 
     assert sorted(MIGRATED + PENDING) == ids
@@ -163,11 +173,16 @@ def test_features_are_token_driven_not_substring():
         assert real["features"][key] is True, key
 
 
-def test_mermaid_and_plantuml_remain_pending():
-    for case_id in PENDING:
-        envelope = _render_case(case_id)
-        assert envelope["features"][case_id] is False, case_id
-        assert "mermaid.min.js" not in envelope["html"]
+def test_mermaid_and_plantuml_are_migrated():
+    """Phase 4C：两项图表语义由 adapter 承担；runtime 与抓图仍属 Phase 5。"""
+    mermaid = _render_case("mermaid")
+    assert mermaid["features"]["mermaid"] is True
+    assert 'class="mermaid"' in mermaid["html"]
+    assert "mermaid.min.js" not in mermaid["html"]
+
+    plantuml = _render_case("plantuml")
+    assert plantuml["features"]["plantuml"] is True
+    assert "<img" in plantuml["html"]
 
 
 def test_heading_wikilink_stays_toc_safe_after_the_export_adaptation():
