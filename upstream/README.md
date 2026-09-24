@@ -10,10 +10,21 @@
 | 许可证 | MIT |
 | pin 的 commit | `908258dafc827ce0475fe7671d414914fbd3867b` |
 | commit 日期 | 2026-08-16T08:01:41Z（Merge branch 'dev'） |
-| 上游版本 | package.json version 4.2.0 |
-| pin 记录 | [pin.json](pin.json)（机器可读，唯一事实源） |
+| 该 commit 的 package.json | version 4.2.0 |
+| pin manifest | [pin.json](pin.json)（机器可读的 metadata / integration evidence manifest） |
 | 接入阶段 | Phase 2，见 [重构路线图](../docs/REFACTOR_ROADMAP.md) |
 | 兼容矩阵 | [迁移兼容矩阵](../docs/MARKDOWN_COMPATIBILITY.md) |
+
+## 事实源（fact sources）
+
+| 事实 | 来源 |
+| --- | --- |
+| upstream 仓库位置 | `.gitmodules` |
+| pinned commit | superproject 的 submodule **gitlink**（`git ls-files -s upstream/vscode-office` 中的 160000 条目） |
+| metadata 与集成证据 | `upstream/pin.json` |
+
+`upstream/pin.json` 是 manifest，不是第二套版本系统：它只登记已核验的事实与证据，不定义版本，也不取代上面两个来源。
+`tests/test_upstream_pin.py` 校验 pin.json 记录的 commit 同时等于 gitlink 与 checkout HEAD。
 
 ## 规则
 
@@ -80,3 +91,4 @@ git submodule deinit -f upstream/vscode-office
 git rm --cached upstream/vscode-office
 # 然后手动删除 .gitmodules 中的条目与 upstream/vscode-office 目录
 ```
+

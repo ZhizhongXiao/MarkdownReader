@@ -10,7 +10,12 @@
   "license": "MIT",
   "recorded_at": "2026-09-24",
   "recorded_by_phase": "Phase 2",
-  "why_this_commit": "上游无 tag（git ls-remote --tags 为空），main 的当前 tip 即 package.json 4.2.0 的已发布版本；pin 的是 commit SHA 而不是分支，因此不跟随 main。",
+  "fact_sources": {
+    "repository_location": ".gitmodules",
+    "pinned_commit": "superproject submodule gitlink (git ls-files -s upstream/vscode-office)",
+    "metadata_and_evidence": "upstream/pin.json"
+  },
+  "why_this_commit": "pinned commit 908258dafc827ce0475fe7671d414914fbd3867b：提交日期 2026-08-16T08:01:41Z，提交信息 Merge branch 'dev'；该 commit 的 package.json 声明 version 4.2.0。上游没有用于本次选择的稳定 release tag（git ls-remote --tags 为空），因此使用明确 commit SHA pin，而不是分支名。",
   "verify": {
     "paths": [
       "package.json",
