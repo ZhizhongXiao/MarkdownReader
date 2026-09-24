@@ -70,7 +70,8 @@ function renderRequest(request) {
   const headings = collectHeadings(renderer.md, tokens, env);
   const html = renderer.md.renderer.render(tokens, renderer.md.options, env);
 
-  return { html: html, headings: headings, features: detectFeatures(html), warnings: warnings };
+  // features 由 token 语义驱动（Phase 4A），不再依赖 HTML substring。
+  return { html: html, headings: headings, features: detectFeatures(html, tokens), warnings: warnings };
 }
 
 function readStdin() {

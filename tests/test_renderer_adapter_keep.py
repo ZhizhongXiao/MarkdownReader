@@ -50,9 +50,9 @@ PENDING_CASES = {
     ),
 }
 
-# Phase 3 只接 base engine + anchor + obsidian 扩展 + katex 扩展；下面这些按计划留给
-# Phase 4，所以此处断言它们仍为 false。Phase 4 真正接入时必须显式更新本表。
-PHASE4_FEATURE_KEYS = ("mermaid", "plantuml", "checkbox", "callout", "mark")
+# Phase 4A 已接入 checkbox / mark / callout（证据在 tests/test_renderer_adapter_targets.py）；
+# 这里只保留仍然 pending 的项：Phase 4B/5 完成前它们必须恒为 false。
+PENDING_FEATURE_KEYS = ("mermaid", "plantuml")
 
 
 def _case(case_id: str) -> dict:
@@ -110,10 +110,11 @@ def test_heading_relationship_contract_holds_for_the_anchor_fixture():
     assert "围栏里的标题" not in [item["text"] for item in headings]
 
 
-def test_phase3_scope_leaves_phase4_features_off():
+def test_pending_features_stay_off_in_phase4a():
+    """Phase 4A 只迁移了五项；mermaid / plantuml 在 Phase 4B/5 之前必须仍然关闭。"""
     for case in sorted(load_cases("target"), key=lambda item: item["id"]):
         features = render(read_fixture(case))["features"]
-        for key in PHASE4_FEATURE_KEYS:
+        for key in PENDING_FEATURE_KEYS:
             assert features[key] is False, (case["id"], key)
 
 # K14 回归：TOC-safe 表示。正文 inline_html 保留链接，TOC metadata 只保留可见、非交互内容。

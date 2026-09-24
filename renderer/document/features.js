@@ -1,37 +1,55 @@
 "use strict";
 
 /**
- * 从渲染结果推断 features。
+ * 从 **token 语义** 推断 features（Phase 4A）。
  *
- * Phase 3 只报告**已经接入**的语义，不去猜未接入的能力：
- *   plantuml / mermaid / checkbox / callout / mark 恒为 false，
- *   等 Phase 4 接入对应上游（或第三方）插件后在这里补齐 marker。
+ * 不再用 html.includes(...) 判断本轮五项能力：raw HTML（<mark>、<input type=checkbox>、
+ * <div class="callout">、<a class="obsidian-wikilink">、<span class="obsidian-tag">）不得让
+ * feature 误报成「Markdown 扩展生效」。
  *
- * 已知局限：marker 检测无法区分「插件产出」与「正文里的原始 HTML」。Phase 4 接入
- * mark/checkbox 时应改为按 token 检测，避免把 <mark> 原始 HTML 误报成 mark 扩展。
+ * 仍 pending（Phase 4B/5）：mermaid、plantuml（未接插件，恒 false）。
+ * katex 目前仍用 HTML marker 判断 —— 记录为 remaining migration（Phase 4B 改 token 判断）。
  */
 
 const { emptyFeatures } = require("../protocol");
 
-const ACTIVE_MARKERS = {
-  katex: ['class="katex'],
-  wikilink: ["obsidian-wikilink"],
-  obsidian_tag: ["obsidian-tag"],
+// 上游插件产出的 token 类型 → feature
+const TOKEN_FEATURES = {
+  mark_open: "mark",
+  checkbox_input: "checkbox",
+  callout_open: "callout",
+  wikilink: "wikilink",
+  wikilink_embed: "wikilink",
+  obsidian_tag: "obsidian_tag",
 };
 
-const NOT_WIRED_KEYS = ["plantuml", "mermaid", "checkbox", "callout", "mark"];
+const PENDING_KEYS = ["plantuml", "mermaid"];
 
-function detectFeatures(html) {
-  const features = emptyFeatures();
-  for (const key of Object.keys(ACTIVE_MARKERS)) {
-    features[key] = ACTIVE_MARKERS[key].some(function (marker) {
-      return String(html).includes(marker);
-    });
+function walkTokens(tokens, visit) {
+  for (const token of tokens || []) {
+    visit(token);
+    if (token.children && token.children.length) {
+      walkTokens(token.children, visit);
+    }
   }
-  for (const key of NOT_WIRED_KEYS) {
+}
+
+function detectFeatures(html, tokens) {
+  const features = emptyFeatures();
+  for (const key of PENDING_KEYS) {
     features[key] = false;
   }
+
+  walkTokens(tokens, function (token) {
+    const key = TOKEN_FEATURES[token.type];
+    if (key) {
+      features[key] = true;
+    }
+  });
+
+  // 仍属 remaining migration：KaTeX 用 marker 判断（Phase 4B 改 token 判断）。
+  features.katex = String(html || "").includes('class="katex');
   return features;
 }
 
-module.exports = { detectFeatures: detectFeatures, NOT_WIRED_KEYS: NOT_WIRED_KEYS };
+module.exports = { detectFeatures: detectFeatures, PENDING_KEYS: PENDING_KEYS };

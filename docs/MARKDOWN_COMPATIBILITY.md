@@ -70,13 +70,13 @@
 
 | # | case | Phase 1 断言（今天必须失败） | 完成的 Phase |
 | --- | --- | --- | --- |
-| G1 | checkbox | `type="checkbox"` 恰好 2 个，字面 `[ ] 未完成事项` 消失 | Phase 4 |
-| G2 | mark | 出现 `<mark>`，字面 `==高亮文本==` 消失 | Phase 4 |
-| G3 | callout | `[!NOTE]` 与 `[!WARNING]` 两个字面 marker 都消失、两段正文都保留，且出现可识别的提示块类名（只做 NOTE 不算通过） | Phase 4 |
-| G4 | wikilink | 字面 `[[` 消失；`[[第二章]]` 与 `[[第二章\|别名显示]]` 都成为链接，可见文本分别为「第二章」「别名显示」，两个 href 均非空且 decode 后能识别目标「第二章」（不锁精确 URL 格式与 class） | Phase 4 |
-| G5 | obsidian-tag | 标签带语义（`tag` 类名或 tag 链接），不再是纯文本 | Phase 4 |
-| G6 | mermaid | `features.mermaid` 为真，且出现 `class="mermaid"` 运行时容器 | Phase 4/5 |
-| G7 | plantuml | `features.plantuml` 为真，且进入图像资源流程（出现 `<img`） | Phase 4/5 |
+| G1 | checkbox | `type="checkbox"` 恰好 2 个，字面 `[ ] 未完成事项` 消失 | **Phase 4A 已在 adapter 实现**（`markdown-it-checkbox`，见 `tests/test_renderer_adapter_targets.py`）；旧 production renderer 仍 xfail |
+| G2 | mark | 出现 `<mark>`，字面 `==高亮文本==` 消失 | **Phase 4A 已在 adapter 实现**（`markdown-it-mark`） |
+| G3 | callout | `[!NOTE]` 与 `[!WARNING]` 都消失、正文保留；已收窄到 pinned 上游输出 `class="callout"` + `data-callout="note|warning"` | **Phase 4A 已在 adapter 实现**（`markdown-it-obsidian-callouts`） |
+| G4 | wikilink | 字面 `[[` 消失；parser/alias 仍来自 pinned 上游，adapter 只把编辑器用的 `href="#"` 换成静态 fragment。可见文本「第二章」「别名显示」，两个 href 非空且 decode 后识别目标「第二章」 | **Phase 4A 已在 adapter 实现**（`renderer/extensions/obsidian_wikilink_export.js`）；document_map / `.md → .html` 仍属 Phase 4B |
+| G5 | obsidian-tag | ASCII 与 Unicode 标签（`#note`/`#项目/子项`）都成 tag；`# 标题`/URL fragment/孤立 `#` 不误报 | **Phase 4A 已在 adapter 实现**（上游 obsidian token + MarkdownReader Unicode 字符集扩展） |
+| G6 | mermaid | `features.mermaid` 为真，且出现 `class="mermaid"` 运行时容器 | **仍 pending**（Phase 4B/5）：features 恒 false，未注入 runtime |
+| G7 | plantuml | `features.plantuml` 为真，且进入图像资源流程（出现 `<img`） | **仍 pending**（Phase 4B/5）：features 恒 false，不建网络资源层 |
 
 Phase 1 **只锁产品级语义，不锁尚未 pin 住的上游 DOM**。Callout 与 Obsidian tag 先接受一个允许集合（`callout`/`admonition`/`markdown-alert`/`alert`/`note`；tag 类名或 `tag` 链接）；Phase 2 固定 vscode-office commit、Phase 3 adapter 定型之后，再补确实需要的上游 DOM contract。
 
@@ -178,3 +178,8 @@ samples/demo.html                         → 未改动，快照契约仍成立
 ## 变更记录
 
 - 2026-09-24（Phase 1）：建立迁移语料、KEEP/TARGET 两组契约、锚点关系契约与本页；Phase 0 基线记录写入 [重构路线图](REFACTOR_ROADMAP.md)。
+- 2026-09-24（Phase 4A）：新 renderer adapter 接入 **checkbox / mark / Callout / WikiLink / Obsidian tag**（G1–G5）：
+  parser/token 仍全部来自 pinned vscode-office 与上游所用插件；WikiLink 增加薄静态 href 适配（`renderer/extensions/obsidian_wikilink_export.js`）；
+  Obsidian tag 增加**最小** Unicode 字符集兼容扩展（`renderer/extensions/obsidian_tag_unicode.js`：上游 pinned 只认 ASCII）；
+  features 五项改由 **token 语义**驱动，raw HTML 不再误报；mermaid / plantuml 仍 pending。
+  证据：`tests/test_renderer_adapter_targets.py`（13 项）+ `tests/test_renderer_adapter_keep.py`（19 项）；旧 production TARGET 门禁仍 7 strict xfail。
