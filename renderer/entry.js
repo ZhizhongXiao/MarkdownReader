@@ -89,11 +89,11 @@ function readStdin() {
 
 async function main() {
   if (process.argv.slice(2).indexOf("--info") >= 0) {
-    const info = Object.assign(
-      { protocol_version: PROTOCOL_VERSION, ok: true },
-      upstreamPaths.describe(),
-    );
-    emit(serialize(info), upstreamPaths.missingSources().length > 0 ? 1 : 0);
+    // ok 反映真实健康状况：provenance 不成立或缺少上游源文件时 --info 也必须失败。
+    const described = upstreamPaths.describe();
+    const healthy = described.missing_sources.length === 0 && described.provenance_ok;
+    const info = Object.assign({ protocol_version: PROTOCOL_VERSION, ok: healthy }, described);
+    emit(serialize(info), healthy ? 0 : 1);
     return;
   }
 
