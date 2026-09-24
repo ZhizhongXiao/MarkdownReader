@@ -34,11 +34,11 @@
 | K5 | GFM 表格与列对齐 | `keep/table-alignment` |
 | K6 | 围栏代码块与语言标注 | `keep/code-fence-language` |
 | K7 | 原始 HTML 行内与块级原样保留 | `keep/raw-inline-html` |
-| K8 | 脚注（引用、脚注区块、返回链接） | `keep/footnote` + `test_renderer_links.py` |
-| K9 | KaTeX 预渲染：出现公式时得到 KaTeX HTML | `keep/math-inline-display` + `test_renderer_katex_assets.py` |
+| K8 | 脚注（引用、脚注区块、返回链接） | `keep/footnote` + `test_renderer_links.py`；**adapter 侧 Phase 4B 已覆盖**：由 MarkdownReader-owned `markdown-it-footnote@^4.0.0` 承担（pinned 上游没有实现），证据 `test_renderer_adapter_compat.py` |
+| K9 | KaTeX 预渲染：出现公式时得到 KaTeX HTML。`$…$` / `$$…$$` 属 pinned 上游 KaTeX 插件；`\(…\)` / `\[…\]` / `\begin{env}` 由 MarkdownReader math compat 解析，但 **token 类型与渲染仍属上游** | `keep/math-inline-display` + `test_renderer_katex_assets.py` + `test_renderer_adapter_compat.py` |
 | K10 | Front Matter 只作 metadata，默认不进正文 | `test_front_matter.py`、`test_conversion_edge_cases.py` + `keep` 语料不含 front matter 的保证 |
 | K11 | `fuzzyLink:false` 的既有语义：裸文件名与版本号保持文本 | `test_renderer_linkify.py` |
-| K12 | `.md` / `.markdown` → `.html` 文档关系（含 fragment/query、未入清单 warning、消息可读） | `test_renderer_links.py`、`test_converter_integration.py` |
+| K12 | `.md` / `.markdown` → `.html` 文档关系（含 fragment/query、未入清单 warning、消息可读） | `test_renderer_links.py`、`test_converter_integration.py`；**adapter 侧 Phase 4B 已覆盖**（`renderer/document/links.js`，parse 后一次转换），证据 `test_renderer_adapter_compat.py` |
 | K13 | local image standalone（data URI；失败保留原引用；`data:`、`file:`、原始 HTML 资源的既有策略） | `test_image_embedding.py`（14 项） |
 | K14 | **adapter contract（renderer → core）**：`headings` 保留顺序，并保留 `level`、`anchor`、`text`、`inline_html`、`toc_inline_html` 的语义；TOC 与 Viewer 只消费这套结果，编号识别只有一个来源。字段名与序列化形式可以迁移，但必须 producer、consumer、tests 同步改并在本文件登记 | `test_toc_heading_contract.py`（45 项）+ `test_markdown_anchor_contract.py` + Viewer NUM1/NUM2 |
 | K15 | warning 通道（可读路径、不阻断转换） | `test_renderer_links.py`、`test_conversion_edge_cases.py` |
@@ -73,7 +73,7 @@
 | G1 | checkbox | `type="checkbox"` 恰好 2 个，字面 `[ ] 未完成事项` 消失 | **Phase 4A 已在 adapter 实现**（`markdown-it-checkbox`，见 `tests/test_renderer_adapter_targets.py`）；旧 production renderer 仍 xfail |
 | G2 | mark | 出现 `<mark>`，字面 `==高亮文本==` 消失 | **Phase 4A 已在 adapter 实现**（`markdown-it-mark`） |
 | G3 | callout | `[!NOTE]` 与 `[!WARNING]` 都消失、正文保留；已收窄到 pinned 上游输出 `class="callout"` + `data-callout="note|warning"` | **Phase 4A 已在 adapter 实现**（`markdown-it-obsidian-callouts`） |
-| G4 | wikilink | 字面 `[[` 消失；parser/alias 仍来自 pinned 上游，adapter 只把编辑器用的 `href="#"` 换成静态 fragment。可见文本「第二章」「别名显示」，两个 href 非空且 decode 后识别目标「第二章」 | **Phase 4A 已在 adapter 实现**（`renderer/extensions/obsidian_wikilink_export.js`）；document_map / `.md → .html` 仍属 Phase 4B |
+| G4 | wikilink | 字面 `[[` 消失；parser/alias 仍来自 pinned 上游，adapter 只把编辑器用的 `href="#"` 换成静态 export href。可见文本「第二章」「别名显示」，两个 href 非空且 decode 后识别目标「第二章」 | **Phase 4A 已在 adapter 实现**（`renderer/extensions/obsidian_wikilink_export.js`）；**Phase 4B 已接入 document_map**：源文件同目录下唯一的 `.md` / `.markdown` 目标 → 对应 `.html`（可带 fragment），解析不出唯一目标时保留 Phase 4A 的 fragment fallback，且不新增 warning |
 | G5 | obsidian-tag | ASCII 与 Unicode 标签（`#note`/`#项目/子项`）都成 tag；`# 标题`/URL fragment/孤立 `#` 不误报 | **Phase 4A 已在 adapter 实现**（上游 obsidian token + MarkdownReader Unicode 字符集扩展） |
 | G6 | mermaid | `features.mermaid` 为真，且出现 `class="mermaid"` 运行时容器 | **仍 pending**（Phase 4C/5）：features 恒 false，未注入 runtime |
 | G7 | plantuml | `features.plantuml` 为真，且进入图像资源流程（出现 `<img`） | **仍 pending**（Phase 4C/5）：features 恒 false，不建网络资源层 |
@@ -127,6 +127,16 @@ manifest 只是索引：schema 版本、case id、分组、fixture 路径、简�
 
 语料只补“今天仅由 demo 快照隐式覆盖”的语法。本地图片、跨文档 `.md` 链接与 Front Matter 已有专门模块（K10–K13），这里不重复造语料。
 
+## 已知差异（Phase 4B 迁移审计发现）
+
+这些差异**本阶段不修改**：它们都落在所有权属于 pinned 上游的 `$` 路径，修改需要第二套 `$…$` parser（AGENTS §6 明确禁止），因此只记录、不顺手改。
+
+| # | 差异 | 旧 production（texmath） | pinned upstream | 现状 |
+| --- | --- | --- | --- | --- |
+| D1 | 行内 `$` 的空白保护 | `dollars` 规则要求 `$…$` 内容不以空白结尾，因此「价格 $100 与 $200 之间。」不是公式 | `math_inline` 只跳过转义 `$` 与空的 `$$`，同一句会被配成公式 | 记录，不修；行为由 `test_renderer_adapter_compat.py::test_a_dollar_pair_across_prose_is_a_recorded_upstream_difference` 锁定，决策留待后续阶段 |
+
+KEEP 契约未受影响：`keep/plain-text-no-math` 用的是单个未配对 `$` 与转义 `\$`，adapter 上仍然不产生公式（该 case 由 `test_renderer_adapter_keep.py` 覆盖）。
+
 ## AGENTS §25 必测项覆盖映射
 
 | 要求 | 证据 |
@@ -134,6 +144,8 @@ manifest 只是索引：schema 版本、case id、分组、fixture 路径、简�
 | Markdown 基础语法 | keep 语料（K2–K7） |
 | checkbox / mark / Callout / WikiLink | TARGET G1–G4（xfail，Phase 4） |
 | footnote | K8 |
+| footnote / 额外数学分隔符 / 文档链接（adapter 侧） | Phase 4B：`tests/test_renderer_adapter_compat.py`（35 项） |
+| KEEP 语料在 adapter 上的对照 | `tests/test_renderer_adapter_keep.py`（20 项，15/15 KEEP case 全覆盖，footnote 于 Phase 4B 补齐） |
 | KaTeX | K9 |
 | Mermaid / PlantUML | TARGET G6–G7 |
 | local image / remote image | K13（remote 同时登记为 T1） |
@@ -183,3 +195,28 @@ samples/demo.html                         → 未改动，快照契约仍成立
   Obsidian tag 增加**最小** Unicode 字符集兼容扩展（`renderer/extensions/obsidian_tag_unicode.js`：上游 pinned 只认 ASCII）；
   features 五项改由 **token 语义**驱动，raw HTML 不再误报；mermaid / plantuml 仍 pending。
   证据：`tests/test_renderer_adapter_targets.py`（13 项）+ `tests/test_renderer_adapter_keep.py`（19 项）；旧 production TARGET 门禁仍 7 strict xfail。
+- 2026-09-24（Phase 4B）：新 renderer adapter 接入 **footnote / 额外数学分隔符 / 文档链接**：
+  * footnote 由 MarkdownReader-owned `markdown-it-footnote@^4.0.0` 承担（pinned 上游没有实现）：KEEP 语料补齐到 15/15，`test_renderer_adapter_keep.py` 的 `PENDING_CASES` 清空；
+  * `\(…\)`、`\[…\]`、`\begin{env}…\end{env}` 由 `renderer/extensions/math_compat.js` 解析，**只 push 上游的 `math_inline` / `math_block` token**，渲染仍由 pinned 上游 KaTeX renderer 完成。**不引入 `markdown-it-texmath`**：它按硬编码规则名注册并覆盖同一个 `renderer.rules` 键，会连带接管 `$` 的渲染（所有权反转），审计记录见下；
+  * `.md` / `.markdown` 文档链接与 WikiLink 目标解析进入 document 层 `renderer/document/links.js`（parse 后、render 前只跑一次，heading 内的链接 warning 因此不再重复），并删除 Phase 3 的 `context.document_map` deferred warning；
+  * `features.katex` 改为 token 驱动（真实数学 token **且** 确实产生 KaTeX markup），raw HTML lookalike 不再误报；
+  * 语法与旧 renderer 的差异由 characterization 决定并锁定：`align*`、大写 env、不配对 env、段中 `\[`、跨行 `\(`、4 空格缩进都不构成公式；
+  * 新发现的上游差异记入「已知差异」D1（不修，需 §6 决策）。
+  证据：`tests/test_renderer_adapter_compat.py`（35 项）+ `tests/test_renderer_adapter_keep.py`（20 项）；全套 `uv run pytest -q` → `254 passed, 7 xfailed`；renderer `npm test` → 6 passed；旧 production TARGET 门禁仍 7 strict xfail。
+
+## texmath 审计记录（Phase 4B，为什么不复用 `markdown-it-texmath`）
+
+`markdown-it-texmath@1.0.0` 的注册方式是固定的：
+
+```js
+md.inline.ruler.before('escape', rule.name, texmath.inline(rule));
+md.renderer.rules[rule.name] = ...      // rule.name ∈ {math_inline, math_inline_double, math_block, math_block_eqno}
+md.block.ruler.before('fence', rule.name, texmath.block(rule));
+```
+
+而 pinned 上游的 `markdown-it-katex.js` 用的正是同一组名字（inline `math_inline`、block `math_block`、`renderer.rules.math_inline` / `math_block`）与同一组 token 类型。因此只要把 texmath 装进同一个实例：
+
+- 后注册的 texmath 会**覆盖** `renderer.rules.math_inline` / `math_block`，`$…$`（上游 token 化的结果）会被 texmath 的模板（`<eq>` / `<section><eqn>`）渲染 → `$` 的所有权被反转（AGENTS §2/§6）；
+- 即便只启用 `brackets` + `beg_end` 两种 delimiter，渲染键的冲突依然存在；若只加载 texmath 的解析规则而不用它的 renderer，就等于在项目里复制一份上游插件。
+
+结论：最薄的合规做法是 MarkdownReader 自己解析上游缺失的 delimiter，并复用**上游的 token 类型与 renderer**（即 `renderer/extensions/math_compat.js`）。

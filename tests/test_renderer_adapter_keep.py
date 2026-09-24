@@ -1,10 +1,10 @@
-"""新 renderer 与 Phase 1 KEEP 语料的语义对照（Phase 3）。
+"""新 renderer 与 Phase 1 KEEP 语料的语义对照（Phase 3 起，Phase 4B 全部覆盖）。
 
 不要求新旧 HTML 字节一致，只按语义断言（期望表直接复用 Phase 1 的 KEEP_EXPECTATIONS）。
 每个 KEEP case 必须被显式分类：
 
   * ADAPTER_CASES —— 新 adapter 已负责，逐条对照；
-  * PENDING_CASES  —— Phase 3 尚未迁移，写明理由；不伪造通过、不改 Phase 1 契约。
+  * PENDING_CASES  —— 尚未迁移，写明理由；不伪造通过、不改 Phase 1 契约。
 
 分类表由测试锁定：出现未分类的 case 即失败，避免静默缩小对照范围。
 Phase 1 的 7 个 TARGET xfail 属于旧 renderer 的门禁，本阶段不改动它们。
@@ -39,16 +39,15 @@ ADAPTER_CASES = (
     "list-nested",
     "raw-inline-html",
     "link-and-autolink",
+    "footnote",
     "math-inline-display",
     "plain-text-no-math",
 )
 
-PENDING_CASES = {
-    "footnote": (
-        "上游 pinned commit 没有 footnote 实现；作为 MarkdownReader-owned extension"
-        " 在 Phase 4 迁移，Phase 1 的 KEEP 契约保持不变。"
-    ),
-}
+# Phase 4B 起所有 15 个 KEEP case 都由新 adapter 覆盖：footnote 由 MarkdownReader-owned 的
+# markdown-it-footnote 承担（pinned 上游没有实现）。此表必须保持为空，任何新增未迁移项都要
+# 写明理由，而不是让对照范围悄悄变小。
+PENDING_CASES: dict[str, str] = {}
 
 # Phase 4A 已接入 checkbox / mark / callout（证据在 tests/test_renderer_adapter_targets.py）；
 # 这里只保留仍然 pending 的项：Phase 4C/5 完成前它们必须恒为 false。

@@ -49,7 +49,7 @@ skip 并说明原因，不会静默通过。自动化测试不覆盖 GUI 运行�
 core/                 转换计划、front matter、TOC、渲染调度、索引生成
 gui/                  pywebview 界面与静态资源（gui/assets/）
 node_renderer/        当前生产 renderer（markdown-it、footnote、texmath、KaTeX）
-renderer/             新 renderer adapter（Phase 3，与 node_renderer 并存，尚未接入生产）
+renderer/             新 renderer adapter（Phase 3–4B，与 node_renderer 并存，尚未接入生产）
 templates/default/    共享阅读器外壳
 templates/Modern|Office|Vscode/   视觉主题（继承 default）
 templates/index/      批量索引模板

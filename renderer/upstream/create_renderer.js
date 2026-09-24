@@ -10,6 +10,7 @@
  *   upstream: frontMatterExport → obsidian → obsidianCallouts → mark → checkbox → anchor
  *             → toc → katex → plantuml → mermaid
  *   adapter :               obsidian → obsidianCallouts → mark → checkbox → anchor → katex
+ *                           (+ math compat) → footnote → MarkdownReader 扩展
  * 去掉的理由：front matter 属性面板（AGENTS §6 不启用）、upstream TOC exporter（MarkdownReader
  * 自建 TOC）、plantuml/mermaid（Phase 4C/5）、highlight.js（后续决策）。它们只影响各自产物的
  * 存在与否，不改变其余插件的相对顺序与 token 语义。
@@ -21,8 +22,10 @@
 const MarkdownIt = require("markdown-it");
 const markdownItAnchor = require("markdown-it-anchor");
 const markdownItCheckbox = require("markdown-it-checkbox");
+const markdownItFootnote = require("markdown-it-footnote");
 const markdownItMark = require("markdown-it-mark");
 const calloutsModule = require("markdown-it-obsidian-callouts");
+const { markdownItMathCompat } = require("../extensions/math_compat");
 const { markdownItObsidianTagUnicode } = require("../extensions/obsidian_tag_unicode");
 const { markdownItWikilinkStaticExport } = require("../extensions/obsidian_wikilink_export");
 const { missingSources } = require("./paths");
@@ -68,9 +71,15 @@ function createRenderer(config) {
   const mathEnabled = options.math !== false;
   if (mathEnabled) {
     md.use(upstreamKatex);
+    // \(…\) / \[…\] / begin-end 是 pinned 上游没有的 delimiter：只补解析，并 push 上游的
+    // math_inline / math_block token 类型，渲染仍由上游 KaTeX renderer 完成。
+    // options.math=false 时两者一起关闭，避免出现无 renderer 的 math token。
+    md.use(markdownItMathCompat);
   }
 
   // 2) MarkdownReader 薄兼容扩展：必须在上游对应插件之后注册（依赖其 token 类型/rules）。
+  //    footnote 是 MarkdownReader-owned：pinned 上游没有 footnote 实现。
+  md.use(markdownItFootnote);
   md.use(markdownItObsidianTagUnicode);
   md.use(markdownItWikilinkStaticExport);
 

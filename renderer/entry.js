@@ -23,10 +23,8 @@ const {
 const { createRenderer } = require("./upstream/create_renderer");
 const { collectHeadings, headingAnchorFallback } = require("./document/headings");
 const { detectFeatures } = require("./document/features");
+const { transformDocumentLinks } = require("./document/links");
 const upstreamPaths = require("./upstream/paths");
-
-// 已知但尚未由新 renderer 处理的 context 字段：产出 warning，而不是静默忽略。
-const DEFERRED_CONTEXT_KEYS = ["document_map"];
 
 function emit(text, code) {
   process.stdout.write(text);
@@ -40,38 +38,31 @@ function fail(code, message, detail) {
   emit(serialize(errorEnvelope(code, message, detail)), 1);
 }
 
-function hasMeaningfulValue(value) {
-  if (value === undefined || value === null) {
-    return false;
-  }
-  if (typeof value !== "object" || Array.isArray(value)) {
-    return true;
-  }
-  return Object.keys(value).length > 0;
-}
-
 function renderRequest(request) {
   const warnings = [];
   const renderer = createRenderer({ options: request.options });
   // document 层职责（K14 的 id 非空保证）由 entry 组合，upstream/ 只负责上游与基础配置。
   renderer.md.use(headingAnchorFallback);
 
-  for (const key of DEFERRED_CONTEXT_KEYS) {
-    if (hasMeaningfulValue(request.context[key])) {
-      warnings.push("context." + key + " 尚未由新 renderer 处理（Phase 4）：已忽略。");
-    }
-  }
   if (!renderer.mathEnabled) {
     warnings.push("options.math=false：公式不会被渲染。");
   }
 
   const env = {};
   const tokens = renderer.md.parse(request.markdown, env);
+  // document 层（Phase 4B）：parse 之后、render 之前只跑一次 —— `.md → .html` 重写与
+  // WikiLink 目标解析都写进 token，避免 heading metadata + 正文两次 inline 渲染造成重复 warning。
+  const documentLinks = transformDocumentLinks(tokens, request.context);
   const headings = collectHeadings(renderer.md, tokens, env);
   const html = renderer.md.renderer.render(tokens, renderer.md.options, env);
 
-  // features 由 token 语义驱动（Phase 4A），不再依赖 HTML substring。
-  return { html: html, headings: headings, features: detectFeatures(html, tokens), warnings: warnings };
+  // features 由 token 语义驱动（Phase 4A/4B），不再依赖 HTML substring。
+  return {
+    html: html,
+    headings: headings,
+    features: detectFeatures(html, tokens),
+    warnings: warnings.concat(documentLinks.warnings),
+  };
 }
 
 function readStdin() {
