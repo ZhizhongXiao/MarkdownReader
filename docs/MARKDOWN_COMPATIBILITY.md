@@ -171,9 +171,9 @@ KEEP 契约未受影响：`keep/plain-text-no-math` 用的是单个未配对 `$`
 
 比较范围之外：local image data URI 与 KaTeX CSS/fonts 载荷（**Phase 5A 已在 adapter 侧完成**，但通道形状与 old 的 `assets.css` 不同，仍不做 equality）、remote image 与抓取、Mermaid runtime、PlantUML 图像、standalone 资源闭包（属 5B/5C）。
 
-当前数字（按套件）：`test_renderer_semantic_parity.py` 12、`test_renderer_adapter_keep.py` 20、`test_renderer_adapter_targets.py` 14（4A 条目里的 13 项是那次提交当时的计数）、`test_renderer_adapter_compat.py` 35、`test_renderer_adapter_diagrams.py` 27、`test_renderer_adapter_protocol.py` 11、`test_renderer_adapter_resources.py` 26（Phase 5A 新增）、`test_renderer_adapter_mermaid_runtime.py` 18 与 `test_renderer_build_assets.py` 3（Phase 5B 新增）。
+当前数字（按套件）：`test_renderer_semantic_parity.py` 12、`test_renderer_adapter_keep.py` 20、`test_renderer_adapter_targets.py` 14（4A 条目里的 13 项是那次提交当时的计数）、`test_renderer_adapter_compat.py` 35、`test_renderer_adapter_diagrams.py` 27、`test_renderer_adapter_protocol.py` 11、`test_renderer_adapter_resources.py` 26（Phase 5A 新增）、`test_renderer_adapter_mermaid_runtime.py` 19 与 `test_renderer_build_assets.py` 3（Phase 5B 新增，含 closeout 的逐图隔离契约）。
 
-全套：`uv run pytest -q` → 340 passed, 7 xfailed；renderer `npm test` → 25 passed；浏览器验收（opt-in）`pwsh tools/run_browser_acceptance.ps1` → 4 passed（默认 pytest 不含它）；`uv run pytest -q --runxfail tests/test_markdown_compat_target.py` → `7 failed, 2 passed`（TARGET 门禁仍是 strict xfail）；`uv run ruff check .` → All checks passed。
+全套：`uv run pytest -q` → 341 passed, 7 xfailed；renderer `npm test` → 32 passed；浏览器验收（opt-in）`pwsh tools/run_browser_acceptance.ps1` → 5 passed（默认 pytest 不含它）；`uv run pytest -q --runxfail tests/test_markdown_compat_target.py` → `7 failed, 2 passed`（TARGET 门禁仍是 strict xfail）；`uv run ruff check .` → All checks passed。
 
 ## AGENTS §25 必测项覆盖映射
 
@@ -275,13 +275,19 @@ samples/demo.html                         → 未改动，快照契约仍成立
 - 2026-09-24（Phase 5B）：Mermaid runtime 落地（**按需交付 + vendored + 可实证离线**）：
   * **vendored 正式 browser 构建**：`renderer/vendor/mermaid/11.15.0/`（`mermaid.min.js` 3,312,967 B + MIT LICENSE + metadata.json），与 npm 包内 `dist/mermaid.min.js` **逐字节相同**（SHA-256 `70137e77…65de`，tarball sha1 `b485c13e…`）。选 11.15.0 是因为 pinned 上游声明 `"mermaid": "^11.15.0"`。
   * **唯一联网入口**是 `tools/update_mermaid_runtime.ps1`（`npm pack` 精确版本 → 只提取产物与许可证 → 记录 SHA → 写 metadata）；普通 `npm run build` 只校验、不下载、不更新。
-  * **v2 additive 通道**：`resources.scripts = [{ id, version, script, boot }]`，仍「必在」；`boot` 是 adapter-owned 的激活 wiring（`mermaid.initialize({ startOnLoad: false })` + 对 `div.mermaid` 逐个 `run`，失败不留未捕获 rejection）。协议版本仍为 2。
+  * **v2 additive 通道**：`resources.scripts = [{ id, version, script, boot }]`，仍「必在」；`boot` 是 adapter-owned 的激活 wiring（`initialize({ startOnLoad: false })` 一次 + **每个容器各自** `run({ nodes: [node] })` 且各自 catch，同步抛也不中断 `forEach`）—— 因此单个图失败不阻断其它图、也不留未捕获 rejection。协议版本仍为 2。
   * **按需纪律（AGENTS §9）**：识别复用 4C 的唯一 predicate（`isMermaidFence`），因此 `features.mermaid` 与是否交付 runtime **逐样本一致**（含隐式首行 `gantt` / `sequenceDiagram` / `graph …`、`js` 语言围栏、空 fence、raw HTML 容器、PlantUML 文档）；普通 Markdown 的 envelope 与 HTML 都不带 runtime。
-  * **构建改为事务式发布**（回应用户对 5A 的两条记录）：`renderer.cjs` / `katex/` / `mermaid/` 全部先写进 `dist/.staging/` 并复验（存在性 + staging 内 runtime 的 SHA-256 == vendor），只有全部成功才替换 dist 里这三个受管名字；**任何失败都发生在替换之前**，不会留下「看起来可用、实际不同步」的 runtime set，也不再残留旧版本字体文件。vendor 校验同样前置（metadata/产物/许可证/字节数任一不符即拒绝构建）。
+  * **构建改为 staged + verified + rollback-protected replacement**（回应用户对 5A 的两条记录）：`renderer.cjs` / `katex/` / `mermaid/` 全部先写进 `dist/.staging/` 并复验（存在性 + staging 内 runtime 的 SHA-256 == vendor），staging 无论成败都会清理；安装前把旧 assets 移到 `dist/.backup/`，全部成功即删除，**中途失败则回滚**到旧 managed set（rollback 自身失败时保留 `.backup/` 并报出路径，不假装恢复成功）。因此「构建/校验失败」发生在安装之前，正式 dist 完全不变，也不会残留旧版本字体文件。vendor 校验同样前置（metadata/产物/许可证/字节数任一不符即拒绝构建）。三个独立路径不构成文件系统级原子事务。
   * **运行期再校验一次** SHA-256；runtime 缺失或被改动时**降级而非失败**（warning + 不交付，容器与语义层照常）。
   * **浏览器验收（opt-in）**：`tests/browser`（playwright，`tools/run_browser_acceptance.ps1`，默认用系统 Edge 不下载浏览器）+ 人工 QA。它用真实 adapter 渲染 → 自装配页面 → 拦截所有非 `file://` 请求 → 断言容器内真的生成 `<svg>`，并单独锁定 D2 不变式（DOM 文本 == 作者原文）。默认 pytest 仍不依赖浏览器。
   * 明说未做的事：HTTP 抓取、remote image、PlantUML 抓图、Theme Registry、standalone 终检、production renderer 切换（仍属 5C/5D 与后续阶段）。
-  证据：`tests/test_renderer_adapter_mermaid_runtime.py`（18 项，新增）+ `tests/test_renderer_build_assets.py`（3 项，新增，篡改/缺件必须拒绝构建且不触碰 dist）+ `renderer/test/build_assets.test.js`（node:test 9 项）；全套 `340 passed, 7 xfailed`；renderer `npm test` 25 passed；浏览器验收 4 passed（Edge、零网络请求、三类图表生成 SVG）；bundle 1,118,095 → 1,122,230 B（runtime 不进 bundle）。
+  证据：`tests/test_renderer_adapter_mermaid_runtime.py`（19 项，新增）+ `tests/test_renderer_build_assets.py`（3 项，新增，篡改/缺件必须拒绝构建且不触碰 dist）+ `renderer/test/build_assets.test.js`（node:test 16 项）；全套 `340 passed, 7 xfailed`；renderer `npm test` 25 passed；浏览器验收 4 passed（Edge、零网络请求、三类图表生成 SVG）；bundle 1,118,095 → 1,122,230 B（runtime 不进 bundle）。
+
+- 2026-09-24（Phase 5B reliability closeout）：修两个「声明与实现不一致」的可靠性问题，**不新增功能、不进入 5C**：
+  * **逐图故障隔离**（`renderer/resources/mermaid_runtime.js`）：`boot` 由「一次 `run` 全部节点」改为 `initialize` 一次 + `Array.from(querySelectorAll("div.mermaid"))` + **每节点** `run({ nodes: [node] })` + 各自 catch（同步抛也不中断 `forEach`）；`[node]` 形态在 mermaid 11.15.0 上先做了真实浏览器 characterization（无需特殊处理）。浏览器反证：**invalid 图在前、valid 图在后**的同页文档，后者仍生成 `<svg>`，且无未捕获 rejection、无 `pageerror`、网络请求仍为 0；坏图的最终 DOM 形态刻意不冻结。
+  * **不再声称不存在的原子性**：`dist/.staging` 生命周期改为 `withStaging`（`try/finally`：esbuild / KaTeX 复制 / Mermaid 复制 / staging 复验任一步失败都清理 staging），安装改为 `publishManagedAssets`（旧 assets → `dist/.backup/` → 安装 staged assets → 成功清理 / 失败回滚，rollback 未完成则保留 `.backup/` 并报出路径）。代码注释、日志与文档统一改用 **staged + verified + rollback-protected replacement**。
+  * **确定性反证**（node 层注入 fs-ops adapter，不依赖文件锁 / 磁盘空间 / 权限）：backup 移动失败、首次安装失败、部分安装后失败都恢复完整旧 set；rollback 自身失败时保留 `.backup/`；`withStaging` 成功与失败都不留 `.staging`；无关文件不受影响；stale 旧文件仍消失。
+  证据：renderer `npm test` 25 → 32 passed；浏览器验收 4 → 5 passed（新增 mixed case）；全套 `340 → 341 passed, 7 xfailed`；`--runxfail` 仍 `7 failed, 2 passed`。
 
 ## texmath 审计记录（Phase 4B，为什么不复用 `markdown-it-texmath`）
 

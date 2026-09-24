@@ -105,11 +105,14 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
 - `renderer/vendor/mermaid/<version>/` 是 vendored 的正式 browser 构建（产物 + MIT LICENSE + metadata.json，含 SHA-256）。
   `npm run build` 只**校验**并复制到 `dist/mermaid/`，不联网、不更新；升级只走
   `pwsh tools/update_mermaid_runtime.ps1 -Version <version>`（唯一联网入口，见 `renderer/vendor/mermaid/README.md`）。
-- 资产发布是**事务式**的（Phase 5B）：`renderer.cjs` / `katex/` / `mermaid/` 先写进 `dist/.staging/` 并复验
-  （含 vendored runtime 的 SHA-256），全部成功才替换 dist 里这三个受管名字；任何失败都发生在替换之前，
-  因此不会留下「看起来可用、实际不同步」的 runtime set，也不会残留旧版本字体。
+- 资产发布是 **staged + verified + rollback-protected replacement**（Phase 5B）：`renderer.cjs` / `katex/` / `mermaid/`
+  先写进 `dist/.staging/` 并复验（含 vendored runtime 的 SHA-256），staging 无论成败都会清理；安装前把旧资产移到
+  `dist/.backup/`，全部成功即清理，**中途失败则回滚**到旧 managed set（rollback 自身失败时保留 `.backup/` 并明确报出路径）。
+  因此：**构建/校验失败发生在安装之前**，正式 dist 完全不变；**安装中途失败**由 rollback contract 恢复旧 set。
+  三个独立路径**不构成**文件系统级原子事务，这里也不这么声称。
 - 浏览器验收（Phase 5B，opt-in）：`tests/browser` 用真实 adapter 渲染 → 自装配页面 → 拦截所有非 `file://` 请求
-  → 断言 `.mermaid` 容器内真的生成 `<svg>`，并锁定 D2 不变式（DOM 文本 == 作者原文）。默认 pytest **不依赖浏览器**。
+  → 断言 `.mermaid` 容器内真的生成 `<svg>`，并锁定 D2 不变式（DOM 文本 == 作者原文）；另有 mixed 用例证明
+  「invalid 图在前、valid 图在后」时后者仍渲染成功且无未捕获错误。默认 pytest **不依赖浏览器**。
 - 协议：v2（Phase 5A）——
   `{ "protocol_version": 2, "ok": true, "html", "headings", "features", "warnings", "resources": { "items": [], "styles": [] } }`；
   `resources` 是**必在**字段（没有资源时也是空结构）：`items` 是资源 manifest，`styles` 是交给 assembler 注入的 CSS；

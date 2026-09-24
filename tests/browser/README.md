@@ -21,8 +21,16 @@ Playwright 打开 file:// 页面
 断言 .mermaid 容器里真的生成 <svg>
 ```
 
-因此它同时覆盖三件事：runtime 真的能跑、离线真的成立（零网络请求）、
-Phase 4C 的 escape 不变式（DOM 文本 == 作者原文）在真实浏览器里成立。
+## 用例
+
+- **round-trip**：容器 DOM 文本 == 作者原文（Phase 4C 的 D2 不变式）。
+- **三类图表**（flowchart / sequenceDiagram / gantt）：离线渲染出 `<svg>`。
+- **mixed**：`invalid` 图在**前**、`valid` 图在**后** → 后者仍生成 `<svg>`，且没有 `unhandledrejection`、
+  没有 `pageerror`、网络请求仍为 0。这是 `boot` 里「**每个容器各自** `run({ nodes: [node] })`」的实证：
+  单个图失败不阻断同页面其它图。坏图最终呈现成什么 DOM 刻意**不冻结**（那是 runtime 自己的错误输出）。
+
+因此它同时覆盖四件事：runtime 真的能跑、离线真的成立（零网络请求）、逐图故障隔离成立、
+Phase 4C 的 escape 不变式在真实浏览器里成立。
 
 ## 浏览器从哪来
 

@@ -15,9 +15,11 @@
  * provenance gate：构建前必须验证 pin manifest == authoritative gitlink == upstream checkout HEAD
  * 三者一致；否则拒绝构建（不写 dist、不谎报来源）。检查只读，不修改任何 Git 状态。
  *
- * 资产发布是事务式的（Phase 5B）：renderer.cjs、katex/、mermaid/ 全部先写进 dist/.staging 并复验
- * （含 vendored Mermaid runtime 的 SHA-256），只有全部成功才替换 dist 里已受管的同名内容。
- * 任何失败都发生在替换之前，因此不会留下「看起来可用、实际不同步」的 runtime set。
+ * 资产发布是 **staged + verified + rollback-protected replacement**：renderer.cjs、katex/、mermaid/ 先写进
+ * dist/.staging 并复验（含 vendored Mermaid runtime 的 SHA-256），只有全部成功才安装到 dist 里已受管的
+ * 三个名字上；安装阶段会先把旧资产移到 dist/.backup，失败则回滚。
+ * 因此：构建/校验失败**发生在安装之前**，正式 dist 完全不变；安装中途失败由 rollback contract 保证旧 set 恢复。
+ * 这里不声称三个独立路径能构成文件系统级原子事务（该保证不存在）。
  * vendored Mermaid runtime 的来源校验同样是 gate：metadata 与产物不一致就拒绝构建（只验证、不下载）。
  *
  * 参数：
@@ -36,8 +38,29 @@ const BUNDLE_NAME = "renderer.cjs";
 const KATEX_DIRECTORY = "katex";
 const MERMAID_DIRECTORY = "mermaid";
 const STAGING_DIRECTORY = ".staging";
+const BACKUP_DIRECTORY = ".backup";
 // dist 里由 build 全权管理的名字：替换时只清这些，不碰别的东西。
 const MANAGED_ASSETS = [BUNDLE_NAME, KATEX_DIRECTORY, MERMAID_DIRECTORY];
+
+// 小型 fs-ops adapter：默认实现就是真实文件系统；测试可以注入失败，从而**确定性**验证 rollback，
+// 而不是靠文件锁 / 磁盘空间 / 权限碰运气。
+const DEFAULT_OPS = {
+  exists: function (target) {
+    return fs.existsSync(target);
+  },
+  readdir: function (target) {
+    return fs.readdirSync(target);
+  },
+  mkdir: function (target) {
+    fs.mkdirSync(target, { recursive: true });
+  },
+  rm: function (target) {
+    fs.rmSync(target, { recursive: true, force: true });
+  },
+  rename: function (from, to) {
+    fs.renameSync(from, to);
+  },
+};
 
 function parseArgs(argv) {
   const options = { checkOnly: false, repoRoot: "" };
@@ -149,12 +172,33 @@ function copyMermaidRuntime(vendor, targetDirectory) {
   fs.copyFileSync(vendor.licensePath, path.join(targetDirectory, "LICENSE"));
 }
 
-// 事务式资产发布：全部产物先写进 dist/.staging 并复验，只有全部成功才替换正式内容。
-function prepareStaging(distDirectory) {
+function cleanupDirectory(target, ops) {
+  (ops || DEFAULT_OPS).rm(target);
+}
+
+// 资产暂存目录：先清空再重建，避免上一次构建的残留混进本次产物。
+function prepareStaging(distDirectory, ops) {
+  const adapter = ops || DEFAULT_OPS;
   const staging = path.join(distDirectory, STAGING_DIRECTORY);
-  fs.rmSync(staging, { recursive: true, force: true });
-  fs.mkdirSync(staging, { recursive: true });
+  adapter.rm(staging);
+  adapter.mkdir(staging);
   return staging;
+}
+
+/**
+ * staging 生命周期：不管 work 成功还是抛错，都不留下 dist/.staging。
+ *
+ * 写入阶段的任何失败（esbuild / KaTeX 复制 / Mermaid 复制 / staging 复验）都发生在这里，
+ * 而正式安装尚未开始，因此正式 dist 完全不变 —— 这是「校验失败不碰 dist」的保证来源。
+ */
+async function withStaging(distDirectory, work, ops) {
+  const adapter = ops || DEFAULT_OPS;
+  const staging = prepareStaging(distDirectory, adapter);
+  try {
+    return await work(staging);
+  } finally {
+    cleanupDirectory(staging, adapter);
+  }
 }
 
 function verifyStaging(staging, vendor) {
@@ -180,15 +224,76 @@ function verifyStaging(staging, vendor) {
   return problems;
 }
 
-// 只清 build 自己管理的名字，然后逐个搬进 dist；staging 目录本身最后删除。
-function replaceManagedAssets(distDirectory, staging) {
-  for (const name of MANAGED_ASSETS) {
-    fs.rmSync(path.join(distDirectory, name), { recursive: true, force: true });
+/**
+ * staged + verified + rollback-protected replacement。
+ *
+ *   1) 现有 managed assets 移到 dist/.backup/
+ *   2) staging 里的 managed assets 安装到 dist/
+ *   3) 成功 → 删除 .backup 与 .staging
+ *   4) 第 1/2 步失败 → 删掉已安装的新 managed assets → 从 .backup 恢复旧 assets
+ *                      → 清理 .staging/.backup → 抛错（build FAIL）
+ *   5) rollback 自身失败 → **保留 .backup**（不假装恢复成功），错误信息给出路径
+ *
+ * 只碰 MANAGED_ASSETS 三个名字；其它 dist/* 文件不动；旧版本 stale 文件随目录替换消失。
+ * 三个独立路径不构成文件系统级原子事务，这里也不这么声称。
+ */
+function publishManagedAssets(distDirectory, staging, ops) {
+  const adapter = ops || DEFAULT_OPS;
+  const backup = path.join(distDirectory, BACKUP_DIRECTORY);
+  const moved = [];
+  const installed = [];
+
+  adapter.rm(backup);
+  adapter.mkdir(backup);
+
+  try {
+    for (const name of MANAGED_ASSETS) {
+      const target = path.join(distDirectory, name);
+      if (adapter.exists(target)) {
+        adapter.rename(target, path.join(backup, name));
+        moved.push(name);
+      }
+    }
+    for (const name of adapter.readdir(staging)) {
+      adapter.rename(path.join(staging, name), path.join(distDirectory, name));
+      installed.push(name);
+    }
+  } catch (error) {
+    const rollbackProblems = [];
+    for (const name of installed) {
+      try {
+        adapter.rm(path.join(distDirectory, name));
+      } catch (rollbackError) {
+        rollbackProblems.push(name + "：" + rollbackError.message);
+      }
+    }
+    for (const name of moved) {
+      const target = path.join(distDirectory, name);
+      try {
+        // 若新资产没能删掉（上一步失败），先尽力清掉它，再放回旧资产。
+        if (adapter.exists(target)) {
+          adapter.rm(target);
+        }
+        adapter.rename(path.join(backup, name), target);
+      } catch (rollbackError) {
+        rollbackProblems.push(name + "：" + rollbackError.message);
+      }
+    }
+    cleanupDirectory(staging, adapter);
+    if (rollbackProblems.length > 0) {
+      throw new Error(
+        "replacement 失败且 rollback 未完成：" + error.message +
+          "；已保留 " + path.relative(distDirectory, backup) +
+          " 供人工恢复（" + rollbackProblems.join("；") + "）",
+      );
+    }
+    cleanupDirectory(backup, adapter);
+    throw new Error("replacement 失败，已恢复旧 managed set：" + error.message);
   }
-  for (const name of fs.readdirSync(staging)) {
-    fs.renameSync(path.join(staging, name), path.join(distDirectory, name));
-  }
-  fs.rmSync(staging, { recursive: true, force: true });
+
+  cleanupDirectory(backup, adapter);
+  cleanupDirectory(staging, adapter);
+  return { installed: installed, replaced: moved };
 }
 
 function reportVendorFailure(vendor) {
@@ -273,54 +378,66 @@ async function main() {
   }
 
   const distDirectory = path.dirname(outFile);
-  const staging = prepareStaging(distDirectory);
-  const stagedBundle = path.join(staging, BUNDLE_NAME);
+  let katexAssets = null;
+  let build = null;
+  try {
+    build = await withStaging(distDirectory, async function (staging) {
+      // esbuild 只在真正打包时加载：--check-provenance 不需要 node_modules。
+      const esbuild = require("esbuild");
+      const result = await esbuild.build({
+        entryPoints: [path.join(RENDERER_ROOT, "entry.js")],
+        outfile: path.join(staging, BUNDLE_NAME),
+        bundle: true,
+        platform: "node",
+        format: "cjs",
+        target: ["node18"],
+        absWorkingDir: RENDERER_ROOT,
+        nodePaths: [path.join(RENDERER_ROOT, "node_modules")],
+        logLevel: "warning",
+        metafile: true,
+        banner: {
+          js: "// 由 renderer/build/build.js 生成，请勿手工编辑。重建：cd renderer && npm run build",
+        },
+      });
 
-  // esbuild 只在真正打包时加载：--check-provenance 不需要 node_modules。
-  const esbuild = require("esbuild");
-  const result = await esbuild.build({
-    entryPoints: [path.join(RENDERER_ROOT, "entry.js")],
-    outfile: stagedBundle,
-    bundle: true,
-    platform: "node",
-    format: "cjs",
-    target: ["node18"],
-    absWorkingDir: RENDERER_ROOT,
-    nodePaths: [path.join(RENDERER_ROOT, "node_modules")],
-    logLevel: "warning",
-    metafile: true,
-    banner: {
-      js: "// 由 renderer/build/build.js 生成，请勿手工编辑。重建：cd renderer && npm run build",
-    },
-  });
+      // companion runtime set：KaTeX 样式与字体（CSS 驱动）+ vendored Mermaid runtime。
+      katexAssets = copyKatexAssets(katexSource, path.join(staging, KATEX_DIRECTORY));
+      copyMermaidRuntime(vendor, path.join(staging, MERMAID_DIRECTORY));
 
-  // companion runtime set：KaTeX 样式与字体（CSS 驱动）+ vendored Mermaid runtime。
-  const katexAssets = copyKatexAssets(katexSource, path.join(staging, KATEX_DIRECTORY));
-  copyMermaidRuntime(vendor, path.join(staging, MERMAID_DIRECTORY));
+      const stagedProblems = verifyStaging(staging, vendor);
+      if (stagedProblems.length > 0) {
+        throw new Error(
+          "staging 校验失败：\n" +
+            stagedProblems.map(function (item) {
+              return "  - " + item;
+            }).join("\n"),
+        );
+      }
 
-  const stagedProblems = verifyStaging(staging, vendor);
-  if (stagedProblems.length > 0) {
+      publishManagedAssets(distDirectory, staging);
+      return result;
+    });
+  } catch (error) {
     process.stderr.write(
-      "[renderer] 拒绝替换 dist：staging 校验失败\n" +
-        stagedProblems.map(function (item) {
-          return "  - " + item;
-        }).join("\n") +
-        "\n  dist 未被修改（旧 runtime set 保持可用）。\n",
+      "[renderer] 拒绝发布：资产构建 / 校验 / 替换失败\n" +
+        "  - " + (error && error.message ? error.message : String(error)) + "\n" +
+        "  dist 里只有 " + MANAGED_ASSETS.join(" / ") + " 由 build 管理；本次不再留下 " +
+        STAGING_DIRECTORY + "/。\n" +
+        "  若上面提示 rollback 未完成，请按提示路径（" + BACKUP_DIRECTORY + "/）人工恢复。\n",
     );
     process.exitCode = 1;
     return;
   }
 
-  replaceManagedAssets(distDirectory, staging);
-
-  const outputs = Object.keys(result.metafile.outputs);
-  const bytes = outputs.length ? result.metafile.outputs[outputs[0]].bytes : 0;
+  const outputs = Object.keys(build.metafile.outputs);
+  const bytes = outputs.length ? build.metafile.outputs[outputs[0]].bytes : 0;
   process.stdout.write(
     "[renderer] built " + path.relative(layout.repoRoot, outFile).replace(/\\/g, "/") +
       " (" + bytes + " bytes) from " + paths.REUSED_SOURCES.length + " pinned upstream source(s)\n" +
       "[renderer] assets: katex " + katexAssets.files + " file(s) / " + katexAssets.bytes + " bytes" +
       " + mermaid " + vendor.version + " (" + vendor.sha256.slice(0, 12) + "…, verified)\n" +
-      "[renderer] dist replaced atomically from " + STAGING_DIRECTORY + "/ (staging verified first)\n" +
+      "[renderer] dist replaced from " + STAGING_DIRECTORY +
+      "/ (staged + verified + rollback-protected)\n" +
       "[renderer] pinned_commit = " + provenance.pinned_commit +
       "  checkout_commit = " + provenance.checkout_commit + "  (verified equal)\n",
   );
@@ -339,8 +456,13 @@ module.exports = {
   verifyVendoredMermaid: verifyVendoredMermaid,
   copyKatexAssets: copyKatexAssets,
   copyMermaidRuntime: copyMermaidRuntime,
+  cleanupDirectory: cleanupDirectory,
   prepareStaging: prepareStaging,
+  withStaging: withStaging,
   verifyStaging: verifyStaging,
-  replaceManagedAssets: replaceManagedAssets,
+  publishManagedAssets: publishManagedAssets,
   MANAGED_ASSETS: MANAGED_ASSETS,
+  STAGING_DIRECTORY: STAGING_DIRECTORY,
+  BACKUP_DIRECTORY: BACKUP_DIRECTORY,
+  DEFAULT_OPS: DEFAULT_OPS,
 };

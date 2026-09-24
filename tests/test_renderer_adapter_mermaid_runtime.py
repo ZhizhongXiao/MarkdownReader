@@ -123,6 +123,24 @@ def test_delivery_is_not_a_warning():
     assert render(MERMAID_DOCUMENT)["warnings"] == []
 
 
+def test_the_boot_runs_each_container_independently():
+    """逐图隔离契约：boot 对每个容器单独 run + 各自 catch，而不是一次 run 全部节点。
+
+    行为证据在 opt-in 的浏览器套件（invalid + valid 同页时，后面的合法图仍生成 SVG）；
+    这里锁住产生该行为的调用形状，避免以后退回「一次 run 全部」。
+    """
+    (script,) = scripts(render(MERMAID_DOCUMENT))
+    boot = script["boot"]
+
+    assert 'querySelectorAll("div.mermaid")' in boot
+    assert "forEach" in boot
+    assert "run({ nodes: [node] })" in boot
+    assert "run({ nodes: nodes })" not in boot, "一次 run 全部节点无法保证逐图隔离"
+    assert ".catch(" in boot, "每个容器都要有自己的 catch"
+    assert "parse(" not in boot, "不在 Node 侧解析 Mermaid 语法"
+    assert "http" not in boot, "boot 不得引用外部资源"
+
+
 def test_the_adapter_delivers_the_runtime_instead_of_injecting_it():
     """adapter 不自己拼页面：html 里没有 script。
 

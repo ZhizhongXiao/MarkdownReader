@@ -26,17 +26,25 @@ const RUNTIME_ID = "mermaid";
 const ARTIFACT_NAME = "mermaid.min.js";
 const METADATA_NAME = "metadata.json";
 
-// mermaid 11：先 initialize，再对 <div class="mermaid"> 逐个 run。容器内容是 D2 escape 过的
-// 惰性文本，run 读取的 textContent 必须等于作者原文；单个图失败不得影响其它图，也不留下
-// 未捕获 rejection（4C 在 Node 侧实测过未捕获 rejection 的破坏力）。
+// mermaid 11：initialize **一次**，然后**每个容器各自** run。逐图隔离是本模块的契约：
+// 单个图失败（parse error / 渲染异常）只影响它自己，不会阻止同页面其它合法图；
+// 每个节点独立 catch，因此也不产生未捕获 rejection。
+// 容器内容是 D2 escape 过的惰性文本，run 读取的 textContent 必须等于作者原文。
+// 这里刻意不解析语法（Node 侧不调用 parse()），错误呈现交给 runtime 自身。
 const BOOT = [
   "(function () {",
   "  function activate() {",
   '    if (!window.mermaid || typeof window.mermaid.run !== "function") { return; }',
   "    window.mermaid.initialize({ startOnLoad: false });",
-  '    var nodes = document.querySelectorAll("div.mermaid");',
+  '    var nodes = Array.prototype.slice.call(document.querySelectorAll("div.mermaid"));',
   "    if (!nodes.length) { return; }",
-  "    Promise.resolve(window.mermaid.run({ nodes: nodes })).catch(function () { return undefined; });",
+  "    nodes.forEach(function (node) {",
+  "      try {",
+  "        Promise.resolve(window.mermaid.run({ nodes: [node] })).catch(function () { return undefined; });",
+  "      } catch (error) {",
+  "        return undefined;",
+  "      }",
+  "    });",
   "  }",
   '  if (document.readyState === "loading") {',
   '    document.addEventListener("DOMContentLoaded", activate);',

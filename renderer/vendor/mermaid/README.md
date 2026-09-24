@@ -42,7 +42,10 @@ pwsh tools/update_mermaid_runtime.ps1 -Version 11.16.0 -ExpectSha256 <期望的 
 `renderer/build/build.js` 在**任何写入之前**校验：版本目录唯一、`metadata.json` 可读、
 产物与许可证存在、`metadata.version` == 目录名、`artifact_sha256` == 实测 SHA-256、
 `artifact_bytes` == 实测字节数。任一不符即拒绝构建（只验证、不修复、不下载）。
-产物全部先写进 `dist/.staging/`，复验通过后才替换 `dist/` 里受管的 `renderer.cjs` / `katex/` / `mermaid/`，
-因此失败的构建不会留下「看起来可用、实际不同步」的 runtime set。
+
+产物全部先写进 `dist/.staging/` 并复验；安装是 **staged + verified + rollback-protected**：旧资产先移到
+`dist/.backup/`，成功即清理，中途失败则回滚到旧 managed set（rollback 自身失败时保留 `.backup/` 并报出路径）。
+因此：构建/校验失败**发生在安装之前**，正式 dist 完全不变；安装中途失败由 rollback 保证旧 set 恢复。
+三个独立路径不构成文件系统级原子事务，这里也不这么声称。staging 无论成败都会被清理。
 
 运行期 `renderer/resources/mermaid_runtime.js` 会再校验一次 SHA-256，被改动过的 runtime 不会交付。

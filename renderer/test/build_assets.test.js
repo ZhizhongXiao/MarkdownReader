@@ -156,29 +156,195 @@ test("staging verification refuses a staged runtime that differs from the vendor
   assert.deepStrictEqual(problems, ["staging 里的 runtime 与 vendored 产物不一致（SHA-256 不同）"]);
 });
 
-test("replacement only touches managed names and drops stale files", function () {
-  const repo = fixtureRepo();
-  const vendor = build.verifyVendoredMermaid(repo);
+const OLD_BUNDLE = "// old bundle\n";
+const NEW_BUNDLE = "// new bundle\n";
+
+function writeTree(root, files) {
+  for (const relative of Object.keys(files)) {
+    const target = path.join(root, ...relative.split("/"));
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, files[relative], "utf8");
+  }
+}
+
+function readTree(root, files) {
+  const contents = {};
+  for (const relative of files) {
+    const target = path.join(root, ...relative.split("/"));
+    contents[relative] = fs.existsSync(target) ? fs.readFileSync(target, "utf8") : null;
+  }
+  return contents;
+}
+
+const OLD_SET = {
+  "renderer.cjs": OLD_BUNDLE,
+  "katex/katex.min.css": "old-katex",
+  "mermaid/mermaid.min.js": "old-mermaid",
+  "keep-me.txt": "user file",
+};
+const NEW_SET = {
+  "renderer.cjs": NEW_BUNDLE,
+  "katex/katex.min.css": "new-katex",
+  "mermaid/mermaid.min.js": "new-mermaid",
+};
+const STALE = "mermaid/stale-runtime.js";
+
+/** 一个已发布过的 dist（旧 managed set + 无关文件 + 一份 stale 残留）与一份完整的 staging。 */
+function stagedFixture() {
   const dist = tempDirectory();
-  fs.mkdirSync(path.join(dist, "mermaid"), { recursive: true });
-  fs.writeFileSync(path.join(dist, "renderer.cjs"), "// old bundle\n", "utf8");
-  fs.writeFileSync(path.join(dist, "mermaid", "stale-runtime.js"), "// from an older version\n", "utf8");
-  fs.writeFileSync(path.join(dist, "keep-me.txt"), "user file\n", "utf8");
-
+  writeTree(dist, OLD_SET);
+  writeTree(dist, { [STALE]: "// from an older version\n" });
   const staging = build.prepareStaging(dist);
-  fs.writeFileSync(path.join(staging, "renderer.cjs"), "// new bundle\n", "utf8");
-  fs.mkdirSync(path.join(staging, "katex"), { recursive: true });
-  fs.writeFileSync(path.join(staging, "katex", "katex.min.css"), "a{}\n", "utf8");
-  build.copyMermaidRuntime(vendor, path.join(staging, "mermaid"));
+  writeTree(staging, NEW_SET);
+  return { dist: dist, staging: staging };
+}
 
-  build.replaceManagedAssets(dist, staging);
+/**
+ * 确定性失败注入：默认实现仍是真实 fs，只在指定序号（或指定目标）的调用上抛错。
+ * 不依赖文件锁 / 磁盘空间 / 权限这类随机失败。
+ */
+function failingOps(predicate) {
+  const calls = { rename: 0, rm: 0 };
+  return {
+    calls: calls,
+    exists: build.DEFAULT_OPS.exists,
+    readdir: build.DEFAULT_OPS.readdir,
+    mkdir: build.DEFAULT_OPS.mkdir,
+    rm: function (target) {
+      calls.rm += 1;
+      if (predicate.rm && predicate.rm(target, calls.rm)) {
+        throw new Error("injected rm failure");
+      }
+      return build.DEFAULT_OPS.rm(target);
+    },
+    rename: function (from, to) {
+      calls.rename += 1;
+      if (predicate.rename && predicate.rename(calls.rename, from, to)) {
+        throw new Error("injected rename failure");
+      }
+      return build.DEFAULT_OPS.rename(from, to);
+    },
+  };
+}
 
-  assert.strictEqual(fs.readFileSync(path.join(dist, "renderer.cjs"), "utf8"), "// new bundle\n");
-  assert.strictEqual(fs.existsSync(path.join(dist, "mermaid", "stale-runtime.js")), false);
-  assert.strictEqual(
-    fs.readFileSync(path.join(dist, "mermaid", "mermaid.min.js"), "utf8"),
-    fs.readFileSync(vendor.artifactPath, "utf8"),
+function assertNoLeftovers(dist) {
+  assert.strictEqual(fs.existsSync(path.join(dist, ".staging")), false, ".staging 不得残留");
+  assert.strictEqual(fs.existsSync(path.join(dist, ".backup")), false, ".backup 不得残留");
+}
+
+function assertOldSetRestored(dist) {
+  assert.deepStrictEqual(readTree(dist, Object.keys(OLD_SET)), OLD_SET);
+  assert.strictEqual(fs.readFileSync(path.join(dist, STALE), "utf8"), "// from an older version\n");
+}
+
+test("a successful replacement installs the new set, drops stale files and keeps unrelated files", function () {
+  const fixture = stagedFixture();
+
+  const published = build.publishManagedAssets(fixture.dist, fixture.staging);
+
+  assert.deepStrictEqual(published.installed.slice().sort(), [
+    "katex",
+    "mermaid",
+    "renderer.cjs",
+  ]);
+  assert.deepStrictEqual(readTree(fixture.dist, Object.keys(NEW_SET)), NEW_SET);
+  assert.strictEqual(fs.existsSync(path.join(fixture.dist, STALE)), false, "旧版本 stale 文件必须消失");
+  assert.strictEqual(fs.readFileSync(path.join(fixture.dist, "keep-me.txt"), "utf8"), "user file");
+  assertNoLeftovers(fixture.dist);
+});
+
+test("a failure while moving the old set into backup restores it completely", function () {
+  const fixture = stagedFixture();
+  const ops = failingOps({ rename: (call) => call === 2 });
+
+  assert.throws(() => build.publishManagedAssets(fixture.dist, fixture.staging, ops), /已恢复旧 managed set/);
+
+  assertOldSetRestored(fixture.dist);
+  assertNoLeftovers(fixture.dist);
+});
+
+test("a failure on the first install restores the old set completely", function () {
+  const fixture = stagedFixture();
+  const ops = failingOps({ rename: (call) => call === 4 });
+
+  assert.throws(() => build.publishManagedAssets(fixture.dist, fixture.staging, ops), /已恢复旧 managed set/);
+
+  assertOldSetRestored(fixture.dist);
+  assertNoLeftovers(fixture.dist);
+});
+
+test("a failure after a partial install restores the old set completely", function () {
+  const fixture = stagedFixture();
+  const ops = failingOps({ rename: (call) => call === 5 });
+
+  assert.throws(() => build.publishManagedAssets(fixture.dist, fixture.staging, ops), /已恢复旧 managed set/);
+
+  assertOldSetRestored(fixture.dist);
+  assertNoLeftovers(fixture.dist);
+});
+
+test("a rollback that itself fails keeps .backup and says so instead of pretending", function () {
+  const fixture = stagedFixture();
+  const managedTargets = build.MANAGED_ASSETS.map((name) => path.join(fixture.dist, name));
+  const ops = failingOps({
+    // 第 5 次 rename = 第二个资产安装时失败 → 此时已有一个新资产安装成功，rollback 必须删掉它。
+    rename: (call) => call === 5,
+    // 注入「删不掉已安装的新资产」：rollback 因此无法完成（旧资产放不回原位）。
+    rm: (target) => managedTargets.includes(target),
+  });
+
+  assert.throws(
+    () => build.publishManagedAssets(fixture.dist, fixture.staging, ops),
+    /rollback 未完成.*\.backup/s,
   );
-  assert.strictEqual(fs.readFileSync(path.join(dist, "keep-me.txt"), "utf8"), "user file\n");
+
+  const backup = path.join(fixture.dist, ".backup");
+  assert.strictEqual(fs.existsSync(backup), true, "rollback 未完成时必须保留 backup（不假装恢复成功）");
+  assert.strictEqual(
+    fs.existsSync(path.join(fixture.dist, ".staging")),
+    false,
+    "staging 无论回滚成败都必须清理",
+  );
+});
+
+test("withStaging removes the staging directory when the work throws", async function () {
+  const dist = tempDirectory();
+
+  await assert.rejects(
+    build.withStaging(dist, async function (staging) {
+      fs.writeFileSync(path.join(staging, "partial-artifact"), "x", "utf8");
+      throw new Error("copy failed");
+    }),
+    /copy failed/,
+  );
+
+  assert.strictEqual(fs.existsSync(path.join(dist, ".staging")), false, ".staging 不得残留");
+});
+
+test("withStaging removes the staging directory after success", async function () {
+  const dist = tempDirectory();
+
+  const result = await build.withStaging(dist, async function (staging) {
+    fs.writeFileSync(path.join(staging, "artifact"), "x", "utf8");
+    return "done";
+  });
+
+  assert.strictEqual(result, "done");
   assert.strictEqual(fs.existsSync(path.join(dist, ".staging")), false);
+});
+
+test("a staging phase that fails leaves the published set untouched", async function () {
+  const fixture = stagedFixture();
+  fs.rmSync(fixture.staging, { recursive: true, force: true });
+
+  await assert.rejects(
+    build.withStaging(fixture.dist, async function () {
+      throw new Error("esbuild failed");
+    }),
+    /esbuild failed/,
+  );
+
+  assert.deepStrictEqual(readTree(fixture.dist, Object.keys(OLD_SET)), OLD_SET);
+  assert.strictEqual(fs.readFileSync(path.join(fixture.dist, STALE), "utf8"), "// from an older version\n");
+  assertNoLeftovers(fixture.dist);
 });
