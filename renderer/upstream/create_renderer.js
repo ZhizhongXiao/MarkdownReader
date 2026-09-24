@@ -11,7 +11,7 @@
  *             → toc → katex → plantuml → mermaid
  *   adapter :               obsidian → obsidianCallouts → mark → checkbox → anchor → katex
  * 去掉的理由：front matter 属性面板（AGENTS §6 不启用）、upstream TOC exporter（MarkdownReader
- * 自建 TOC）、plantuml/mermaid（Phase 4B/5）、highlight.js（后续决策）。它们只影响各自产物的
+ * 自建 TOC）、plantuml/mermaid（Phase 4C/5）、highlight.js（后续决策）。它们只影响各自产物的
  * 存在与否，不改变其余插件的相对顺序与 token 语义。
  *
  * 基础配置跟随 KEEP contract：html:true、breaks:false、typographer 关闭、linkify 打开但关闭

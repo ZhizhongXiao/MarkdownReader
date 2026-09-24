@@ -75,8 +75,8 @@
 | G3 | callout | `[!NOTE]` 与 `[!WARNING]` 都消失、正文保留；已收窄到 pinned 上游输出 `class="callout"` + `data-callout="note|warning"` | **Phase 4A 已在 adapter 实现**（`markdown-it-obsidian-callouts`） |
 | G4 | wikilink | 字面 `[[` 消失；parser/alias 仍来自 pinned 上游，adapter 只把编辑器用的 `href="#"` 换成静态 fragment。可见文本「第二章」「别名显示」，两个 href 非空且 decode 后识别目标「第二章」 | **Phase 4A 已在 adapter 实现**（`renderer/extensions/obsidian_wikilink_export.js`）；document_map / `.md → .html` 仍属 Phase 4B |
 | G5 | obsidian-tag | ASCII 与 Unicode 标签（`#note`/`#项目/子项`）都成 tag；`# 标题`/URL fragment/孤立 `#` 不误报 | **Phase 4A 已在 adapter 实现**（上游 obsidian token + MarkdownReader Unicode 字符集扩展） |
-| G6 | mermaid | `features.mermaid` 为真，且出现 `class="mermaid"` 运行时容器 | **仍 pending**（Phase 4B/5）：features 恒 false，未注入 runtime |
-| G7 | plantuml | `features.plantuml` 为真，且进入图像资源流程（出现 `<img`） | **仍 pending**（Phase 4B/5）：features 恒 false，不建网络资源层 |
+| G6 | mermaid | `features.mermaid` 为真，且出现 `class="mermaid"` 运行时容器 | **仍 pending**（Phase 4C/5）：features 恒 false，未注入 runtime |
+| G7 | plantuml | `features.plantuml` 为真，且进入图像资源流程（出现 `<img`） | **仍 pending**（Phase 4C/5）：features 恒 false，不建网络资源层 |
 
 Phase 1 **只锁产品级语义，不锁尚未 pin 住的上游 DOM**。Callout 与 Obsidian tag 先接受一个允许集合（`callout`/`admonition`/`markdown-alert`/`alert`/`note`；tag 类名或 `tag` 链接）；Phase 2 固定 vscode-office commit、Phase 3 adapter 定型之后，再补确实需要的上游 DOM contract。
 

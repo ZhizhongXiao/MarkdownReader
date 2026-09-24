@@ -51,7 +51,7 @@ PENDING_CASES = {
 }
 
 # Phase 4A 已接入 checkbox / mark / callout（证据在 tests/test_renderer_adapter_targets.py）；
-# 这里只保留仍然 pending 的项：Phase 4B/5 完成前它们必须恒为 false。
+# 这里只保留仍然 pending 的项：Phase 4C/5 完成前它们必须恒为 false。
 PENDING_FEATURE_KEYS = ("mermaid", "plantuml")
 
 
@@ -111,7 +111,7 @@ def test_heading_relationship_contract_holds_for_the_anchor_fixture():
 
 
 def test_pending_features_stay_off_in_phase4a():
-    """Phase 4A 只迁移了五项；mermaid / plantuml 在 Phase 4B/5 之前必须仍然关闭。"""
+    """Phase 4A 只迁移了五项；mermaid / plantuml 在 Phase 4C/5 之前必须仍然关闭。"""
     for case in sorted(load_cases("target"), key=lambda item: item["id"]):
         features = render(read_fixture(case))["features"]
         for key in PENDING_FEATURE_KEYS:

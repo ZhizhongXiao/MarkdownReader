@@ -177,3 +177,19 @@ def test_heading_wikilink_stays_toc_safe_after_the_export_adaptation():
     assert "<" not in heading["toc_inline_html"], heading["toc_inline_html"]
     assert heading["toc_inline_html"] == "参见 第二章"
     assert "<a" in heading["inline_html"]
+
+def test_obsidian_tag_mixed_candidates_are_not_truncated():
+    """混合 tag 必须整段成为一个 tag。
+
+    上游 ASCII rule 只会吃掉 ASCII 前缀（#abc）而把中文/路径留下；所以含 Unicode 的
+    candidate 必须由 MarkdownReader compatibility rule 整段消费。
+    """
+    envelope = render("#abc中文 与 #abc/项目 与 #项目/sub。\n")
+    html = envelope["html"]
+
+    assert envelope["features"]["obsidian_tag"] is True
+    assert html.count('class="obsidian-tag"') == 3, html
+    for tag_text in ("#abc中文", "#abc/项目", "#项目/sub"):
+        assert ">" + tag_text + "</span>" in html, tag_text
+    assert ">#abc</span>中文" not in html, "ASCII 前缀被单独消费、中文残留"
+    assert ">#abc</span>/项目" not in html, "ASCII 前缀被单独消费、路径残留"

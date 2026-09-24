@@ -7,7 +7,7 @@
  * <div class="callout">、<a class="obsidian-wikilink">、<span class="obsidian-tag">）不得让
  * feature 误报成「Markdown 扩展生效」。
  *
- * 仍 pending（Phase 4B/5）：mermaid、plantuml（未接插件，恒 false）。
+ * 仍 pending（Phase 4C/5）：mermaid、plantuml（未接插件，恒 false）。
  * katex 目前仍用 HTML marker 判断 —— 记录为 remaining migration（Phase 4B 改 token 判断）。
  */
 
