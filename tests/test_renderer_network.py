@@ -138,6 +138,31 @@ def test_a_timeout_does_not_block_the_conversion(loopback):
     assert "请求超时" in envelope["warnings"][0]
 
 
+def test_a_body_read_timeout_is_retried_and_reported_as_timeout(loopback):
+    """头已返回、body 停住：必须按 timeout 分类并 retry（旧实现误报 network 且不重试）。"""
+    url = loopback.url("/stall/1500")
+
+    envelope = render("![图](" + url + ")\n", {"resource_timeout_ms": 300}, allow_network=True)
+
+    assert img_source(envelope["html"]) == url, "失败必须保留原引用"
+    (item,) = items(envelope, "image")
+    assert item["status"] == "failed" and "resolved" not in item
+    assert "请求超时" in envelope["warnings"][0], envelope["warnings"]
+    assert loopback.stats.count("/stall/1500") == 2, "body 读取阶段的超时必须 retry 一次"
+
+
+def test_a_body_read_failure_is_retried_and_reported_as_network(loopback):
+    """声明长度与实际发送不符后断连：读取阶段属网络错误，必须 retry 一次。"""
+    url = loopback.url("/truncate")
+
+    envelope = render("![图](" + url + ")\n", {"resource_timeout_ms": 2000}, allow_network=True)
+
+    assert img_source(envelope["html"]) == url
+    assert items(envelope, "image")[0]["status"] == "failed"
+    assert "网络错误" in envelope["warnings"][0], envelope["warnings"]
+    assert loopback.stats.count("/truncate") == 2, "读取阶段的网络错误必须 retry 一次"
+
+
 def test_an_oversized_resource_does_not_block_the_conversion(loopback):
     url = loopback.url("/oversized")
 
@@ -185,6 +210,43 @@ def test_a_missing_content_type_without_extension_fails(loopback):
 
     assert img_source(envelope["html"]) == url
     assert "响应不是图片" in envelope["warnings"][0]
+
+
+# --- 非法数值选项回落默认值（Phase 5C reliability closeout） ------------------
+
+
+def test_a_negative_retries_option_falls_back_to_the_default(loopback):
+    """-1 曾让重试循环一次都不执行（零请求 + network 失败）；必须回落默认 1（共 2 次尝试）。"""
+    url = loopback.url("/status/503")
+
+    envelope = render("![图](" + url + ")\n", {"resource_retries": -1}, allow_network=True)
+
+    assert loopback.stats.count("/status/503") == 2, "负数必须回落默认值，而不是一次请求都不发"
+    assert items(envelope, "image")[0]["status"] == "failed"
+    assert "HTTP 503" in envelope["warnings"][0], envelope["warnings"]
+
+
+def test_a_non_positive_timeout_falls_back_to_the_default(loopback):
+    """0 ms 超时会立刻 abort；回落 8000 ms 后这个 300 ms 的响应必须成功内嵌。"""
+    url = loopback.url("/slow/300")
+
+    envelope = render("![图](" + url + ")\n", {"resource_timeout_ms": 0}, allow_network=True)
+
+    assert img_source(envelope["html"]).startswith(PNG_PREFIX)
+    assert items(envelope, "image")[0]["status"] == "inlined"
+    assert envelope["warnings"] == []
+    assert loopback.stats.count("/slow/300") == 1
+
+
+def test_a_non_positive_max_bytes_falls_back_to_the_default(loopback):
+    """0 B 上限会把任何资源判为超限；回落 16 MiB 后必须内嵌成功。"""
+    url = loopback.png("small.png")
+
+    envelope = render("![图](" + url + ")\n", {"resource_max_bytes": 0}, allow_network=True)
+
+    assert img_source(envelope["html"]).startswith(PNG_PREFIX)
+    assert items(envelope, "image")[0]["status"] == "inlined"
+    assert envelope["warnings"] == []
 
 
 # --- 协议相对 URL -----------------------------------------------------------

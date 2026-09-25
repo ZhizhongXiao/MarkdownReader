@@ -117,6 +117,10 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
   单资源 16 MiB / 只接受 `image/*`，缺 Content-Type 才按扩展名回退），`renderer/resources/remote_resolver.js`
   负责 URL 级 cache（同一 URL 一个 Promise）与并发调度（上限 4，结果按文档顺序写回）。默认 `fetch_remote_resources=true`；
   失败一律保留作者原引用 + 可读 warning 并继续转换。
+  数值 option（`resource_timeout_ms` / `resource_retries` / `resource_max_bytes`）只在有效范围内生效，越界
+  （非正数 / retries 为负或非整数）一律回落默认值；retry 分类在 fetch 阶段与 **body 读取阶段共用同一套规则**
+  （`AbortError` / `TimeoutError` → timeout，其它读错误 → network，两者都可 retry；只有超限 `too-large` 不 retry，
+  且每次 retry 都是完整重新 GET）。
 - 测试**不依赖公共互联网**（Phase 5C gate）：`tests/renderer_adapter.py::render()` 默认注入 `fetch_remote_resources=false`，
   因此 `uv run pytest` / `npm test` 不会联网；真实联网语义只在 `tests/test_renderer_network.py` 里用
   127.0.0.1 loopback 服务器（`tests/loopback_http.py`）验证。

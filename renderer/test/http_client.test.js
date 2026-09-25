@@ -56,6 +56,10 @@ function fakeResponse(options) {
         return {
           read: async function () {
             state.read = true;
+            if (settings.bodyError) {
+              // 头已正常返回、body 读取失败（timeout / socket / 流错误）的分类测试用。
+              throw settings.bodyError;
+            }
             if (sent) {
               return { done: true };
             }
@@ -106,6 +110,63 @@ test("policy defaults are the frozen 5C values", function () {
   assert.strictEqual(DEFAULT_RETRIES, 1);
   assert.strictEqual(DEFAULT_RETRY_DELAY_MS, 150);
   assert.strictEqual(DEFAULT_MAX_BYTES, 16 * 1024 * 1024);
+});
+
+test("invalid numeric options fall back to the defaults", function () {
+  const allInvalid = createHttpClient({
+    fetchImpl: async function () {},
+    timeoutMs: -1,
+    retries: -1,
+    maxBytes: 0,
+  });
+  assert.deepStrictEqual(allInvalid.policy, {
+    timeoutMs: DEFAULT_TIMEOUT_MS,
+    retries: DEFAULT_RETRIES,
+    retryDelayMs: DEFAULT_RETRY_DELAY_MS,
+    maxBytes: DEFAULT_MAX_BYTES,
+  });
+
+  for (const timeoutMs of [0, -5, Number.NaN, Number.POSITIVE_INFINITY, "8000"]) {
+    const client = createHttpClient({ fetchImpl: async function () {}, timeoutMs: timeoutMs });
+    assert.strictEqual(client.policy.timeoutMs, DEFAULT_TIMEOUT_MS, "timeoutMs=" + String(timeoutMs));
+  }
+  for (const retries of [-1, -10, 1.5, Number.NaN, Number.POSITIVE_INFINITY, "1"]) {
+    const client = createHttpClient({ fetchImpl: async function () {}, retries: retries });
+    assert.strictEqual(client.policy.retries, DEFAULT_RETRIES, "retries=" + String(retries));
+  }
+  for (const maxBytes of [0, -1, Number.NaN, "1024"]) {
+    const client = createHttpClient({ fetchImpl: async function () {}, maxBytes: maxBytes });
+    assert.strictEqual(client.policy.maxBytes, DEFAULT_MAX_BYTES, "maxBytes=" + String(maxBytes));
+  }
+});
+
+test("valid numeric options are honored", function () {
+  const client = createHttpClient({
+    fetchImpl: async function () {},
+    timeoutMs: 300,
+    retries: 0,
+    retryDelayMs: 0,
+    maxBytes: 2048,
+  });
+
+  assert.deepStrictEqual(client.policy, {
+    timeoutMs: 300,
+    retries: 0,
+    retryDelayMs: 0,
+    maxBytes: 2048,
+  });
+});
+
+test("a negative retries option still issues the default number of attempts", async function () {
+  const fake = clientWith(function () {
+    return fakeResponse({ status: 503, headers: imageHeaders() });
+  }, { retries: -1 });
+
+  const result = await fake.client.get("https://x.invalid/a.png");
+
+  assert.strictEqual(result.ok, false);
+  assert.strictEqual(result.reason, "http-503");
+  assert.strictEqual(fake.calls.length, 2, "负数必须回落默认 1（共 2 次尝试），而不是一次请求都不发");
 });
 
 test("a successful image response returns bytes, mime and the final URL", async function () {
@@ -243,6 +304,58 @@ test("a timeout is reported as timeout and retried", async function () {
 
   assert.strictEqual(result.ok, false);
   assert.strictEqual(result.reason, "timeout");
+  assert.strictEqual(fake.calls.length, 2);
+});
+
+test("a body read timeout is reported as timeout and retried with a fresh GET", async function () {
+  const timeoutError = new Error("The operation was aborted due to timeout");
+  timeoutError.name = "TimeoutError";
+  let responses = 0;
+  const fake = clientWith(function () {
+    responses += 1;
+    return fakeResponse({ headers: imageHeaders(), bodyError: timeoutError });
+  });
+
+  const result = await fake.client.get("https://x.invalid/a.png");
+
+  assert.strictEqual(result.ok, false);
+  assert.strictEqual(result.reason, "timeout", "body 读取阶段的 abort 必须按 timeout 分类");
+  assert.strictEqual(result.retryable, true);
+  assert.strictEqual(fake.calls.length, 2, "body 读取阶段的超时必须 retry");
+  assert.strictEqual(responses, 2);
+  assert.strictEqual(fake.calls[0].init.method, "GET");
+  assert.strictEqual(fake.calls[1].init.method, "GET");
+  assert.notStrictEqual(
+    fake.calls[0].init.signal,
+    fake.calls[1].init.signal,
+    "retry 必须重新发起完整 GET（新 AbortSignal），不能复用已失败的 body reader",
+  );
+});
+
+test("a body read failure is reported as network and retried", async function () {
+  const fake = clientWith(function () {
+    return fakeResponse({ headers: imageHeaders(), bodyError: new TypeError("terminated") });
+  });
+
+  const result = await fake.client.get("https://x.invalid/a.png");
+
+  assert.strictEqual(result.ok, false);
+  assert.strictEqual(result.reason, "network");
+  assert.strictEqual(result.retryable, true);
+  assert.strictEqual(fake.calls.length, 2);
+});
+
+test("a read error is classified by name, not by its message", async function () {
+  const impostor = new Error("too-large");
+  impostor.name = "TypeError";
+  const fake = clientWith(function () {
+    return fakeResponse({ headers: imageHeaders(), bodyError: impostor });
+  });
+
+  const result = await fake.client.get("https://x.invalid/a.png");
+
+  assert.strictEqual(result.ok, false);
+  assert.strictEqual(result.reason, "network", "分类只看 error.name，不比对 message");
   assert.strictEqual(fake.calls.length, 2);
 });
 

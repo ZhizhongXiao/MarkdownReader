@@ -49,7 +49,7 @@
 | K20 | 发布门禁与产物校验 | `test_release_freeze.py`、`test_release_validation.py` |
 | K21 | 按需载荷：有公式才携带 KaTeX 资产，无公式不携带（体积纪律）。**具体信封键名不是契约** | `test_renderer_katex_assets.py`、`test_converter_integration.py` |
 | K22 | Mermaid runtime 按需（AGENTS §9）：只有文档真的含 Mermaid 时才携带 runtime；普通 Markdown 的 envelope 与 HTML 都不带。runtime 是 vendored 的正式 browser 构建（与 npm 包内 `dist/mermaid.min.js` 逐字节相同），build 与运行期各校验一次 SHA-256，且**离线可渲染**（零网络请求） | `tests/test_renderer_adapter_mermaid_runtime.py`（19 项）+ `tests/browser`（opt-in，5 项，真实浏览器） |
-| K23 | 远程资源（remote Markdown 图片 / PlantUML 图像）行为契约：联网成功 → data URI（`ref` 仍是作者原 URL，`resolved` 记最终 URL）；失败（超时 / 网络 / HTTP / 非图片 / 超限）→ **保留作者原引用 + 可读 warning + 转换继续**；同一 URL 的同一失败只报一次；`fetch_remote_resources=false` → kept 且不 warning；raw HTML 里的远程引用永不抓取。**timeout / retry / max-size / 并发数的数值是实现策略，不是契约**（见 `renderer/resources/http_client.js`） | `tests/test_renderer_network.py`（21 项，127.0.0.1 loopback）+ `renderer/test/http_client.test.js`（20）+ `renderer/test/remote_resolver.test.js`（11） |
+| K23 | 远程资源（remote Markdown 图片 / PlantUML 图像）行为契约：联网成功 → data URI（`ref` 仍是作者原 URL，`resolved` 记最终 URL）；失败（超时 / 网络 / HTTP / 非图片 / 超限）→ **保留作者原引用 + 可读 warning + 转换继续**；同一 URL 的同一失败只报一次；`fetch_remote_resources=false` → kept 且不 warning；raw HTML 里的远程引用永不抓取。**timeout / retry / max-size / 并发数的数值是实现策略，不是契约**，但「数值越界一律回落默认值」与「body 读取阶段按 fetch 阶段同一规则分类、只有超限不 retry」属实现承诺（见 `renderer/resources/http_client.js`） | `tests/test_renderer_network.py`（26 项，127.0.0.1 loopback）+ `renderer/test/http_client.test.js`（26）+ `renderer/test/remote_resolver.test.js`（11） |
 
 ## TRANSITIONAL：记录现状，路线图已定要改
 
@@ -172,7 +172,7 @@ KEEP 契约未受影响：`keep/plain-text-no-math` 用的是单个未配对 `$`
 
 比较范围之外：local image data URI 与 KaTeX CSS/fonts 载荷（**Phase 5A 已在 adapter 侧完成**，但通道形状与 old 的 `assets.css` 不同，仍不做 equality）、remote image 与抓取、Mermaid runtime、PlantUML 图像、standalone 资源闭包（属 5B/5C）。
 
-当前数字（按套件）：`test_renderer_semantic_parity.py` 12、`test_renderer_adapter_keep.py` 20、`test_renderer_adapter_targets.py` 14（4A 条目里的 13 项是那次提交当时的计数）、`test_renderer_adapter_compat.py` 35、`test_renderer_adapter_diagrams.py` 27、`test_renderer_adapter_protocol.py` 11、`test_renderer_adapter_resources.py` 26（Phase 5A）、`test_renderer_adapter_mermaid_runtime.py` 19 与 `test_renderer_build_assets.py` 3（Phase 5B）、`test_renderer_network.py` 21（Phase 5C，127.0.0.1 loopback）。
+当前数字（按套件）：`test_renderer_semantic_parity.py` 12、`test_renderer_adapter_keep.py` 20、`test_renderer_adapter_targets.py` 14（4A 条目里的 13 项是那次提交当时的计数）、`test_renderer_adapter_compat.py` 35、`test_renderer_adapter_diagrams.py` 27、`test_renderer_adapter_protocol.py` 11、`test_renderer_adapter_resources.py` 26（Phase 5A）、`test_renderer_adapter_mermaid_runtime.py` 19 与 `test_renderer_build_assets.py` 3（Phase 5B）、`test_renderer_network.py` 26（Phase 5C，127.0.0.1 loopback）。
 
 全套：`uv run pytest -q` → 362 passed, 7 xfailed；renderer `npm test` → 61 passed；浏览器验收（opt-in）`pwsh tools/run_browser_acceptance.ps1` → 5 passed（默认 pytest 不含它）；`uv run pytest -q --runxfail tests/test_markdown_compat_target.py` → `7 failed, 2 passed`（TARGET 门禁仍是 strict xfail）；`uv run ruff check .` → All checks passed。
 
@@ -188,7 +188,7 @@ KEEP 契约未受影响：`keep/plain-text-no-math` 用的是单个未配对 `$`
 | Mermaid / PlantUML（adapter 侧） | Phase 4C：`tests/test_renderer_adapter_diagrams.py`（27 项）+ `renderer/test/mermaid_predicate.test.js`（node:test）；Phase 5B：`tests/test_renderer_adapter_mermaid_runtime.py`（19 项）+ `tests/browser`（opt-in 5 项，真实浏览器离线渲染）；Phase 5C：PlantUML 抓图见 `tests/test_renderer_network.py` |
 | KaTeX | K9 |
 | Mermaid / PlantUML | TARGET G6–G7（旧 production 仍 7 strict xfail）；adapter 侧 Phase 4C：`tests/test_renderer_adapter_diagrams.py`（27 项） |
-| local image / remote image | K13（remote 同时登记为 T1，Phase 5C 已改写）；adapter 侧 Phase 5A：`tests/test_renderer_adapter_resources.py`（26 项）；联网语义 Phase 5C：`tests/test_renderer_network.py`（21 项，127.0.0.1 loopback） |
+| local image / remote image | K13（remote 同时登记为 T1，Phase 5C 已改写）；adapter 侧 Phase 5A：`tests/test_renderer_adapter_resources.py`（26 项）；联网语义 Phase 5C：`tests/test_renderer_network.py`（26 项，127.0.0.1 loopback） |
 | `.md → .html` | K12 |
 | Front Matter | K10 |
 | heading anchor | K1 |
@@ -300,6 +300,12 @@ samples/demo.html                         → 未改动，快照契约仍成立
   * **不访问公共互联网的 gate**：`tests/renderer_adapter.py::render()` 默认注入 `fetch_remote_resources=false`；真实联网语义只在 `tests/test_renderer_network.py` 用 127.0.0.1 loopback 服务器（`tests/loopback_http.py`）验证，其中一条**不传**该选项，因此同时证明生产默认 = 联网抓取。
   * 明说未做的事：CSS 远程 `url()`、theme assets（Phase 6/7）、磁盘 cache、magic-byte 嗅探、全局下载预算、GUI 选项、protocol 版本升级（仍 v2）、standalone 终检（5D）。
   证据：`tests/test_renderer_network.py`（21 项，端到端 + 环回）+ `renderer/test/http_client.test.js`（20）+ `renderer/test/remote_resolver.test.js`（11）；全套 `341 → 362 passed, 7 xfailed`；renderer `npm test` 32 → 61 passed；bundle 1,122,431 → 1,135,968 B。
+
+- 2026-09-25（Phase 5C reliability closeout）：修两个「声明与实现不一致」的可靠性问题，**不新增功能、不进入 5D**：
+  * **body 读取阶段的失败分类**（`renderer/resources/http_client.js`）：`fetch` 已返回头之后，`readLimited()` 里的 `reader.read()` 因 `AbortSignal.timeout` / socket 中断抛错时，原先被硬编码成 `network / 不 retry`，与已登记的「network error / timeout 可 retry」不一致（慢服务器完全可能走到这条路）。现在 fetch 阶段与 body 阶段**共用同一个分类器**，且只按 `error.name` 判别（`TooLargeError` → `too-large` 不 retry；`AbortError` / `TimeoutError` → `timeout` 可 retry；其它读错误 → `network` 可 retry），不再比对 `error.message`。每次 retry 都是**完整重新 GET**（新 `AbortSignal` + 新 `Response`），不复用已失败的 body reader。
+  * **数值 option 的范围 gate**（同一文件）：`resource_timeout_ms` / `resource_retries` / `resource_max_bytes` 原先只校验 `Number.isFinite`，负数与 0 会穿透；`resource_retries = -1` 会让 `for (attemptIndex = 0; attemptIndex <= retries; …)` 一次都不执行，最终返回「未发起请求」的 network 失败。现在 `timeout` / `max_bytes` 要求「有限且为正」、`retries` 要求「非负整数」，越界一律回落默认（8000 / 1 / 16 MiB）；范围判定只在 http_client 一处，collector 不再重复实现同一规则。
+  * **反证**（node：注入 fake fetch 与可抛错的 body reader；端到端：loopback 新增 `/stall/<ms>` 与 `/truncate`）：body 阶段 `TimeoutError` → `reason=timeout` 且重试一次、两次请求的 `AbortSignal` 不同；body 阶段普通读错误 → `reason=network` 且重试一次；`message` 恰为 `too-large` 但 `name` 普通 → 仍归 `network`（锁定「按 name 不按 message」）；`resource_retries=-1` / `resource_timeout_ms=0` / `resource_max_bytes=0` 都走默认值并真的发出请求 / 内嵌成功（不是零次请求、不是立刻超时、不是超限）。
+  证据：`tests/test_renderer_network.py` 21 → 26 项、`renderer/test/http_client.test.js` 20 → 26 项；全套 `362 → 367 passed, 7 xfailed`；`--runxfail` 仍 `7 failed, 2 passed`；renderer `npm test` 61 → 67 passed；bundle 1,135,968 → 1,136,353 B。
 
 ## texmath 审计记录（Phase 4B，为什么不复用 `markdown-it-texmath`）
 

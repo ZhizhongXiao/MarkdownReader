@@ -8,7 +8,11 @@
  *
  * 策略（implementation policy，不是长期 KEEP contract，只在本文件与测试里记录）：
  *   timeout 8000 ms / 次尝试；retries 1（总尝试 2 次）；retry delay 固定 150 ms；
+ *   timeout / retries / maxBytes 只在「有限且为正」（retries 还须为非负整数）时生效，否则回落默认值；
  *   retry 只在 network error / timeout / HTTP 5xx；4xx 与内容校验失败（CT / size）不 retry；
+ *   body 读取阶段的 AbortError / TimeoutError 与 fetch 阶段一样按 timeout 分类并 retry，其它读错误按 network
+ *   分类并 retry，只有 too-large 不 retry；每次 retry 都是**完整重新 GET**（新 AbortSignal + 新 Response），
+ *   绝不复用已失败的 body reader。
  *   单资源上限 16 MiB：Content-Length 超标立即拒绝（不读 body），否则读流累计超限即 abort；
  *   允许 http(s) 内重定向，返回 response.url 供审计；最终 URL 若不是 http(s) 视为失败。
  *
@@ -40,6 +44,33 @@ function failure(reason, detail, retryable) {
     detail: detail === undefined ? "" : String(detail),
     retryable: retryable === true,
   };
+}
+
+// readLimited 超限时用的内部哨兵：分类只看 error.name，不比对 message（message 是外部实现细节）。
+const TOO_LARGE_NAME = "TooLargeError";
+
+function tooLargeError() {
+  const error = new Error("响应体超过大小上限");
+  error.name = TOO_LARGE_NAME;
+  return error;
+}
+
+/**
+ * 传输失败分类（fetch 阶段与 body 读取阶段共用同一套规则）：
+ *   TooLargeError → too-large，不 retry；
+ *   AbortError / TimeoutError → timeout，retry（AbortSignal.timeout 与手动 abort 在 Node 上都以这两个 name 出现）；
+ *   其它（socket 中断、连接被重置、流解析失败等）→ network，retry。
+ */
+function errorFailure(error) {
+  const name = error && error.name ? String(error.name) : "";
+  const detail = error && error.message ? error.message : String(error);
+  if (name === TOO_LARGE_NAME) {
+    return failure("too-large", detail, false);
+  }
+  if (name === "TimeoutError" || name === "AbortError") {
+    return failure("timeout", detail, true);
+  }
+  return failure("network", detail, true);
 }
 
 function sleep(milliseconds) {
@@ -81,7 +112,7 @@ async function readLimited(response, maxBytes) {
   if (!body || typeof body.getReader !== "function") {
     const buffer = Buffer.from(await response.arrayBuffer());
     if (buffer.length > maxBytes) {
-      throw new Error("too-large");
+      throw tooLargeError();
     }
     return buffer;
   }
@@ -100,7 +131,7 @@ async function readLimited(response, maxBytes) {
       } catch (_error) {
         // cancel 失败不影响结论：本次资源仍然按超限处理。
       }
-      throw new Error("too-large");
+      throw tooLargeError();
     }
     chunks.push(Buffer.from(step.value));
   }
@@ -124,19 +155,31 @@ function createTimeoutSignal(timeoutMs, AbortControllerImpl) {
   return undefined;
 }
 
+/** 有限且为正的数字，否则回落默认值。 */
+function positiveNumber(value, fallback) {
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+/** 非负整数，否则回落默认值（retries = 0 合法：只尝试一次）。 */
+function nonNegativeInteger(value, fallback) {
+  return Number.isInteger(value) && value >= 0 ? value : fallback;
+}
+
 /**
  * 造一个 HTTP client。生产默认 fetchImpl = globalThis.fetch；测试传 fake fetch。
  * 返回 { get(url), policy }；get() 永不抛错，失败一律返回 { ok: false, reason, retryable }。
+ * 数值选项越界（非正数 / retries 为负或非整数）一律回落默认值；policy 给出的始终是真正生效的值。
  */
 function createHttpClient(options) {
   const settings = options || {};
   const fetchImpl = settings.fetchImpl === undefined ? globalThis.fetch : settings.fetchImpl;
-  const timeoutMs = Number.isFinite(settings.timeoutMs) ? settings.timeoutMs : DEFAULT_TIMEOUT_MS;
-  const retries = Number.isFinite(settings.retries) ? settings.retries : DEFAULT_RETRIES;
+  // 选项只在有效范围内生效，否则回落默认值（负数 / 0 / NaN / Infinity 都不能穿透到重试循环与上限判断）。
+  const timeoutMs = positiveNumber(settings.timeoutMs, DEFAULT_TIMEOUT_MS);
+  const retries = nonNegativeInteger(settings.retries, DEFAULT_RETRIES);
   const retryDelayMs = Number.isFinite(settings.retryDelayMs)
     ? settings.retryDelayMs
     : DEFAULT_RETRY_DELAY_MS;
-  const maxBytes = Number.isFinite(settings.maxBytes) ? settings.maxBytes : DEFAULT_MAX_BYTES;
+  const maxBytes = positiveNumber(settings.maxBytes, DEFAULT_MAX_BYTES);
   const AbortControllerImpl = settings.AbortControllerImpl || globalThis.AbortController;
 
   async function attempt(url) {
@@ -152,10 +195,8 @@ function createHttpClient(options) {
         signal: createTimeoutSignal(timeoutMs, AbortControllerImpl),
       });
     } catch (error) {
-      const name = error && error.name ? String(error.name) : "";
-      const timedOut = name === "TimeoutError" || name === "AbortError";
-      const detail = error && error.message ? error.message : String(error);
-      return failure(timedOut ? "timeout" : "network", detail, true);
+      // fetch 阶段不可能出现 too-large 哨兵；共用分类器保证两阶段规则一致。
+      return errorFailure(error);
     }
 
     if (!response || typeof response.status !== "number") {
@@ -187,9 +228,8 @@ function createHttpClient(options) {
     try {
       bytes = await readLimited(response, maxBytes);
     } catch (error) {
-      const tooLarge = error && String(error.message) === "too-large";
-      const detail = error && error.message ? error.message : String(error);
-      return failure(tooLarge ? "too-large" : "network", detail, false);
+      // 超限（哨兵）不 retry；读取阶段的 abort / socket 错误与 fetch 阶段同一分类，可 retry。
+      return errorFailure(error);
     }
 
     return {

@@ -14,9 +14,9 @@
  * options 中与资源层相关的项（Phase 5C，均为实现选项，不是永久 KEEP contract）：
  *   fetch_remote_resources  默认 true：联网尝试内嵌远程图片与 PlantUML 图像；
  *                           false 时 remote 一律 kept、不联网、不报 warning
- *   resource_timeout_ms     单次请求超时（默认 8000）
- *   resource_retries        重试次数（默认 1，即最多 2 次尝试）
- *   resource_max_bytes      单资源字节上限（默认 16 MiB）
+ *   resource_timeout_ms     单次请求超时（默认 8000；非正数 / 非有限值回落默认）
+ *   resource_retries        重试次数（默认 1，即最多 2 次尝试；非负整数以外回落默认）
+ *   resource_max_bytes      单资源字节上限（默认 16 MiB；非正数 / 非有限值回落默认）
  *
  * v2 成功 envelope 始终带 resources（无资源时是空结构，不存在「有时有、有时没有」）：
  *   resources.items   = 资源 manifest（**文档顺序**）：[{ kind, source, ref, status, mime?, resolved? }]

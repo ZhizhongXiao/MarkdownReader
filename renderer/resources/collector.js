@@ -95,7 +95,8 @@ function collectJobs(tokens) {
   return jobs;
 }
 
-// 选项只接受有限数字；非法/缺省一律回落到 client 自己的 policy 默认值。
+// 选项只过滤「非数字」；有效范围（正数 / 非负整数）由 http_client 的 policy gate 单点判定，
+// 越界值在这里原样传下去并最终回落默认值 —— 本层不重复实现 gate，避免两处规则不一致。
 function optionNumber(value) {
   return Number.isFinite(value) ? Number(value) : undefined;
 }
