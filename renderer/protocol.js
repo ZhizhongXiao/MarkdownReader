@@ -11,13 +11,27 @@
  *   { "markdown": "...", "options": {}, "context": { "source_path": "",
  *     "output_path": "", "document_map": {} } }
  *
+ * options 中与资源层相关的项（Phase 5C，均为实现选项，不是永久 KEEP contract）：
+ *   fetch_remote_resources  默认 true：联网尝试内嵌远程图片与 PlantUML 图像；
+ *                           false 时 remote 一律 kept、不联网、不报 warning
+ *   resource_timeout_ms     单次请求超时（默认 8000）
+ *   resource_retries        重试次数（默认 1，即最多 2 次尝试）
+ *   resource_max_bytes      单资源字节上限（默认 16 MiB）
+ *
  * v2 成功 envelope 始终带 resources（无资源时是空结构，不存在「有时有、有时没有」）：
- *   resources.items   = 资源 manifest：[{ kind, source, ref, status, mime?, resolved? }]
+ *   resources.items   = 资源 manifest（**文档顺序**）：[{ kind, source, ref, status, mime?, resolved? }]
+ *                       kind   = image（Markdown 图片）| plantuml（uml_diagram）| css-resource | runtime
+ *                       status = inlined | kept | failed（不引入 unresolved）
+ *                       ref    = 作者原引用（远程失败/保留时 HTML 也用它）
+ *                       resolved = 实际取得资源的位置：本地是绝对路径，远程成功是 response.url
  *   resources.styles  = 需要 assembler 注入的 CSS：[{ id, css }]（目前只有 katex）
  *   resources.scripts = 需要 assembler 注入的脚本：[{ id, version, script, boot }]
  *                       （目前只有按需的 mermaid；5B 起是 v2 的 additive 通道，不升版本）
- * warnings 仍是**用户可读字符串数组**，只承载降级/缺失/不可读等需要用户注意的情况；
- * 成功内嵌不产生 warning —— 状态记在 manifest 里（v1 的 envelope 属旧 production renderer）。
+ * warnings 仍是**用户可读字符串数组**，只承载降级/缺失/不可读/抓取失败等需要注意的情况；
+ * 成功内嵌不产生 warning；同一远程 URL 的同一失败只报一次（v1 的 envelope 属旧 production renderer）。
+ *
+ * 渲染是 async（Phase 5C 的远程抓取），但对外契约不变：stdout 仍只有一个 JSON envelope，
+ * 诊断只走 stderr。
  */
 
 const PROTOCOL_VERSION = 2;

@@ -247,8 +247,13 @@ def test_existing_data_uri_is_left_untouched(tmp_path: Path):
     assert item["source"] == "data" and item["status"] == "kept"
 
 
-def test_remote_image_is_left_untouched(tmp_path: Path):
-    """联网抓取属 5C：5A 只记 manifest，不改 HTML，也不报 warning。"""
+def test_remote_image_is_kept_when_fetching_is_disabled(tmp_path: Path):
+    """T1 由 Phase 5C 改写：remote 的**行为**现在取决于 `fetch_remote_resources`。
+
+    这里的 harness 默认注入 `fetch_remote_resources = false`（保证完整测试不访问公网），
+    因此 remote 只记 kept、不改 HTML、也不报 warning；**联网成功/失败的真实语义**由
+    tests/test_renderer_network.py 用 127.0.0.1 loopback 服务器证明。
+    """
     sources = [
         "http://example.com/a.png",
         "https://example.com/a.png",
@@ -271,12 +276,19 @@ def test_file_scheme_image_keeps_the_markdown_it_default(tmp_path: Path):
     assert envelope["warnings"] == []
 
 
-def test_image_without_source_context_is_not_resolved():
-    """没有 source_path 就没有解析基准：不内嵌、不报 warning、manifest 为空。"""
+def test_image_without_source_context_is_kept_without_a_warning():
+    """5C 的 classify-first：缺 source_path 只影响 local 解析，不再让 manifest 为空。
+
+    local 没有基准 → kept（不是 failed：缺上下文不等于文件错误），data: / remote 也照常记录。
+    """
     envelope = render("![a](pic.png)\n")
 
     assert img_source(envelope["html"]) == "pic.png"
-    assert envelope["resources"] == {"items": [], "styles": [], "scripts": []}
+    assert envelope["resources"]["items"] == [
+        {"kind": "image", "source": "local", "ref": "pic.png", "status": "kept"}
+    ]
+    assert envelope["resources"]["styles"] == []
+    assert envelope["resources"]["scripts"] == []
     assert envelope["warnings"] == []
 
 

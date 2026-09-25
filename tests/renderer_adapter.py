@@ -27,6 +27,10 @@ BUILD_HINT = (
     "请先执行 cd renderer; npm ci; npm run build"
 )
 
+# Phase 5C gate：默认关闭远程抓取，保证完整的 pytest / npm test 不依赖公共互联网。
+# 联网语义只在显式 allow_network=True + 本地 loopback 服务器的测试里验证。
+DEFAULT_OPTIONS = {"fetch_remote_resources": False}
+
 
 def require_node() -> str:
     """返回 node 可执行文件；缺 node 属平台工具缺失，只跳过依赖它的检查。"""
@@ -62,10 +66,23 @@ def run_adapter(payload, args: tuple = (), timeout: int = 120) -> subprocess.Com
     )
 
 
-def render(markdown: str, options: dict | None = None, context: dict | None = None) -> dict:
-    """渲染一段 Markdown 并要求成功，返回 envelope。"""
+def render(
+    markdown: str,
+    options: dict | None = None,
+    context: dict | None = None,
+    *,
+    allow_network: bool = False,
+) -> dict:
+    """渲染一段 Markdown 并要求成功，返回 envelope。
+
+    Phase 5C 的 gate：默认注入 ``fetch_remote_resources = False``，因此**完整自动化测试不会访问
+    公共互联网**。需要验证真实联网语义的测试用 ``allow_network=True``（不注入该默认值，走 renderer
+    的生产默认 true），并且 URL 必须指向 127.0.0.1 的测试服务器（见 tests/loopback_http.py）。
+    """
+    merged = {} if allow_network else dict(DEFAULT_OPTIONS)
+    merged.update(options or {})
     completed = run_adapter(
-        {"markdown": markdown, "options": options or {}, "context": context or {}}
+        {"markdown": markdown, "options": merged, "context": context or {}}
     )
     assert completed.returncode == 0, completed.stderr
     envelope = json.loads(completed.stdout)

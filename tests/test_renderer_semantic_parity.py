@@ -420,7 +420,9 @@ def test_resource_layer_channel_differs_by_design_after_phase5a():
     assert "assets" in old, "旧 renderer 的 KaTeX 载荷通道"
     assert "assets" not in new, "v2 用 resources 取代 assets.css（T7 已登记）"
     assert set(new["resources"]) == {"items", "styles", "scripts"}
-    assert new["resources"] == {"items": [], "styles": [], "scripts": []}, (
-        "没有 source_path 上下文时不做本地资源解析"
-    )
+    assert new["resources"]["items"] == [
+        {"kind": "image", "source": "local", "ref": "missing.png", "status": "kept"}
+    ], "5C 的 classify-first：缺 source_path 时 local 记 kept（不是 failed），且不报 warning"
+    assert new["resources"]["styles"] == []
+    assert new["resources"]["scripts"] == []
     assert "missing.png" in new["html"], "资源层不得导致引用丢失"

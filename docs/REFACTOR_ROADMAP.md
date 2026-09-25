@@ -319,9 +319,10 @@ PlantUML 当前只使用联网 server。
 5B  PASS      vendored mermaid@11.15.0 runtime 经 resources.scripts 按需交付；每容器独立 run（逐图隔离）
               资产发布 staged + verified + rollback-protected（staging 复验 → .backup → 失败回滚）
               opt-in 浏览器验收：离线打开、零网络请求、.mermaid 内真的生成 SVG；含 invalid 在前 + valid 在后的 mixed 反证
-5C  pending   remote image 与 PlantUML 抓取、超时/失败保留 URL + warning、断网仍转换
+5C  PASS      remote image 与 PlantUML 抓图：HTTP client（8s / 1 retry / 150ms / 16MiB / 只收 image）+ URL cache +
+              并发 4 + 文档顺序写回；失败保留原 URL + warning + 转换继续；测试不访问公网（127.0.0.1 loopback）
 5D  pending   standalone closure gate（外部子资源扫描 + 载荷纪律 + 体积报告）
-production renderer 仍未切换：cutover 依赖 5C–5D 的 standalone 闭包
+production renderer 仍未切换：cutover 依赖 5D 的 standalone 闭包
 ```
 
 ## 验收

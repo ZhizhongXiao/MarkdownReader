@@ -113,6 +113,13 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
 - 浏览器验收（Phase 5B，opt-in）：`tests/browser` 用真实 adapter 渲染 → 自装配页面 → 拦截所有非 `file://` 请求
   → 断言 `.mermaid` 容器内真的生成 `<svg>`，并锁定 D2 不变式（DOM 文本 == 作者原文）；另有 mixed 用例证明
   「invalid 图在前、valid 图在后」时后者仍渲染成功且无未捕获错误。默认 pytest **不依赖浏览器**。
+- 网络层（Phase 5C）：`renderer/resources/http_client.js` 负责传输（GET / timeout 8 s / retries 1 / retry delay 150 ms /
+  单资源 16 MiB / 只接受 `image/*`，缺 Content-Type 才按扩展名回退），`renderer/resources/remote_resolver.js`
+  负责 URL 级 cache（同一 URL 一个 Promise）与并发调度（上限 4，结果按文档顺序写回）。默认 `fetch_remote_resources=true`；
+  失败一律保留作者原引用 + 可读 warning 并继续转换。
+- 测试**不依赖公共互联网**（Phase 5C gate）：`tests/renderer_adapter.py::render()` 默认注入 `fetch_remote_resources=false`，
+  因此 `uv run pytest` / `npm test` 不会联网；真实联网语义只在 `tests/test_renderer_network.py` 里用
+  127.0.0.1 loopback 服务器（`tests/loopback_http.py`）验证。
 - 协议：v2（Phase 5A）——
   `{ "protocol_version": 2, "ok": true, "html", "headings", "features", "warnings", "resources": { "items": [], "styles": [] } }`；
   `resources` 是**必在**字段（没有资源时也是空结构）：`items` 是资源 manifest，`styles` 是交给 assembler 注入的 CSS；

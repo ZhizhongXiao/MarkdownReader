@@ -39,7 +39,7 @@ function fail(code, message, detail) {
   emit(serialize(errorEnvelope(code, message, detail)), 1);
 }
 
-function renderRequest(request) {
+async function renderRequest(request) {
   const warnings = [];
   const renderer = createRenderer({ options: request.options });
   // document 层职责（K14 的 id 非空保证）由 entry 组合，upstream/ 只负责上游与基础配置。
@@ -54,9 +54,10 @@ function renderRequest(request) {
   // document 层（Phase 4B）：parse 之后、render 之前只跑一次 —— `.md → .html` 重写与
   // WikiLink 目标解析都写进 token，避免 heading metadata + 正文两次 inline 渲染造成重复 warning。
   const documentLinks = transformDocumentLinks(tokens, request.context);
-  // 资源层（Phase 5A）：同样在 parse 后、render 前只跑一次；只处理 Markdown image token
-  // （raw HTML 里的引用保持原样），并把需要 assembler 注入的 CSS 放进 resources.styles。
-  const resources = collectResources(tokens, request.context);
+  // 资源层（Phase 5A/5C）：同样在 parse 后、render 前只跑一次；只处理 Markdown 语义 token
+  // （image 与 uml_diagram），raw HTML 里的引用保持原样。Phase 5C 起这里会并发抓取远程资源，
+  // 因此 collectResources 是 async；stdout 仍只在全部完成后写一个 JSON envelope。
+  const resources = await collectResources(tokens, request.context, request.options);
   const headings = collectHeadings(renderer.md, tokens, env);
   const html = renderer.md.renderer.render(tokens, renderer.md.options, env);
 
@@ -131,7 +132,7 @@ async function main() {
   }
 
   try {
-    emit(serialize(okEnvelope(renderRequest(request))), 0);
+    emit(serialize(okEnvelope(await renderRequest(request))), 0);
   } catch (error) {
     fail(
       "render_failed",

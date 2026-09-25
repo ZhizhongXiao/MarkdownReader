@@ -281,17 +281,22 @@ def test_raw_html_plantuml_lookalike_is_not_a_feature():
     assert envelope["features"]["plantuml"] is False, "raw HTML 不得让 feature 误报"
 
 
-def test_plantuml_rendering_never_carries_resources_or_fetch_results():
-    """Phase 5C 的边界：图上抓取与内嵌尚未实现，资源层也不收集它（不是 Markdown image token）。"""
+def test_plantuml_rendering_keeps_the_url_when_fetching_is_disabled():
+    """Phase 5C 登记改写：PlantUML 抓图由 `fetch_remote_resources` 控制。
+
+    本用例（harness 默认关闭抓取）锁「不联网、URL 原样、无 warning、无 data URI」；
+    联网成功 → data URI、失败 → 原 URL + warning + 转换继续，由 tests/test_renderer_network.py
+    用 127.0.0.1 loopback 服务器证明（G7 的资源部分）。
+    """
     options = {"plantuml_server": CUSTOM_PLANTUML_SERVER}
     envelope = render("@startuml\nA -> B\n@enduml\n", options=options)
     html = envelope["html"]
 
     assert "data:image" not in html and "base64" not in html
     assert "<script" not in html
-    assert envelope["resources"] == {"items": [], "styles": [], "scripts": []}, (
-        "抓图与内嵌属于 Phase 5C"
-    )
+    assert _img_src(html).startswith(CUSTOM_PLANTUML_SERVER + "/svg/"), "URL 必须原样保留"
+    (item,) = [entry for entry in envelope["resources"]["items"] if entry["kind"] == "plantuml"]
+    assert item["source"] == "remote" and item["status"] == "kept", item
     assert envelope["warnings"] == []
 
 
