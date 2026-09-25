@@ -33,6 +33,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / "dist"
+# v2 是 production renderer，v1 保留为 rollback：两套依赖都进发布记录。
+RENDERER_DIR = ROOT / "renderer"
+RENDERER_LOCK = RENDERER_DIR / "package-lock.json"
+NODE_RENDERER_LOCK = ROOT / "node_renderer" / "package-lock.json"
 PASS_MARKER = "QA 结论：通过"
 # The record is written by hand, so a tick may arrive as [X], with spaces inside
 # the brackets, or indented. Every shape counts the same. A box holding anything
@@ -136,10 +140,40 @@ def run(command, **kwargs):
     )
 
 
+def build_renderer() -> bool:
+    """Build renderer/dist before packaging; the spec refuses to pack without it.
+
+    renderer/dist is a gitignored build artifact, so "the spec verifies and
+    collects it" only works while something produces it -- that is this step. It
+    runs once for both packagings, and renderer/build/build.js keeps its own
+    staged, verified and rollback-protected replacement contract.
+    """
+    print("renderer:")
+    npm = shutil.which("npm")
+    if npm is None:
+        return report(False, "npm not on PATH (the v2 renderer payload must be built)")
+    for arguments in (["ci"], ["run", "build"]):
+        result = subprocess.run(
+            [npm, *arguments],
+            cwd=str(RENDERER_DIR),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        if not report(result.returncode == 0, "npm " + " ".join(arguments)):
+            print((result.stdout or "")[-1500:])
+            print((result.stderr or "")[-1500:])
+            return False
+    return True
+
+
 def build() -> bool:
     print("build:")
     if DIST.exists():
         shutil.rmtree(DIST, ignore_errors=True)
+    if not build_renderer():
+        return False
     ok = True
     for mode in ("onefile", "onedir"):
         result = run(
@@ -210,6 +244,22 @@ def tool_version(distribution):
     return (result.stdout or "").strip() or "unknown"
 
 
+def release_inputs() -> list:
+    """Return the (label, sha256) build inputs a release record must carry.
+
+    v2 is the production renderer and v1 stays the rollback path, so both
+    renderer dependency sets are recorded: swapping either lockfile without a
+    rebuild is a change the record has to show.
+    """
+    runtime = json.loads(read(ROOT / "packaging" / "node-runtime.json"))
+    return [
+        ("uv.lock", sha256(ROOT / "uv.lock")),
+        ("node_renderer/package-lock.json  (v1 rollback)", sha256(NODE_RENDERER_LOCK)),
+        ("renderer/package-lock.json  (v2 production)", sha256(RENDERER_LOCK)),
+        ("node.exe", str(runtime.get("sha256"))),
+    ]
+
+
 def write_record(display: str, artifacts: list, with_tag: bool) -> None:
     runtime = json.loads(read(ROOT / "packaging" / "node-runtime.json"))
     commit = run(["git", "rev-parse", "HEAD"]).stdout.strip()
@@ -229,12 +279,8 @@ def write_record(display: str, artifacts: list, with_tag: bool) -> None:
         "",
     ]
     lines += ["- " + a.name + "  " + sha256(a) for a in artifacts]
-    lines += [
-        "- uv.lock  " + sha256(ROOT / "uv.lock"),
-        "- package-lock.json  " + sha256(ROOT / "node_renderer" / "package-lock.json"),
-        "- node.exe  " + str(runtime.get("sha256")),
-        "",
-    ]
+    lines += ["- " + label + "  " + value for label, value in release_inputs()]
+    lines += [""]
     (DIST / ("release-record-" + display + ".md")).write_text(
         chr(10).join(lines) + chr(10), encoding="utf-8"
     )

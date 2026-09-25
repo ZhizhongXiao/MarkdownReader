@@ -36,10 +36,21 @@ def generate_demo(
     if str(REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(REPO_ROOT))
 
+    from core.config import PRODUCTION_RENDERER_VERSION
     from core.converter import process_single
 
     cfg = {"template": template, "numbering": False, "overwrite": True}
-    result = process_single(str(input_path), str(output), cfg)
+    # 显式离线：committed specimen 必须在无网络环境下可重现（demo.md 目前不含远程资源，
+    # 但"不联网"应当是输入保证，而不是巧合）。
+    options = (
+        {"fetch_remote_resources": False} if PRODUCTION_RENDERER_VERSION == "v2" else None
+    )
+    result = process_single(
+        str(input_path),
+        str(output),
+        cfg,
+        renderer_options=options,
+    )
     if result is None:
         raise RuntimeError("demo generation failed: %s" % input_path)
     return Path(result)

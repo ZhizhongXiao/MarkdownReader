@@ -13,7 +13,6 @@ docs/MARKDOWN_COMPATIBILITY.md 的 TRANSITIONAL T5 一行。
 import re
 import sys
 from pathlib import Path
-from urllib.parse import unquote
 
 import pytest
 
@@ -129,6 +128,7 @@ def test_toc_rows_link_back_to_the_body_headings(document_html: str):
 
     assert len(toc_ids) == len(body_ids) == EXPECTED_ANCHOR_HEADINGS
     assert toc_ids == body_ids, "TOC 的 data-id 必须与正文 heading id 一致"
-    assert [unquote(target) for target in link_targets] == body_ids, (
-        "每个 TOC 链接都必须指向对应 heading"
-    )
+    # href 与 id 必须**字面相同**（不做 unquote）：两个 renderer 的 id 形态可以不同
+    # （v2 沿用上游 slugifyUnicode，对非 ASCII 做百分号编码），而浏览器跳转靠的就是
+    # 这种精确匹配。逐字符比较比各自的编码约定更严格。
+    assert link_targets == body_ids, "每个 TOC 链接都必须指向对应 heading"

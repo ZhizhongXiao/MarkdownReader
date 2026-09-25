@@ -23,7 +23,26 @@ python -m PyInstaller --clean --noconfirm --workpath "packaging\.pyinstaller-bui
 构建缓存位于 `packaging/.pyinstaller-build/`，完成后可安全删除；`--clean` 会清理缓存与本次 workpath。
 需要完全排除旧产物影响时先删除 `dist/`。
 
-打包内容：GUI 静态资源、全部模板、Node 渲染脚本与依赖、内置 Node 运行时、启动图与程序图标。
+打包内容：GUI 静态资源、全部模板、v2 renderer 载荷（`renderer/dist/`）、Node 渲染脚本与依赖、
+内置 Node 运行时、启动图与程序图标。
+
+## v2 renderer 载荷
+
+发布包默认使用 v2 renderer，因此必须带上：
+
+```text
+renderer/dist/renderer.cjs
+renderer/dist/katex/
+renderer/dist/mermaid/
+```
+
+它们是 gitignored 构建产物（`cd renderer; npm ci; npm run build`）。`packaging/release_freeze.py`
+在 PyInstaller 之前自动执行这两步，spec 在缺少它们时直接让构建失败。构建期还会用
+`packaging/node/node.exe` 对 v1 与 v2 各做一次冒烟：既要证明内置 Node 能跑，也要证明即将打包的
+`renderer/dist` 与即将打包的 `node.exe` 真的能合作。
+
+`renderer/node_modules/`、`renderer/src/`、`renderer/vendor/` 是构建期输入，不进发布包。
+`node_renderer/`（脚本 + 依赖）继续随包发布，它是 v1 回退路径。
 
 ## 内置 Node
 
@@ -63,3 +82,7 @@ python packaging/release_freeze.py --tag                     # 重建产物、�
 `release_freeze.py` 要求工作区干净、HEAD 与 `origin/main` 一致，并从 `docs/QA-CHECKLIST.md` 读取验收结果：
 条目全部勾选且结论包含 `QA 结论：通过` 才允许打 tag。发布物为 EXE、便携 ZIP、`SHA256SUMS.txt`
 与 `release-record-<版本>.md`。
+
+`--qa-record` 默认指向 `docs/QA-CHECKLIST.md`；实机验收记录必须与**当前 production renderer**
+对应（v2 cutover 之后的记录不能沿用 v1 时代的勾选），因此切换 production renderer 时要指向对应
+的那一份记录文件。

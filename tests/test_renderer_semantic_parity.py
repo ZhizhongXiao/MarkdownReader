@@ -8,10 +8,11 @@ compatibility」建立一层明确的 old/new 语义对照证据。这不是新�
 renderer 内部 token 顺序。
 
 Phase 4A/4C 新语法（checkbox / mark / callout / wikilink / obsidian-tag / mermaid / plantuml）
-在 old renderer 上本就不支持，因此**不做** old == new：old 侧由 Phase 1 的 7 个 strict xfail
-证明「仍不支持」，new 侧由 tests/test_renderer_adapter_targets.py 与
-tests/test_renderer_adapter_diagrams.py 证明「已实现」。features 通道只有新 adapter 有，
-同样不做 equality（见 test_features_are_adapter_only）。
+在 old renderer 上本就不支持，因此**不做** old == new：old 侧由「旧 renderer 没有这些语义」
+说明，new 侧由 tests/test_renderer_adapter_targets.py 与
+tests/test_renderer_adapter_diagrams.py 证明「已实现」。（Cutover C4 之后，production 默认走
+new；7 项 TARGET 门禁在 tests/test_markdown_compat_target.py 里以普通断言通过。）
+features 通道只有新 adapter 有，同样不做 equality（见 test_features_are_adapter_only）。
 
 资源交付通道自 Phase 5A 起形状不同：old 是 `assets.css`，new 是 v2 的 `resources`，因此仍不做
 equality，只锁「各自通道成立、引用不丢」（见

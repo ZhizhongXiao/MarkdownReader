@@ -17,6 +17,7 @@ from core.config import (
     PLACEHOLDER_CONTENT,
     PLACEHOLDER_TITLE,
     PLACEHOLDER_TOC,
+    PRODUCTION_RENDERER_VERSION,
     get_shared_print_css_path,
     get_shared_viewer_js_path,
     load_theme_chain,
@@ -88,7 +89,7 @@ def process_single(
     link_context: dict | None = None,
     report: dict | None = None,
     *,
-    renderer_version: str = "v1",
+    renderer_version: str = PRODUCTION_RENDERER_VERSION,
     renderer_options: dict | None = None,
 ) -> str | None:
     """Convert a single Markdown file to a standalone HTML document.
@@ -101,9 +102,10 @@ def process_single(
             omitted, the source and output paths are derived from this call so
             relative resources still resolve.
         report: When given, receives the conversion warnings.
-        renderer_version: ``"v1"`` (default, the production path) or ``"v2"``.
-            This is an **internal** parameter on purpose: it is not part of
-            config.json yet (Cutover C3 / K26).
+        renderer_version: ``"v1"`` or ``"v2"``; defaults to
+            ``core.config.PRODUCTION_RENDERER_VERSION`` (the policy constant that
+            a rollback flips). This is an **internal** parameter on purpose: it is
+            not part of config.json yet (Cutover C3 / K26).
         renderer_options: Renderer options; only the v2 path honours them.
             ``None`` uses ``_V2_DEFAULT_OPTIONS``, supplied values are merged
             over it. The v1 path rejects non-empty options.
@@ -156,6 +158,9 @@ def process_single(
             renderer_options=renderer_options,
             report=report,
         )
+    if renderer_version != "v1":
+        # 未知版本不能静默按 v1 处理：那会让调用方以为自己的选择生效了。
+        raise ValueError("renderer_version 只能是 'v1' 或 'v2'，收到：%r" % (renderer_version,))
 
     render_result = render_markdown_node(
         body_md,
@@ -311,7 +316,7 @@ def process_batch(
     plan: dict | None = None,
     progress_callback=None,
     *,
-    renderer_version: str = "v1",
+    renderer_version: str = PRODUCTION_RENDERER_VERSION,
     renderer_options: dict | None = None,
 ) -> list[dict]:
     """Process multiple Markdown files.
@@ -323,7 +328,8 @@ def process_batch(
         source_root: Source directory used to preserve relative paths.
         index_filename: Generated batch index filename.
         collection_name: Source directory name displayed by the index.
-        renderer_version: Forwarded to ``process_single`` (internal, default v1).
+        renderer_version: Forwarded to ``process_single``; defaults to the
+            production policy (``core.config.PRODUCTION_RENDERER_VERSION``).
         renderer_options: Forwarded to ``process_single`` (only v2 honours them).
 
     Returns:

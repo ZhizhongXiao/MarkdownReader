@@ -88,12 +88,20 @@ REQUIRED_FILES = (
     "node_renderer/render.js",
     "node_renderer/package.json",
     "node_renderer/package-lock.json",
+    "renderer/dist/renderer.cjs",
+    "renderer/dist/katex/katex.min.css",
+    "renderer/dist/mermaid/mermaid.min.js",
     "packaging/node/node.exe",
 )
 for _relative in REQUIRED_FILES:
     require_file(_relative)
 
-for _relative in ("node_renderer/node_modules", "packaging/node"):
+for _relative in (
+    "node_renderer/node_modules",
+    "renderer/dist/katex",
+    "renderer/dist/mermaid",
+    "packaging/node",
+):
     require_dir(_relative)
 
 # Validate the renderer for real before building: an empty or incomplete
@@ -150,10 +158,36 @@ if _smoke.returncode != 0:
         + ((_smoke.stderr or _smoke.stdout or "").strip()[:2000])
     )
 
+# Cutover C4: the release renders with v2 by default, so the build has to prove
+# that the renderer/dist about to be packaged works with the node.exe about to be
+# packaged -- not that some Node on PATH happens to work.
+_v2_smoke_source = (
+    "from core import renderer_v2; renderer_v2.validate_v2_runtime("
+    + repr(str(bundled_node))
+    + ")"
+)
+_v2_smoke = subprocess.run(
+    [sys.executable, "-c", _v2_smoke_source],
+    cwd=str(project_root),
+    capture_output=True,
+    text=True,
+)
+if _v2_smoke.returncode != 0:
+    raise SystemExit(
+        "v2 renderer 自检未通过："
+        + ((_v2_smoke.stderr or _v2_smoke.stdout or "").strip()[:2000])
+    )
+
 datas = []
 add_tree(datas, project_root / "gui" / "assets", "gui/assets")
 add_tree(datas, project_root / "templates", "templates")
 add_tree(datas, project_root / "node_renderer", "node_renderer")
+
+# The v2 renderer payload (Cutover C4): renderer/dist is a gitignored build
+# artifact, so packaging/README.md and release_freeze.py own producing it while
+# this spec verifies and collects it. Only dist/ ships -- renderer/node_modules,
+# renderer/src and renderer/vendor are build-time inputs, not runtime payload.
+add_tree(datas, project_root / "renderer" / "dist", "renderer/dist")
 
 # Optional portable Node.js runtime. Put node.exe under packaging/node before
 # building if the release should run without user-installed Node.js.

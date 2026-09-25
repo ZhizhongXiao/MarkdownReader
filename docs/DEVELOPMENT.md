@@ -142,23 +142,34 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
   `resources` 是**必在**字段（没有资源时也是空结构）：`items` 是资源 manifest，`styles` 是交给 assembler 注入的 CSS，
   `scripts` 是按需交付的运行时（今天只有 mermaid），`author_references` 是作者 raw HTML 的 provenance（Cutover C1，见 K25）；
   `warnings` 保持用户可读字符串数组，成功内嵌不产生 warning（状态记在 manifest）。
-  失败同样是单个 JSON envelope + 退出码 1，诊断只走 stderr。v1 的 `assets.css` 只属于旧 production renderer。
+  失败同样是单个 JSON envelope + 退出码 1，诊断只走 stderr。v1 的 `assets.css` 只属于 v1（Cutover C4 后是回退路径）。
 - renderer 选择（Cutover C2，K26）：`core.renderer_node.render_markdown_node(markdown, context=…,
-  renderer_version="v1", options=None)` —— **显式**选择 v1 / v2，默认 v1（生产默认未切换）。
+  renderer_version="v1", options=None)` —— **显式**选择 v1 / v2；这是 bridge，默认 `v1`（它是低层 API，
+  production policy 见下一条）。
   `core/renderer_v2.py` 负责调用 `renderer/dist/renderer.cjs`、校验 `protocol_version == 2` 与必在形状、
   原样返回**完整** envelope；Node 可执行文件解析与版本下限（v2 需 major >= 18，常量 `MINIMUM_NODE_MAJOR`
   也由 `packaging/MarkdownReader.spec` 在构建期断言）属于 `core/renderer_node.py`。
   不做协议探测、不在 v2 失败时回退 v1、artifact 缺失给出构建提示；`options` 只对 v2 生效
   （v1 收到非空 options 报 `ValueError`，不静默忽略）。
 - converter 的 v2 路径（Cutover C3，K26）：`process_single` / `process_batch` 增加**内部** keyword
-  `renderer_version`（默认 `"v1"`）与 `renderer_options`。显式 `"v2"` 时 renderer 走 C2 的 bridge，
-  装配交给 `core/html_assembly.py`（含注入账本）；`report["warnings"]` 固定为
-  **renderer warnings + assembly warnings**（顺序即此顺序）。v2 的 production 内部默认是
-  `_V2_DEFAULT_OPTIONS = {"math": True, "fetch_remote_resources": True}`，`renderer_options` 在其上覆盖，
-  **不进 config.json**（Phase 8 才决定哪些 renderer 选项成为产品配置）。失败语义与 v1 对齐：
-  模板不可装配 → log + 返回 `None`（不写文件）；renderer / bridge 失败保留 actionable 异常
-  （缺 artifact 不被吞成静默无输出）。`core/converter.py` 运行期**不调用** closure checker
-  （它只是 test / release gate）。
+  `renderer_version`（默认 = `core.config.PRODUCTION_RENDERER_VERSION`）与 `renderer_options`。
+  v2 时 renderer 走 C2 的 bridge，装配交给 `core/html_assembly.py`（含注入账本）；
+  `report["warnings"]` 固定为 **renderer warnings + assembly warnings**（顺序即此顺序）。
+  v2 的 production 内部默认是 `_V2_DEFAULT_OPTIONS = {"math": True, "fetch_remote_resources": True}`，
+  `renderer_options` 在其上覆盖，**不进 config.json**（Phase 8 才决定哪些 renderer 选项成为产品配置）。
+  失败语义与 v1 对齐：模板不可装配 → log + 返回 `None`（不写文件）；renderer / bridge 失败保留
+  actionable 异常（缺 artifact 不被吞成静默无输出）；未知 `renderer_version` 明确报错，不静默按 v1 处理。
+  `core/converter.py` 运行期**不调用** closure checker（它只是 test / release gate）。
+- production renderer policy（Cutover C4，K26）：`core/config.py::PRODUCTION_RENDERER_VERSION`（现为 `"v2"`）
+  是**唯一**的默认来源。它不经 `_DEFAULTS`、不进 `config.json`、GUI 不可覆盖 —— 这是源码级 policy，
+  不是用户设置；**回退 = 把这一行改回 `"v1"` 并重建**（v1 的 renderer、装配与打包资产都保留）。
+  GUI 启动校验跟随 policy：`validate_renderer_runtime_for(PRODUCTION_RENDERER_VERSION)`，因此
+  「包内缺 `renderer/dist`」或「Node < 18」会在**启动时**失败，而不是转换到一半。
+- 发布包与验收（Cutover C4）：`renderer/dist/`（`renderer.cjs` + `katex/` + `mermaid/`）是新的必需载荷，
+  spec 的 `REQUIRED_FILES` 与 `packaging/validate_release.py::RUNTIME_FILES` 两处断言；`release_freeze.py`
+  在 PyInstaller 之前自动 `npm ci` + `npm run build`（只构建一次，两种形态共用）。构建期用**将被打包的**
+  `node.exe` 对 v1 与 v2 各冒烟一次。实机验收记录必须与当前 production renderer 对应
+  （`docs/QA-CHECKLIST-1.0.0-rc1-v2.md`；v1 时代记录只作历史，`release_freeze` 只认 `--qa-record` 指定的那份）。
 
 ## 命名与路径约定
 

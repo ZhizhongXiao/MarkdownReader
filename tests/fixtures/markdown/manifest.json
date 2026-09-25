@@ -3,7 +3,7 @@
   "description": "Markdown 迁移 fixture 索引：只登记 case（id/group/file/note），断言写在 Python 测试中。分类、来源与门禁规则见 docs/MARKDOWN_COMPATIBILITY.md。",
   "groups": {
     "keep": "必须保持的 Markdown 语义（KEEP）",
-    "target": "本次升级要从 vscode-office 新增的语义（TARGET，当前 strict xfail）",
+    "target": "本次升级要从 vscode-office 新增的语义（TARGET：Cutover C4 起由 production v2 保证）",
     "anchor": "heading/TOC 关系契约（KEEP：只锁关系，不锁 slug 文本）"
   },
   "cases": [

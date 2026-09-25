@@ -32,6 +32,16 @@ BUNDLE_ROOT = get_bundle_root()
 # Kept as the writable application root for existing callers.
 PROJECT_ROOT = get_application_dir()
 
+# Production renderer policy. This is the single source of truth for what the
+# converter uses when no caller asks for a specific renderer, and therefore the
+# one line a rollback flips. It is deliberately NOT a config.json value: it is a
+# source-level policy, not a user setting (a config model is Phase 8 work).
+#
+# The renderer_node bridge keeps its own `"v1"` default on purpose -- it is a
+# low-level API that can drive either renderer explicitly, not the policy holder.
+# Cutover C4 sets this to "v2"; v1 stays available for rollback.
+PRODUCTION_RENDERER_VERSION = "v2"
+
 # Templates root directory
 TEMPLATES_DIR = os.path.join(BUNDLE_ROOT, "templates")
 

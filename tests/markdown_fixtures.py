@@ -43,14 +43,24 @@ def read_fixture(case: dict) -> str:
 
 
 def render_fixture(case: dict) -> dict:
-    """用真实渲染器渲染一个 case 并返回结果。
+    """用 production renderer 渲染一个 case 并返回结果。
 
     source_path 指向 fixture 本身，相对资源按真实文档解析；语料不含跨文档链接，
     因此 document_map 为空。
+
+    这里显式使用 `PRODUCTION_RENDERER_VERSION`，而不是 bridge 自己的默认值：迁移语料
+    检验的是 production policy。v2 下同时显式关闭远程抓取，保证语料（含 PlantUML）不会
+    访问公共网络 —— PlantUML 因此保留 server URL，其语义仍可断言。
     """
+    from core.config import PRODUCTION_RENDERER_VERSION
     from core.renderer_node import render_markdown_node
 
     path = fixture_path(case)
+    options = (
+        {"math": True, "fetch_remote_resources": False}
+        if PRODUCTION_RENDERER_VERSION == "v2"
+        else None
+    )
     return render_markdown_node(
         read_fixture(case),
         context={
@@ -58,4 +68,6 @@ def render_fixture(case: dict) -> dict:
             "output_path": str(path.with_suffix(".html")),
             "document_map": {},
         },
+        renderer_version=PRODUCTION_RENDERER_VERSION,
+        options=options,
     )

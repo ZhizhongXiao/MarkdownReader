@@ -160,6 +160,32 @@ def get_node_command() -> str:
     return validate_renderer_runtime()
 
 
+def _require_v2_runtime() -> str:
+    """Resolve Node, enforce the v2 floor and validate the v2 artifact, once per process."""
+    node_command = resolve_node_runtime()
+    _require_v2_node_major(probe_node_version(node_command))
+    # 延迟导入：v1 路径不必加载 v2 桥；spec 只导入常量时也不牵扯运行时模块。
+    from core import renderer_v2
+
+    renderer_v2.validate_v2_runtime(node_command)
+    return node_command
+
+
+def validate_renderer_runtime_for(renderer_version: str) -> str:
+    """Validate whichever renderer the caller is about to use.
+
+    ``"v1"`` keeps its own validation; ``"v2"`` additionally needs the Node
+    capability floor and the built artifact. A production consumer calls this with
+    ``core.config.PRODUCTION_RENDERER_VERSION`` at startup, so a broken package
+    fails at launch instead of in the middle of a batch.
+    """
+    if renderer_version == "v1":
+        return validate_renderer_runtime()
+    if renderer_version == "v2":
+        return _require_v2_runtime()
+    raise ValueError("renderer_version 只能是 'v1' 或 'v2'，收到：%r" % (renderer_version,))
+
+
 def render_markdown_node(md_text, context=None, *, renderer_version="v1", options=None):
     """Render Markdown with an explicitly selected renderer version.
 
@@ -174,12 +200,10 @@ def render_markdown_node(md_text, context=None, *, renderer_version="v1", option
             )
         return _render_markdown_v1(md_text, context)
     if renderer_version == "v2":
-        node_command = resolve_node_runtime()
-        _require_v2_node_major(probe_node_version(node_command))
+        node_command = _require_v2_runtime()
         # 延迟导入：v1 路径不必加载 v2 桥；spec 只导入常量时也不牵扯运行时模块。
         from core import renderer_v2
 
-        renderer_v2.validate_v2_runtime(node_command)
         return renderer_v2.render_markdown_v2(node_command, md_text, context, options)
     raise ValueError("renderer_version 只能是 'v1' 或 'v2'，收到：%r" % (renderer_version,))
 

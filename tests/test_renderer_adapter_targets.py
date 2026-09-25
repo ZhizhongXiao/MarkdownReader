@@ -1,9 +1,10 @@
 """新 adapter 的 TARGET 七项套件：checkbox / mark / callout / wikilink / obsidian-tag /
 mermaid / plantuml。
 
-与 Phase 1 的 tests/test_markdown_compat_target.py 并存：那份门禁跑的是**旧生产 renderer**，
-仍是 7 个 strict xfail；本模块不改变它，只证明新 adapter 已承担这七项语义（Phase 4A 五项 +
-Phase 4C 两项；图表细节见 tests/test_renderer_adapter_diagrams.py）。
+与 Phase 1 的 tests/test_markdown_compat_target.py 并存：那份门禁跑的是 **production policy**
+（Cutover C4 起为 v2，同一个 renderer）；本模块直接对着 adapter 断言这七项语义（Phase 4A 五项 +
+Phase 4C 两项；图表细节见 tests/test_renderer_adapter_diagrams.py），并提供 feature 不被
+substring 误报的反例。
 
 feature 必须来自 token 语义：本模块用 raw HTML 反例（<mark>、<input type=checkbox>、
 <div class="callout">、<a class="obsidian-wikilink">、<span class="obsidian-tag">）证明

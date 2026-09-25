@@ -16,7 +16,7 @@ if PROJECT_ROOT not in sys.path:
 import webview  # noqa: E402
 from webview.dom import DOMEventHandler  # noqa: E402
 
-from core.config import BUNDLE_ROOT  # noqa: E402
+from core.config import BUNDLE_ROOT, PRODUCTION_RENDERER_VERSION  # noqa: E402
 from gui.api import BridgeApi  # noqa: E402
 
 _logger = logging.getLogger("gui")
@@ -137,12 +137,12 @@ def main():
 
     # of a batch.
 
-    from core.renderer_node import validate_renderer_runtime
+    from core.renderer_node import validate_renderer_runtime_for
 
 
     try:
 
-        validate_renderer_runtime()
+        validate_renderer_runtime_for(PRODUCTION_RENDERER_VERSION)
 
     except RuntimeError as error:
 

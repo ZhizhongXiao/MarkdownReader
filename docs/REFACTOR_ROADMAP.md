@@ -253,7 +253,7 @@ Phase 4B  PASS  footnote / extra math delimiters / document links
 parity     PASS  old/new 语义对照（D1 = 唯一接受的旧/新 parser 语义差异）
 Phase 4C  PASS  Mermaid recognition/容器 + PlantUML 语义层（D2 = intentional export hardening）
 adapter 覆盖：KEEP 15/15、TARGET 7/7、pending 0
-production renderer 仍未切换（cutover 依赖 Phase 5 的 standalone resource closure）
+production renderer 后由 Cutover C4 切换（cutover 依赖 Phase 5 的 standalone resource closure）
 ```
 
 证据：docs/MARKDOWN_COMPATIBILITY.md 的对应套件数字与 changelog。
@@ -346,9 +346,19 @@ C3  PASS      converter 能显式走完整 v2 pipeline：process_single/process_
               warnings 合并顺序 = renderer + assembly（固定）；v2 内部默认 math + fetch 由 converter 写死并允许覆盖
               theme_body_class 收敛到 core/config.py（converter 与 assembler 共用）；runtime 不调用 closure checker
               未做：默认仍是 v1、demo 未再生、renderer/dist 未进发布包、release gate 与 rollback（全属 C4）
-C4            默认 renderer 切换 + demo 再生 + 新产物过 standalone gate + release/selfcheck + rollback 证明
-              前置：packaging/MarkdownReader.spec 目前不含 renderer/dist/（KaTeX + Mermaid 约 +5.5 MB）
-production renderer 仍未切换（默认 v1；C4 才有默认切换、packaging、demo 再生与 rollback）
+C4  A PASS     packaging closure：renderer/dist 进 spec 的 REQUIRED_FILES + datas + validate_release 的
+              RUNTIME_FILES；release_freeze 在 PyInstaller 之前 npm ci + npm run build（只构建一次，两种形态共用）
+              构建期用**将被打包的** node.exe 对 v1 与 v2 各冒烟一次
+    B PASS    production policy = core/config.py::PRODUCTION_RENDERER_VERSION（现 "v2"）：converter 默认引用它，
+              bridge 默认仍 v1，GUI 启动校验跟随 policy（validate_renderer_runtime_for）
+    B' PASS   默认翻转后 triage：3 处测试假设（TOC href 的 unquote 归一化、batch 假 renderer 签名、默认==v1 的断言）
+              + 1 处真漏洞（converter 对未知 renderer_version 静默按 v1 处理）→ 全部修正，未放宽任何 contract
+    C PASS    7 项 TARGET 由 strict xfail 转为普通通过（xfail 清零）；markdown_fixtures 跟随 policy 且显式离线；
+              demo 再生（1,544,529 → 1,547,612 B）并通过 standalone gate
+    D PASS    onefile + onedir 真实构建，validate_release --mode both PASS（frozen 启动即验证 v2：包内 node + renderer/dist）
+              浏览器验收 6/6；新验收记录 docs/QA-CHECKLIST-1.0.0-rc1-v2.md（0/43，待实机完成）
+    剩余（用户侧）实机 QA 勾选 + 合并到 main 后 release_freeze --check-only / --tag
+production renderer = v2（默认）；v1 = 显式回退路径（一处 policy 常量 + 完整打包资产）
 ```
 
 ## 验收

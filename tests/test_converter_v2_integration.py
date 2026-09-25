@@ -282,18 +282,18 @@ def test_a_missing_v2_artifact_keeps_its_actionable_error(tmp_path, monkeypatch)
     assert "npm run build" in str(error.value)
 
 
-def test_the_default_and_explicit_v1_never_use_the_v2_assembler(tmp_path, monkeypatch):
+def test_explicit_v1_never_uses_the_v2_assembler(tmp_path, monkeypatch):
+    """回退路径：显式 v1 不经过 v2 assembler（默认已走 v2，见 cutover 套件）。"""
+
     def forbidden(*args, **kwargs):
         raise AssertionError("v1 路径不得调用 v2 assembler")
 
     monkeypatch.setattr(converter, "assemble_document", forbidden)
 
-    default = convert(tmp_path, "# 标题\n", name="default.md", version=None)
-    explicit = convert(tmp_path, "# 标题\n", name="explicit.md", version="v1")
+    result = convert(tmp_path, "# 标题\n", name="explicit.md", version="v1")
 
-    for result in (default, explicit):
-        assert result["saved"] == str(result["output"])
-        assert "theme-modern" in result["html"]
+    assert result["saved"] == str(result["output"])
+    assert "theme-modern" in result["html"]
 
 
 def test_the_runtime_converter_does_not_reference_the_closure_checker():

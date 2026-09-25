@@ -79,3 +79,60 @@ def test_a_ticked_record_without_the_conclusion_is_refused(tmp_path):
 
 def test_a_missing_record_is_refused(tmp_path):
     assert release_freeze.qa_gate(tmp_path / "absent.md") is False
+
+
+def test_the_record_covers_both_renderer_lockfiles():
+    """v2 是 production、v1 是 rollback：两套依赖都必须进发布记录。"""
+    labels = [label for label, _ in release_freeze.release_inputs()]
+
+    assert any("renderer/package-lock.json" in label and "v2" in label for label in labels)
+    assert any("node_renderer/package-lock.json" in label and "v1" in label for label in labels)
+    assert "node.exe" in labels
+
+
+def test_every_release_input_carries_a_real_hash():
+    entries = release_freeze.release_inputs()
+
+    assert entries, "a record without build inputs proves nothing"
+    for label, value in entries:
+        assert len(value) == 64, (label, value)
+        assert all(character in "0123456789abcdef" for character in value), (label, value)
+
+
+def _stub_build(monkeypatch, tmp_path, renderer_ok: bool) -> list:
+    """Replace build()'s two seams -- the renderer step and PyInstaller -- with recorders."""
+    order: list = []
+
+    def fake_build_renderer() -> bool:
+        order.append("renderer")
+        return renderer_ok
+
+    class FakeResult:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    def fake_run(command, **kwargs):
+        order.append("pyinstaller:" + str((kwargs.get("env") or {}).get("MR_BUILD_MODE")))
+        return FakeResult()
+
+    monkeypatch.setattr(release_freeze, "DIST", tmp_path / "dist")
+    monkeypatch.setattr(release_freeze, "build_renderer", fake_build_renderer)
+    monkeypatch.setattr(release_freeze, "run", fake_run)
+    return order
+
+
+def test_the_renderer_payload_is_built_once_before_both_packagings(tmp_path, monkeypatch):
+    """renderer/dist 是必需载荷：先构建一次，再循环两种形态（不为每个 mode 重建）。"""
+    order = _stub_build(monkeypatch, tmp_path, renderer_ok=True)
+
+    assert release_freeze.build() is True
+    assert order == ["renderer", "pyinstaller:onefile", "pyinstaller:onedir"]
+
+
+def test_a_failed_renderer_build_stops_the_release(tmp_path, monkeypatch):
+    """载荷构建失败就不能打包：否则打出来的是一个缺 renderer/dist 的残包。"""
+    order = _stub_build(monkeypatch, tmp_path, renderer_ok=False)
+
+    assert release_freeze.build() is False
+    assert order == ["renderer"], "renderer 步骤失败后不得继续 PyInstaller"

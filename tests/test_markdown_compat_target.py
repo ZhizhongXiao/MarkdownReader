@@ -1,9 +1,8 @@
 """TARGET：本次升级要从 vscode-office 新增的 Markdown 语义（迁移门禁）。
 
-每条 case 今天都必须真实执行并以失败告终（strict xfail）；--runxfail 可以证明
-“今天确实还不支持”。上游接入后某条一旦开始通过，pytest 会把 XPASS 报成失败，
-因此必须把它的标记正式改成 pass。这条规则写在 docs/MARKDOWN_COMPATIBILITY.md，
-Final Acceptance 之前不允许遗留 xfail。
+Cutover C4 之后这 7 条由 production renderer（v2）真实保证，因此不再是 xfail：它们以普通
+断言运行，一旦回归就直接失败。语料与检查函数依旧一一对应，条数锁定在
+EXPECTED_TARGET_CASES；Final Acceptance 之前不允许出现 xfail 或 skip。
 
 Phase 1 只锁产品级语义，不锁尚未 pin 住的上游 DOM：Phase 2 固定 vscode-office
 commit、Phase 3 adapter 定型以后，再补确实需要的上游 DOM contract。
@@ -125,7 +124,7 @@ def test_target_corpus_is_registered_and_locked():
 
 
 def test_every_target_fixture_renders_today():
-    """非 xfail：证明下面的 xfail 不是渲染器崩溃或 fixture 缺失造成的。"""
+    """先证明语料真的都能渲染，再看下面每条语义断言：失败来自语义，不是崩溃或缺文件。"""
     for case_id, case in sorted(_cases().items()):
         result = render_fixture(case)
         assert result["html"].strip(), case_id
@@ -133,9 +132,5 @@ def test_every_target_fixture_renders_today():
 
 
 @pytest.mark.parametrize("case_id", sorted(TARGET_CHECKS))
-@pytest.mark.xfail(
-    strict=True,
-    reason="Phase 4：语义由 vscode-office 上游提供；实现后必须把标记改成 pass",
-)
 def test_target_case_is_implemented(case_id: str):
     TARGET_CHECKS[case_id](render_fixture(_cases()[case_id]))
