@@ -423,6 +423,43 @@ def test_stylesheet_icon_preload_and_rel_less_links_are_subresources():
         assert scan(_page(markup))["verdict"] == "failure", rel
 
 
+def test_an_alternate_stylesheet_is_still_a_subresource():
+    """`alternate stylesheet` 仍是 external resource link，只是不是默认样式表。"""
+    href = "https://cdn.example.invalid/high-contrast.css"
+    html = _page('<link rel="alternate stylesheet" href="' + href + '" title="High contrast">')
+
+    assert [entry["ref"] for entry in collect_subresources(html)] == [href]
+    assert scan(html)["verdict"] == "failure"
+
+
+def test_a_fetching_rel_token_wins_over_a_non_fetching_one():
+    """混合 rel：出现 fetching token 就必须算 subresource（`author` 不能把它掩掉）。"""
+    href = "https://cdn.example.invalid/x.css"
+    for rel in ("author stylesheet", "dns-prefetch preload", "alternate icon"):
+        html = _page('<link rel="' + rel + '" href="' + href + '">')
+
+        assert [entry["ref"] for entry in collect_subresources(html)] == [href], rel
+        assert scan(html)["verdict"] == "failure", rel
+
+
+def test_metadata_only_rels_are_ignored():
+    href = "https://example.invalid/whatever"
+    for rel in ("canonical", "alternate", "dns-prefetch preconnect", "prev next", "license help"):
+        html = _page('<link rel="' + rel + '" href="' + href + '">')
+
+        assert collect_subresources(html) == [], rel
+        assert scan(html)["verdict"] == "standalone", rel
+
+
+def test_an_unknown_rel_is_a_subresource():
+    href = "https://cdn.example.invalid/x.css"
+    for rel in ("something-new", "canonical something-new"):
+        html = _page('<link rel="' + rel + '" href="' + href + '">')
+
+        assert [entry["ref"] for entry in collect_subresources(html)] == [href], rel
+        assert scan(html)["verdict"] == "failure", rel
+
+
 def test_a_string_form_import_is_a_subresource():
     html = _page('<style>@import "https://cdn.example.invalid/theme.css";</style>')
 

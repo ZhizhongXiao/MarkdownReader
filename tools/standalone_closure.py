@@ -36,9 +36,10 @@ renderer's own fragment (`envelope["html"]`) really contains that many occurrenc
 string "http" - the committed demo page contains three navigation links and is still
 standalone. CSS is scanned both in `<style>` elements and in `style="..."` attributes:
 K13 says the resource collector must not touch raw HTML, it does not say a browser will
-not load what the author wrote there. A `<link>` counts only for `rel` values a browser
-actually fetches; unknown or missing `rel` counts too, because a closure gate should be
-noisy rather than quietly ignore a real subresource.
+not load what the author wrote there. A `<link>` counts for every `rel` that contains a
+fetching token - a fetching token wins over a metadata one, so `alternate stylesheet`
+still counts - and for any unknown, empty or mixed-unknown value; only a value made
+purely of metadata tokens is ignored.
 """
 
 import argparse
@@ -62,8 +63,25 @@ SUB_RESOURCE_ATTRIBUTES: dict[str, tuple[str, ...]] = {
 }
 SRCSET_ATTRIBUTES: dict[str, tuple[str, ...]] = {"img": ("srcset",), "source": ("srcset",)}
 
-# `<link>` rel values that do not make a browser load the target. Every other value
-# (including an unknown or missing one) counts as a subresource on purpose.
+# `<link>` rel tokens that make a browser load the target. A fetching token wins over a
+# metadata token, so `alternate stylesheet` and `author stylesheet` stay subresources.
+FETCHING_LINK_RELS = frozenset(
+    {
+        "apple-touch-icon",
+        "apple-touch-icon-precomposed",
+        "icon",
+        "manifest",
+        "mask-icon",
+        "modulepreload",
+        "prefetch",
+        "preload",
+        "stylesheet",
+    }
+)
+
+# `<link>` rel values that are metadata rather than a fetch. Only used when no fetching
+# token is present, and an unknown, empty or mixed-unknown value still counts as a
+# subresource on purpose.
 NON_FETCHING_LINK_RELS = frozenset(
     {
         "alternate",
@@ -94,9 +112,22 @@ SRCSET_TOKEN_PATTERN = re.compile(r"\S+")
 INLINE_PREFIXES = ("data:", "about:", "#")
 
 def _link_reference_is_fetched(rel: str | None) -> bool:
-    """Return True when a `<link>` rel value makes a browser load the target."""
-    tokens = {token.strip().lower() for token in str(rel or "").split()}
-    return not (tokens & NON_FETCHING_LINK_RELS)
+    """Return True when a `<link>` rel value makes a browser load the target.
+
+    A fetching token wins over a non-fetching one, so `alternate stylesheet` and
+    `author stylesheet` are subresources: an alternate stylesheet is still an external
+    resource link, merely not the default one, and "not the default" is not the same as
+    "will not be fetched". A value made only of non-fetching tokens is metadata and is
+    ignored; anything else - unknown, empty, or mixed with an unknown token - counts as
+    a subresource, because a closure gate should be noisy rather than quietly miss a
+    real external resource.
+    """
+    tokens = {token.lower() for token in str(rel or "").split() if token}
+    if tokens & FETCHING_LINK_RELS:
+        return True
+    if tokens and tokens <= NON_FETCHING_LINK_RELS:
+        return False
+    return True
 
 
 def srcset_references(value: str) -> list[str]:
