@@ -20,6 +20,9 @@ _BUNDLED_NODE = os.path.join(BUNDLE_ROOT, "node", "node.exe")
 # The runtime is resolved and validated once per process; renders then reuse it.
 _RESOLVED_NODE: str | None = None
 
+# Node 版本同样每进程只读一次：v1 用它确认运行时可用，v2 用它判定渲染器下限（K26）。
+_RESOLVED_NODE_VERSION: str | None = None
+
 
 def _subprocess_window_kwargs() -> dict:
     """Hide Node child process windows on Windows."""
@@ -92,6 +95,36 @@ def resolve_node_runtime() -> str:
     return "node"
 
 
+def probe_node_version(node_command: str) -> str:
+    """Return the Node version string (e.g. "v24.20.0"), cached once per process.
+
+    全项目读 Node 版本只在这里：v1 用它确认运行时可用，v2 用它判定 `MINIMUM_NODE_MAJOR`。
+    版本串为空同样判失败 —— 拿不到版本就无法证明满足 v2 的下限。
+    """
+    global _RESOLVED_NODE_VERSION
+    if _RESOLVED_NODE_VERSION is not None:
+        return _RESOLVED_NODE_VERSION
+
+    missing = "未找到可用的 Node.js，请检查内置 Node 或系统 PATH。"
+    try:
+        result = subprocess.run(
+            [node_command, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            **_subprocess_window_kwargs(),
+        )
+    except FileNotFoundError as error:
+        raise RuntimeError(missing) from error
+    if result.returncode != 0:
+        raise RuntimeError(missing)
+    version = (result.stdout or "").strip()
+    if not version:
+        raise RuntimeError(missing)
+    _RESOLVED_NODE_VERSION = version
+    return version
+
+
 def validate_renderer_runtime() -> str:
     """Validate Node and the renderer assets once, then remember the answer.
 
@@ -104,19 +137,8 @@ def validate_renderer_runtime() -> str:
         return _RESOLVED_NODE
 
     node_command = resolve_node_runtime()
-    missing = "未找到可用的 Node.js，请检查内置 Node 或系统 PATH。"
-    try:
-        result = subprocess.run(
-            [node_command, "--version"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-            **_subprocess_window_kwargs(),
-        )
-    except FileNotFoundError:
-        raise RuntimeError(missing)
-    if result.returncode != 0:
-        raise RuntimeError(missing)
+    # 版本探针与 v2 的下限判定共用同一个实现与缓存。
+    probe_node_version(node_command)
 
     if not os.path.isfile(_RENDER_JS):
         raise RuntimeError("未找到 Node 渲染脚本：%s" % _RENDER_JS)
@@ -138,11 +160,55 @@ def get_node_command() -> str:
     return validate_renderer_runtime()
 
 
-def render_markdown_node(md_text, context=None):
-    """Render Markdown text to HTML using Node.js.
+def render_markdown_node(md_text, context=None, *, renderer_version="v1", options=None):
+    """Render Markdown with an explicitly selected renderer version.
 
-    Returns HTML body fragment string.
+    v1（默认）→ `node_renderer/render.js`；v2 → `renderer/dist/renderer.cjs`（Cutover C2 / K26）。
+    选择是显式的：不做协议探测，v2 失败也不会静默回退到 v1。`options` 只对 v2 生效。
     """
+    if renderer_version == "v1":
+        if options:
+            raise ValueError(
+                "renderer_version='v1' 不接受 options：v1 的渲染选项是固定的，"
+                "options 只在 renderer_version='v2' 时生效。"
+            )
+        return _render_markdown_v1(md_text, context)
+    if renderer_version == "v2":
+        node_command = resolve_node_runtime()
+        _require_v2_node_major(probe_node_version(node_command))
+        # 延迟导入：v1 路径不必加载 v2 桥；spec 只导入常量时也不牵扯运行时模块。
+        from core import renderer_v2
+
+        renderer_v2.validate_v2_runtime(node_command)
+        return renderer_v2.render_markdown_v2(node_command, md_text, context, options)
+    raise ValueError("renderer_version 只能是 'v1' 或 'v2'，收到：%r" % (renderer_version,))
+
+
+def _require_v2_node_major(version: str) -> int:
+    """Enforce the v2 capability floor.
+
+    策略属于运行时归属（本模块），下限常量属于 v2 桥（单一来源，spec 也读它）。
+    解析不出来就等于无法证明满足下限，因此同样失败。
+    """
+    from core import renderer_v2
+
+    try:
+        major = renderer_v2.node_major(version)
+    except ValueError as error:
+        raise RuntimeError(
+            "无法解析 Node 版本，v2 需要 major >= %d：%s"
+            % (renderer_v2.MINIMUM_NODE_MAJOR, error)
+        ) from error
+    if major < renderer_v2.MINIMUM_NODE_MAJOR:
+        raise RuntimeError(
+            "v2 renderer 需要 Node major >= %d，当前为 %s。请升级内置 Node，"
+            "或改用 renderer_version='v1'。" % (renderer_v2.MINIMUM_NODE_MAJOR, version)
+        )
+    return major
+
+
+def _render_markdown_v1(md_text, context=None):
+    """v1 渲染路径（`node_renderer/render.js`）：Cutover C2 只搬运函数体，行为不变。"""
     # Validated once per process: a render no longer asks whether Node exists.
     node_command = validate_renderer_runtime()
 

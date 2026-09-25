@@ -43,6 +43,23 @@ def require_dir(relative):
         raise SystemExit("发布资源缺失（目录）：" + relative)
 
 
+def require_node_floor(version):
+    """Assert the recorded bundled Node meets the v2 renderer capability floor.
+
+    下限常量只有一处来源（`core/renderer_v2.py`），这里不另造 Node manifest：只给已记录的
+    版本加一条「major >= 18」的断言。导入放在函数内，因为这是 PyInstaller 的 spec：
+    SPECPATH / Analysis / EXE 等名字由它注入，模块级导入顺序不属于这里关心的事。
+    """
+    sys.path.insert(0, str(project_root))
+    from core.renderer_v2 import MINIMUM_NODE_MAJOR
+
+    major = str(version).strip().lstrip("vV").split(".", 1)[0]
+    if not major.isdigit() or int(major) < MINIMUM_NODE_MAJOR:
+        raise SystemExit(
+            "内置 Node 低于 v2 renderer 的下限 v" + str(MINIMUM_NODE_MAJOR) + "：" + str(version)
+        )
+
+
 # Everything the packaged application reads at runtime. add_tree() below skips
 # missing sources on purpose, since templates ship as whole trees, so the files
 # that must exist are named here instead: a release either carries all of them or
@@ -103,6 +120,10 @@ if _actual_version != _expected_version:
         "内置 Node 版本与 packaging/node-runtime.json 不一致："
         + _actual_version + " != " + _expected_version
     )
+
+# 能力下限（Cutover C2）：v2 renderer 需要 Node 18 起。exact-version + SHA-256 门禁照旧，
+# 这里只多一条下限断言 —— 记录里的 Node 降级到 18 以下会让 v2 无法工作。
+require_node_floor(_expected_version)
 _hasher = hashlib.sha256()
 with open(bundled_node, "rb") as _stream:
     for _chunk in iter(lambda: _stream.read(1024 * 1024), b""):

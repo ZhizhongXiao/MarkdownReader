@@ -336,12 +336,15 @@ C1  PASS      作者 raw HTML provenance 通道：renderer 在 token 层记录�
               → resources.author_references = [{ref, count}]（v2 additive；只记来源：不 fetch、不改 html、不进 items）
               checker 缺省自动消费该通道（--author-refs 仍可覆盖），佐证计数与 ref 抽取同路径（修 &amp; 实体失配）
               两侧共用 tests/fixtures/author_references.json：node 直测 scanner + spawn dist，pytest 走真实 dist
-C2            生产适配器切到 v2：core/renderer_v2.py + core/renderer_node.py 显式版本配置（不再靠 JS 探测协议），
-              并校验打包 Node >= 18
+C2  PASS      生产 bridge 能**显式**调用 v2：新 core/renderer_v2.py（artifact 存在性 / v2 冒烟 / subprocess 协议 /
+              envelope 校验；导入无副作用，packaging spec 复用其 MINIMUM_NODE_MAJOR）+ core/renderer_node.py 的
+              probe_node_version / _require_v2_node_major / dispatch（默认 v1；不探测协议；不回退 v1）
+              v2 冒烟离线且要求 dist/katex 真的加载；返回完整 envelope（不压缩）；Node 下限 major >= 18
+              未做：converter 仍不调用 v2（C3）、renderer/dist/ 仍未进发布包（C4）、无 config.json 配置项（Phase 8）
 C3            converter 在 v2 选中时改用 core/html_assembly.py 装配；_theme_body_class 归 core/config.py；v1 逐字节不变
 C4            默认 renderer 切换 + demo 再生 + 新产物过 standalone gate + release/selfcheck + rollback 证明
               前置：packaging/MarkdownReader.spec 目前不含 renderer/dist/（KaTeX + Mermaid 约 +5.5 MB）
-production renderer 仍未切换（C2 起才动生产路径）
+production renderer 仍未切换（默认 v1；C3 让 converter 会用 v2 装配，C4 才切默认）
 ```
 
 ## 验收

@@ -137,10 +137,19 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
   规则与 closure checker 同构，两侧由 `tests/fixtures/author_references.json` 强制对齐（node 直测 scanner +
   spawn dist，pytest 走真实 dist）；`tools/standalone_closure.py` 缺省自动消费该通道，`--author-refs` 只在需要覆盖时使用。
 - 协议：v2（Phase 5A）——
-  `{ "protocol_version": 2, "ok": true, "html", "headings", "features", "warnings", "resources": { "items": [], "styles": [] } }`；
-  `resources` 是**必在**字段（没有资源时也是空结构）：`items` 是资源 manifest，`styles` 是交给 assembler 注入的 CSS；
+  `{ "protocol_version": 2, "ok": true, "html", "headings", "features", "warnings",`
+  `"resources": { "items": [], "styles": [], "scripts": [], "author_references": [] } }`；
+  `resources` 是**必在**字段（没有资源时也是空结构）：`items` 是资源 manifest，`styles` 是交给 assembler 注入的 CSS，
+  `scripts` 是按需交付的运行时（今天只有 mermaid），`author_references` 是作者 raw HTML 的 provenance（Cutover C1，见 K25）；
   `warnings` 保持用户可读字符串数组，成功内嵌不产生 warning（状态记在 manifest）。
   失败同样是单个 JSON envelope + 退出码 1，诊断只走 stderr。v1 的 `assets.css` 只属于旧 production renderer。
+- renderer 选择（Cutover C2，K26）：`core.renderer_node.render_markdown_node(markdown, context=…,
+  renderer_version="v1", options=None)` —— **显式**选择 v1 / v2，默认 v1（生产默认未切换）。
+  `core/renderer_v2.py` 负责调用 `renderer/dist/renderer.cjs`、校验 `protocol_version == 2` 与必在形状、
+  原样返回**完整** envelope；Node 可执行文件解析与版本下限（v2 需 major >= 18，常量 `MINIMUM_NODE_MAJOR`
+  也由 `packaging/MarkdownReader.spec` 在构建期断言）属于 `core/renderer_node.py`。
+  不做协议探测、不在 v2 失败时回退 v1、artifact 缺失给出构建提示；`options` 只对 v2 生效
+  （v1 收到非空 options 报 `ValueError`，不静默忽略）。
 
 ## 命名与路径约定
 
