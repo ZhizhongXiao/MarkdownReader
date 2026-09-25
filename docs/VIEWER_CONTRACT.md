@@ -75,7 +75,7 @@ GUI 自己的 `gui-theme` 属于应用外壳，不属于生成文档。
 - viewer JS 的内部函数名、模块边界、文件切分方式；
 - CSS 文件的切分与命名（`viewer.css` / `theme.css` 是否合并、拆分）；
 - 主题变量的具体取值、字体名、装饰细节；
-- **仓库内**主题目录名（`Modern` / `Office` / `Vscode` 的大小写、`templates/` 到 `themes/` 的位置）；
+- **仓库内**资产目录的位置（`viewer/`、`themes/builtin/` 的布局、文件切分、主题 CSS 的文件名）；
 - 生成 HTML 里样式块的**排列方式**（但注入顺序 viewer → theme → 资源 → print 必须保持，见 `core/html_assembly.py` 的确定性顺序）；
 - `body.theme-<id>` 的**id 取值**可以扩展（新主题），但既有三个 id 不可改名 —— 改名等于让老 HTML 的 localStorage 选择失效。
 
@@ -96,4 +96,8 @@ shared_print_css_text()   打印样式
 
 `core/config.py` 只管 config.json 与 bundle 路径，不反向依赖该模块；`core/converter.py`（v1 回退路径）与 `core/html_assembly.py`（v2）都只经它取资产；`gui/api.py` 的主题列表也来自它。
 
-Phase 6B 之后 `templates/` 会被 `viewer/` 与 `themes/builtin/<id>/` 取代：**只有这个模块需要改**。Phase 6B 之后"v1 回退"仅表示 renderer 语义回退，不表示回退整套 Viewer 文件（视觉层只有一套）。
+Phase 6B 起 `templates/` 只剩批索引页；阅读器资产在 `viewer/`（外壳、样式、脚本）与 `themes/builtin/<id>/`（主题）。两个装配路径与 GUI 都只经本模块取资产，因此搬迁只改了这一个文件。
+
+viewer 脚本是**按 `viewer/js/manifest.json` 顺序、空分隔拼接**的同一个 IIFE 片段：拼接结果必须与拆分前的单文件逐字节相同（由 `samples/demo.html` 比对与 `tests/test_viewer_assets_contract.py` 共同保证）。模块文件必须以换行结尾，否则加载器直接报错 —— 粘连比失败更难查。原文件开头有一个 UTF-8 BOM 且它进入了交付文档，所以由加载器显式补回（`_VIEWER_JS_BOM`），源模块不含 BOM。
+
+Phase 6B 之后"v1 回退"仅表示 renderer 语义回退，不表示回退整套 Viewer 文件（视觉层只有一套）。

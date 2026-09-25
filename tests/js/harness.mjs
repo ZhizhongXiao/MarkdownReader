@@ -1,4 +1,4 @@
-// Stage 6.1a — shared jsdom harness for templates/viewer.js behaviour contracts.
+// Stage 6.1a — shared jsdom harness for the viewer behaviour contracts.
 //
 // Test-only. Not shipped: packaging/MarkdownReader.spec collects only
 // gui/assets, templates and node_renderer, so tests/js never reaches the EXE.

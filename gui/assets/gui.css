@@ -11,7 +11,7 @@
 
    Notes:
    - The GUI is independent from generated reader HTML.
-   - Preview styles are mockups only; real template output lives under templates/.
+   - Preview styles are mockups only; real reader output lives under viewer/ and themes/.
    - Keep layout-sensitive left-column rules together to avoid accidental drift.
    ============================================================ */
 

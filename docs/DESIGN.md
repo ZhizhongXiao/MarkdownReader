@@ -36,13 +36,15 @@ Markdown → Python 调度 → Node 渲染 → 模板组装 → 浏览器阅读
 ## 模板体系
 
 ```text
-templates/default/    共享外壳：工具栏、目录、正文容器、基础排版、通用变量
-templates/Modern/     通用阅读主题
-templates/Office/     类 Word 正式文档与打印主题
-templates/Vscode/     编辑器预览风格的技术主题
-templates/index/      批量索引页（index.html + theme.css + index.js，生成时内嵌）
-templates/viewer.js   共享阅读器交互
-templates/print.css   共享打印样式
+viewer/viewer.html    阅读器外壳：工具栏、目录、正文容器
+viewer/css/layout.css 共享布局与组件样式（只消费主题变量）
+viewer/css/print.css  共享打印样式
+viewer/js/*.js        阅读器交互模块（manifest.json 声明加载顺序，装配时拼成一个脚本）
+themes/builtin/base/  基础主题 token（调色板、字体、布局尺寸），hidden，不可选
+themes/builtin/modern/     通用阅读主题
+themes/builtin/office/     类 Word 正式文档与打印主题
+themes/builtin/vscode/     编辑器预览风格的技术主题
+templates/index/      批量索引页（index.html + theme.css + index.js，生成时内嵌；独立表面）
 ```
 
 三个主题都继承 `default`；索引页与阅读页是两套独立的单文件产物。各主题的视觉约定见各自的 README。

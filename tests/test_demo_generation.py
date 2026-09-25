@@ -2,7 +2,7 @@
 
 samples/demo.md is the specimen of what the reader supports, and samples/demo.html
 is committed next to it, so a fresh render has to match the repository copy: a
-drift in the renderer, the templates or the demo source surfaces here instead of
+drift in the renderer, the reader assets or the demo source surfaces here instead of
 being reviewed away. The structural assertions describe landmarks the demo must
 keep, and the snapshot contract locks the rest.
 """
@@ -72,5 +72,5 @@ def test_demo_html_matches_the_committed_specimen(tmp_path: Path):
     assert actual == expected, (
         "samples/demo.html no longer matches the sources: run "
         "`python tools/generate_demo.py` and commit the regenerated file "
-        "(or fix what changed in templates/, node_renderer/ or samples/demo.md)."
+        "(or fix what changed in viewer/, themes/, node_renderer/ or samples/demo.md)."
     )

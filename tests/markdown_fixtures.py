@@ -5,8 +5,8 @@ demo 快照隐式覆盖。case 登记在 tests/fixtures/markdown/manifest.json �
 只是索引（schema/id/group/file/note），断言全部写在 Python 测试中，因此本模块不
 构造测试 DSL，只负责读取 fixture 并调用真实渲染器。
 
-不参与打包：packaging/MarkdownReader.spec 只收集 gui/assets、templates 与
-node_renderer。
+不参与打包：packaging/MarkdownReader.spec 只收集 gui/assets、viewer、themes、
+templates/index 与 node_renderer。
 """
 
 import json

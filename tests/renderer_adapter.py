@@ -6,7 +6,8 @@
 并给出构建提示，而不是 skip —— 否则完整测试会在「还没构建」时假绿。只有缺 node 这个
 平台工具时才 skip，且只跳过依赖它的检查。
 
-不参与打包：packaging/MarkdownReader.spec 只收集 gui/assets、templates 与 node_renderer。
+不参与打包：packaging/MarkdownReader.spec 只收集 gui/assets、viewer、themes、
+templates/index 与 node_renderer。
 """
 
 import json

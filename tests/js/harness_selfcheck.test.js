@@ -12,7 +12,7 @@
 //   SC5  a clean page reports nothing at all
 //
 // The suite builds its own minimal pages, so it never depends on a fixture and
-// never says anything about templates/viewer.js.
+// never says anything about the viewer payload it is given.
 
 import test from "node:test";
 import assert from "node:assert/strict";

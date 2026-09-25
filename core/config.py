@@ -45,11 +45,6 @@ PROJECT_ROOT = get_application_dir()
 # Cutover C4 sets this to "v2"; v1 stays available for rollback.
 PRODUCTION_RENDERER_VERSION = "v2"
 
-# Templates root directory. Assets are located through `core/viewer_assets.py`;
-# this constant stays because it is a bundle path, and because the index page
-# surface (`core/index_builder.py`) shares the same root.
-TEMPLATES_DIR = os.path.join(BUNDLE_ROOT, "templates")
-
 # Template placeholders
 PLACEHOLDER_TITLE = "{{TITLE}}"
 PLACEHOLDER_TOC = "{{TOC}}"

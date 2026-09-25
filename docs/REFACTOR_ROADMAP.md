@@ -396,15 +396,16 @@ templates/viewer.js
 ```text
 viewer/
 ├─ viewer.html
-├─ css/
-└─ js/
+├─ css/            layout.css + print.css
+└─ js/             *.js + manifest.json（加载顺序的唯一来源）
 
 themes/
 ├─ builtin/
+│  ├─ base/        token（hidden，不可选）
 │  ├─ modern/
 │  ├─ office/
 │  └─ vscode/
-└─ template/
+└─ template/       （Phase 7 外置主题开发模板）
 ```
 
 Viewer JS 拆为职责明确的小模块。
@@ -450,7 +451,12 @@ VS Code
             行为与产物不变：samples/demo.html SHA-256 不变（1018DB5A…F755，1547612 bytes）
             新增 tests/test_viewer_assets_contract.py（注册表 / hidden / 单主题内嵌 / 源码级 SSOT 锁）
                   tests/test_viewer_keep_contract.py（13 id + 8 存储键 + class/属性钩子冻结）
-6B          资产搬迁（viewer/ + themes/builtin/<id>/）与 viewer 拆分，行为零变化（未开始）
+6B  PASS    资产搬迁 + viewer 源码拆分（行为零变化）
+             viewer/viewer.html、viewer/css/{layout,print}.css、viewer/js/*（16 模块 + manifest.json）
+             themes/builtin/{base,modern,office,vscode}/：目录名 == metadata.id == 选择器；三个主题 extends base
+             core/viewer_assets.py 仍是唯一来源（两个根 + manifest 拼接 + BOM 归位）；config.py 的 TEMPLATES_DIR 删除
+             viewer 载荷与拆分前逐字节相同（迁移脚本断言 + 回读校验）；samples/demo.html SHA-256 不变
+             旧路径不再被 runtime / tests / packaging 引用；templates/index/ 原位
 6C          三套 builtin 主题内嵌进同一 HTML + 主题切换器（含 print 特异性修复，未开始）
 6D          清理旧目录与文档收口（未开始）
 ```

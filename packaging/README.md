@@ -23,8 +23,9 @@ python -m PyInstaller --clean --noconfirm --workpath "packaging\.pyinstaller-bui
 构建缓存位于 `packaging/.pyinstaller-build/`，完成后可安全删除；`--clean` 会清理缓存与本次 workpath。
 需要完全排除旧产物影响时先删除 `dist/`。
 
-打包内容：GUI 静态资源、全部模板、v2 renderer 载荷（`renderer/dist/`）、Node 渲染脚本与依赖、
-内置 Node 运行时、启动图与程序图标。
+打包内容：GUI 静态资源、阅读器资产（`viewer/`）、内置主题（`themes/builtin/`）、批索引页模板
+（`templates/index/`）、v2 renderer 载荷（`renderer/dist/`）、Node 渲染脚本与依赖、内置 Node 运行时、
+启动图与程序图标。
 
 ## v2 renderer 载荷
 

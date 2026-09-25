@@ -33,6 +33,7 @@ from core.viewer_assets import (
     shared_viewer_js_text,
     theme_body_class,
     theme_css_chain,
+    validate_theme,
     viewer_layout_css_text,
     viewer_shell_text,
 )
@@ -80,10 +81,15 @@ def assemble_document(
     scripts = resources.get("scripts") or []
     headings = envelope.get("headings") or []
     resolved_template = normalize_template_name(template_name)
+    # An unusable theme must fail here: the theme-CSS step below only degrades, so
+    # without this check an unknown theme would assemble a document with no theme
+    # variables instead of raising (the pre-6B behaviour, locked by
+    # tests/test_standalone_matrix.py).
+    validate_theme(resolved_template)
 
-    template_html = viewer_shell_text(resolved_template)
+    template_html = viewer_shell_text()
     if not template_html:
-        raise ValueError(f"模板“{resolved_template}”缺少 viewer.html，无法装配。")
+        raise ValueError("缺少阅读器页面外壳（viewer/viewer.html），无法装配。")
     for placeholder in (PLACEHOLDER_TITLE, PLACEHOLDER_CONTENT, PLACEHOLDER_TOC):
         if placeholder not in template_html:
             raise ValueError(f"模板“{resolved_template}”缺少占位符 {placeholder}，无法装配。")
@@ -96,7 +102,7 @@ def assemble_document(
 
     # ── <head>: viewer.css, theme chain, resource styles, print.css ──
     head_fragments: list[tuple[str, str, str | None]] = []
-    viewer_css = viewer_layout_css_text(resolved_template)
+    viewer_css = viewer_layout_css_text()
     if viewer_css:
         head_fragments.append((f"<style>\n{viewer_css}\n</style>", "viewer-css", None))
 

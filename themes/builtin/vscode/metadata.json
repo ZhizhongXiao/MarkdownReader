@@ -4,5 +4,5 @@
     "author": "MarkdownReader",
     "version": "1.0.0",
     "description": "VS Code inspired Markdown preview theme for technical notes, code documents, and developer-oriented reading.",
-    "extends": "default"
+    "extends": "base"
 }

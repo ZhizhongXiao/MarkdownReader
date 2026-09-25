@@ -61,27 +61,27 @@ def require_node_floor(version):
 
 
 # Everything the packaged application reads at runtime. add_tree() below skips
-# missing sources on purpose, since templates ship as whole trees, so the files
-# that must exist are named here instead: a release either carries all of them or
-# it is not produced, because gui/app.py falls back to a placeholder page and
-# would otherwise let a broken build start and look healthy.
+# missing sources on purpose, since the reader assets ship as whole trees, so the
+# files that must exist are named here instead: a release either carries all of
+# them or it is not produced, because gui/app.py falls back to a placeholder page
+# and would otherwise let a broken build start and look healthy.
 REQUIRED_FILES = (
     "main.py",
     "gui/assets/index.html",
     "gui/assets/gui.css",
     "gui/assets/gui.js",
-    "templates/viewer.js",
-    "templates/print.css",
-    "templates/default/viewer.html",
-    "templates/default/viewer.css",
-    "templates/default/theme.css",
-    "templates/default/metadata.json",
-    "templates/Modern/theme.css",
-    "templates/Modern/metadata.json",
-    "templates/Office/theme.css",
-    "templates/Office/metadata.json",
-    "templates/Vscode/theme.css",
-    "templates/Vscode/metadata.json",
+    "viewer/viewer.html",
+    "viewer/css/layout.css",
+    "viewer/css/print.css",
+    "viewer/js/manifest.json",
+    "themes/builtin/base/theme.css",
+    "themes/builtin/base/metadata.json",
+    "themes/builtin/modern/theme.css",
+    "themes/builtin/modern/metadata.json",
+    "themes/builtin/office/theme.css",
+    "themes/builtin/office/metadata.json",
+    "themes/builtin/vscode/theme.css",
+    "themes/builtin/vscode/metadata.json",
     "templates/index/index.html",
     "templates/index/index.js",
     "templates/index/theme.css",
@@ -97,6 +97,8 @@ for _relative in REQUIRED_FILES:
     require_file(_relative)
 
 for _relative in (
+    "viewer/js",
+    "themes/builtin",
     "node_renderer/node_modules",
     "renderer/dist/katex",
     "renderer/dist/mermaid",
@@ -180,7 +182,12 @@ if _v2_smoke.returncode != 0:
 
 datas = []
 add_tree(datas, project_root / "gui" / "assets", "gui/assets")
-add_tree(datas, project_root / "templates", "templates")
+# The reader's assets live in their own roots since Phase 6B: the shell, styles and
+# script under viewer/, the themes under themes/builtin/. The batch index page is a
+# separate surface and keeps its templates/index/ home.
+add_tree(datas, project_root / "viewer", "viewer")
+add_tree(datas, project_root / "themes", "themes")
+add_tree(datas, project_root / "templates" / "index", "templates/index")
 add_tree(datas, project_root / "node_renderer", "node_renderer")
 
 # The v2 renderer payload (Cutover C4): renderer/dist is a gitignored build

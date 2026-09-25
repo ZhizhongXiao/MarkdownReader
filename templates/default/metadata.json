@@ -1,9 +1,0 @@
-{
-    "id": "default",
-    "name": "Base",
-    "author": "MarkdownReader",
-    "version": "1.0.0",
-    "description": "Base viewer layout and shared theme variables used by MarkdownReader templates.",
-    "extends": null,
-    "hidden": true
-}

@@ -3,7 +3,7 @@
 This checks the release contract, not the build log:
 
   * the executable exists and is large enough to be carrying the runtime
-  * a onedir release carries Node, the renderer and the templates beside the EXE
+  * a onedir release carries Node, the renderer and the reader assets beside the EXE
   * a onefile release starts and survives, which proves the frozen startup check
     found its bundled Node: main() exits when it cannot
   * the local path used here has Chinese characters and spaces, the same shape a
@@ -31,7 +31,14 @@ RUNTIME_FILES = (
     ("renderer", "dist", "renderer.cjs"),
     ("renderer", "dist", "katex"),
     ("renderer", "dist", "mermaid"),
-    ("templates", "viewer.js"),
+    ("viewer", "viewer.html"),
+    ("viewer", "css", "layout.css"),
+    ("viewer", "css", "print.css"),
+    ("viewer", "js", "manifest.json"),
+    ("themes", "builtin", "base", "theme.css"),
+    ("themes", "builtin", "modern", "theme.css"),
+    ("themes", "builtin", "office", "theme.css"),
+    ("themes", "builtin", "vscode", "theme.css"),
     ("templates", "index", "index.js"),
     ("gui", "assets", "index.html"),
 )

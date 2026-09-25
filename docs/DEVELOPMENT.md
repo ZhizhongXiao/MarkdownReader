@@ -51,11 +51,12 @@ core/viewer_assets.py 阅读器/主题资产的唯一来源（外壳、脚本、
 gui/                  pywebview 界面与静态资源（gui/assets/）
 renderer/             生产 renderer（v2 adapter，产物 renderer/dist 随包发布）
 node_renderer/        v1 回退 renderer（markdown-it、footnote、texmath、KaTeX）
-templates/default/    共享阅读器外壳
-templates/Modern|Office|Vscode/   视觉主题（继承 default）
-templates/index/      批量索引模板
-templates/viewer.js   共享阅读器交互
-templates/print.css   共享打印样式
+viewer/viewer.html    阅读器外壳（工具栏、目录、正文容器）
+viewer/css/           共享布局样式与打印样式
+viewer/js/            阅读器交互模块 + manifest.json（加载顺序的唯一来源）
+themes/builtin/base/  基础主题 token（hidden，不可选）
+themes/builtin/modern|office|vscode/   视觉主题（继承 base）
+templates/index/      批量索引模板（独立表面，未纳入 Phase 6）
 packaging/            打包配置、图标、启动图与发布脚本
 samples/              示例与渲染标本（demo.md 与入库的 demo.html）
 tests/                自动化测试（tests/js 为 jsdom 层，不进打包）
@@ -172,16 +173,17 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
   `node.exe` 对 v1 与 v2 各冒烟一次。实机验收记录必须与当前 production renderer 对应
   （`docs/QA-CHECKLIST-1.0.0-rc1-v2.md`；v1 时代记录只作历史，`release_freeze` 只认 `--qa-record` 指定的那份）。
 
-- 阅读器资产层（Phase 6A）：`core/viewer_assets.py` 是"阅读器由哪些文件组成"的唯一来源（页面外壳、viewer 脚本、
-  打印样式、样式链、主题注册表）。`core/config.py` 只管 config.json 与 bundle 路径，且**不反向依赖**它；
-  `core/converter.py`（v1 回退）与 `core/html_assembly.py`（v2）都只经它取资产，`gui/api.py` 的主题列表也来自它。
-  契约清单与"哪些可以改"见 [Viewer 契约](VIEWER_CONTRACT.md)；Phase 6B 把资产搬到 `viewer/` 与
-  `themes/builtin/<id>/` 时**只改这一个模块**。
+- 阅读器资产层（Phase 6A/6B）：`core/viewer_assets.py` 是"阅读器由哪些文件组成"的唯一来源（页面外壳、
+  viewer 脚本、打印样式、样式链、主题注册表）。`core/config.py` 只管 config.json 与 bundle 路径，且
+  **不反向依赖**它；`core/converter.py`（v1 回退）与 `core/html_assembly.py`（v2）都只经它取资产，
+  `gui/api.py` 的主题列表也来自它。Phase 6B 把资产搬到 `viewer/` 与 `themes/builtin/<id>/`、并把
+  viewer 脚本拆成按 `viewer/js/manifest.json` 拼接的模块时，改的正是这一个模块。
+  契约清单与"哪些可以改"见 [Viewer 契约](VIEWER_CONTRACT.md)。
 
 ## 命名与路径约定
 
 - 项目名、窗口标题与产物统一 `MarkdownReader`；npm 包标识为小写 `markdownreader-node-renderer`。
-- 模板目录按实际路径写 `templates/Modern|Office|Vscode/`，配置中的模板 ID 是 `modern|office|vscode`（Phase 6B 计划改为 `themes/builtin/<id>/`，届时目录名与 id 统一；契约见 [Viewer 契约](VIEWER_CONTRACT.md)）。
+- 主题目录按实际路径写 `themes/builtin/modern|office|vscode/`，目录名即配置里的主题 ID（`modern|office|vscode`），也是 `metadata.json` 的 `id`；契约见 [Viewer 契约](VIEWER_CONTRACT.md)。
 - 浏览器存储键统一 `markdownreader-*`；配置文件为 `config.json`（仓库只保留 `config.example.json`）。
 - WebView2 数据目录为 `%LOCALAPPDATA%\MarkdownReader\WebView2`。
 

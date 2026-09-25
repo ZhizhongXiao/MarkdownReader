@@ -28,9 +28,11 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from viewer_payload import write_viewer_payload  # noqa: E402
 
 JS_DIR = ROOT / "tests" / "js"
-VIEWER_JS = ROOT / "templates" / "viewer.js"
 
 # Locked count: a vanished or renamed check must fail instead of quietly reducing
 # coverage.
@@ -53,10 +55,10 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def test_harness_self_checks():
+def test_harness_self_checks(tmp_path: Path):
     """Run the harness self-checks and enforce their reported outcome."""
     environment = dict(os.environ)
-    environment.update({"MR_VIEWER_JS": str(VIEWER_JS)})
+    environment.update({"MR_VIEWER_JS": str(write_viewer_payload(tmp_path))})
     completed = subprocess.run(
         ["node", "--test", "harness_selfcheck.test.js"],
         cwd=str(JS_DIR),

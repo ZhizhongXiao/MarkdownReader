@@ -13,7 +13,7 @@ xfail(strict=True) discipline used by the Python contracts.
 
 The JS layer needs its own dependency (jsdom), installed in tests/js so it
 never reaches the packaged EXE: packaging/MarkdownReader.spec collects only
-gui/assets, templates and node_renderer. When that layer is not installed the
+gui/assets, viewer, themes, templates/index and node_renderer. When that layer is not installed the
 module skips with an explicit reason instead of failing.
 """
 
@@ -31,11 +31,13 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from viewer_payload import write_viewer_payload  # noqa: E402
 
 import core.converter as converter  # noqa: E402
 
 JS_DIR = ROOT / "tests" / "js"
-VIEWER_JS = ROOT / "templates" / "viewer.js"
 CONFIG = {"template": "modern", "numbering": True, "overwrite": True}
 
 # Locked counts. They make a vanished or renamed contract a failure instead of
@@ -138,12 +140,12 @@ def viewer_fixtures(tmp_path_factory) -> dict:
     return {"paths": documents, "urls": urls}
 
 
-def test_viewer_state_contracts(viewer_fixtures: dict):
+def test_viewer_state_contracts(viewer_fixtures: dict, tmp_path: Path):
     """Run the jsdom contract suite and enforce its reported outcome."""
     environment = dict(os.environ)
     environment.update(
         {
-            "MR_VIEWER_JS": str(VIEWER_JS),
+            "MR_VIEWER_JS": str(write_viewer_payload(tmp_path)),
             "MR_FIXTURE_A": str(viewer_fixtures["paths"]["A"]),
             "MR_FIXTURE_A_URL": viewer_fixtures["urls"]["A"],
             "MR_FIXTURE_B": str(viewer_fixtures["paths"]["B"]),

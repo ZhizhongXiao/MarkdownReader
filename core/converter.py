@@ -35,6 +35,7 @@ from core.viewer_assets import (
     shared_viewer_js_text,
     theme_body_class,
     theme_css_chain,
+    validate_theme,
     viewer_layout_css_text,
     viewer_shell_text,
 )
@@ -183,8 +184,11 @@ def process_single(
     numbering = cfg.get("numbering", False)
     toc_html = generate_toc_html(headings) if headings else ""
 
-    # 6. Load the reader assets through the asset layer (Phase 6A)
-    template_html = viewer_shell_text(template_name)
+    # 6. Load the reader assets through the asset layer (Phase 6A/6B)
+    # 未知/循环继承的主题必须在这里失败（与拆分前一致）：主题样式那一步只会降级，
+    # 否则会产出一份没有任何主题变量的文档。
+    validate_theme(template_name)
+    template_html = viewer_shell_text()
     if not template_html:
         _logger.error("模板“%s”缺少 viewer.html。", template_name)
         return None
@@ -195,7 +199,7 @@ def process_single(
 
     # 7. Collect CSS (viewer.css + theme chain) → inject into <head>
     css_parts = []
-    layout_css = viewer_layout_css_text(template_name)
+    layout_css = viewer_layout_css_text()
     if layout_css:
         css_parts.append(layout_css)
     try:

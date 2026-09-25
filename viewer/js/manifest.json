@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "files": [
+    "kernel.js",
+    "state.js",
+    "toc-nav.js",
+    "toc-fold.js",
+    "content-fold.js",
+    "lightbox.js",
+    "code-copy.js",
+    "table-scroll.js",
+    "position-restore.js",
+    "content-level.js",
+    "toc-panel.js",
+    "dark-mode.js",
+    "numbering.js",
+    "toc-resize.js",
+    "back-to-top.js",
+    "boot.js"
+  ]
+}

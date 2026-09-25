@@ -1,11 +1,9 @@
 """Reader asset layer: what a generated document is made of, and where from.
 
-Phase 6A. The knowledge "which files make up a reader document" used to live in
-several places at once: `core/config.py` resolved the template chain, each of the
-two assembly paths read the files itself, and the GUI listed the template
-directory to build its dropdown. This module is that knowledge's single home, so
-the later Phase 6 steps (moving the assets, splitting the viewer, embedding every
-builtin theme) change one file instead of five.
+Phase 6A collected this knowledge into one module; Phase 6B moved the assets it
+points at (and split the viewer script). Both assembly paths, the GUI dropdown and
+the tests now read the layout through this one layer, which is why the move
+touched paths here instead of in five modules.
 
 Two boundaries are deliberate:
 
@@ -17,30 +15,38 @@ Two boundaries are deliberate:
   asset layer.
 
 Delivered documents are standalone files opened over ``file://``. That fixes one
-runtime rule here: the viewer ships as **one classic script**. Source-level
-modules (Phase 6B) are concatenated at assembly time; ``<script type="module">``
-would be blocked by CORS on ``file://``, and fetching module files at runtime
-would break the offline promise.
+runtime rule here: the viewer ships as **one classic script**, assembled from the
+modules listed in ``viewer/js/manifest.json`` -- fragments of a single IIFE in file
+order, joined with no separator so the payload stays byte-identical to the file
+they replace. ``<script type="module">`` would be blocked by CORS on ``file://``,
+and fetching module files at runtime would break the offline promise.
 
-Terminology: a *template* is a user-facing selector (today the directory name,
-for example ``Modern``), while a *theme id* is the canonical lowercase id from
-its ``metadata.json`` (``modern``). They differ in case today and will be unified
-when Phase 6B moves the assets under ``themes/builtin/<id>/``.
+Terminology: a theme id is the canonical lowercase id from ``metadata.json``, which
+is also its directory name under ``themes/builtin/``. The user-facing selector in
+``config.json`` is that same id.
 """
 
 import json
 import logging
 import os
 
-from core.config import TEMPLATES_DIR, normalize_template_name
+from core.config import BUNDLE_ROOT, normalize_template_name
 
 _logger = logging.getLogger(__name__)
 
-# Phase 6B moves these under viewer/ and themes/builtin/<id>/. Until then they are
-# still the template directories, and this module is the only place that knows it.
-_ASSET_ROOT = TEMPLATES_DIR
-_SHARED_VIEWER_JS = os.path.join(_ASSET_ROOT, "viewer.js")
-_SHARED_PRINT_CSS = os.path.join(_ASSET_ROOT, "print.css")
+# Phase 6B moved the reader's assets out of `templates/` (which now holds only the
+# batch index page): the shell and its styles/script live under `viewer/`, and the
+# themes under `themes/builtin/<id>/`. This module is the only place that knows it.
+_VIEWER_ROOT = os.path.join(BUNDLE_ROOT, "viewer")
+_THEMES_ROOT = os.path.join(BUNDLE_ROOT, "themes", "builtin")
+_VIEWER_SHELL = os.path.join(_VIEWER_ROOT, "viewer.html")
+_VIEWER_LAYOUT_CSS = os.path.join(_VIEWER_ROOT, "css", "layout.css")
+_VIEWER_PRINT_CSS = os.path.join(_VIEWER_ROOT, "css", "print.css")
+_VIEWER_JS_MANIFEST = os.path.join(_VIEWER_ROOT, "js", "manifest.json")
+# The viewer used to be one file with a leading UTF-8 BOM, and that byte reached
+# the delivered document. The modules carry no BOM, so the loader puts it back and
+# the assembled payload stays byte-identical to the pre-6B file.
+_VIEWER_JS_BOM = "\ufeff"
 
 
 def _read_text(path: str | None) -> str:
@@ -58,7 +64,7 @@ def _read_text(path: str | None) -> str:
 
 def theme_metadata(theme_id: str) -> dict:
     """Return a theme's ``metadata.json``, or ``{}`` when it is unreadable."""
-    path = os.path.join(_ASSET_ROOT, str(theme_id), "metadata.json")
+    path = os.path.join(_THEMES_ROOT, str(theme_id), "metadata.json")
     if os.path.isfile(path):
         try:
             with open(path, "r", encoding="utf-8") as handle:
@@ -77,9 +83,9 @@ def theme_ids(*, include_hidden: bool = False) -> list[str]:
     template directory itself to answer this question.
     """
     names = []
-    if os.path.isdir(_ASSET_ROOT):
-        for entry in os.listdir(_ASSET_ROOT):
-            if not os.path.isdir(os.path.join(_ASSET_ROOT, entry)):
+    if os.path.isdir(_THEMES_ROOT):
+        for entry in os.listdir(_THEMES_ROOT):
+            if not os.path.isdir(os.path.join(_THEMES_ROOT, entry)):
                 continue
             metadata = theme_metadata(entry)
             if not metadata:
@@ -104,6 +110,20 @@ def normalize_theme_id(theme_id: str | None) -> str:
     return normalize_template_name(theme_id)
 
 
+def validate_theme(theme_id: str) -> str:
+    """Return the normalized theme id, raising ``ValueError`` when it is unusable.
+
+    The assembly paths call this before they read anything else. An unknown theme, a
+    circular inheritance or a missing parent must fail -- exactly as it did while the
+    page shell was still resolved through the theme chain. Without this check the
+    theme-CSS step would only *degrade* (that is how an unreadable ``theme.css`` is
+    treated), and the document would ship with no theme variables at all.
+    """
+    normalized = normalize_theme_id(theme_id)
+    resolve_theme_chain(normalized)
+    return normalized
+
+
 # ================================================================
 # Chain resolution
 # ================================================================
@@ -117,7 +137,7 @@ def resolve_theme_chain(theme_id: str) -> list[str]:
     """
     theme_id = normalize_theme_id(theme_id)
 
-    if not os.path.isdir(os.path.join(_ASSET_ROOT, theme_id)):
+    if not os.path.isdir(os.path.join(_THEMES_ROOT, theme_id)):
         raise ValueError(f"未找到模板：“{theme_id}”")
 
     chain = [theme_id]
@@ -130,7 +150,7 @@ def resolve_theme_chain(theme_id: str) -> list[str]:
             break
         if parent in seen:
             raise ValueError(f"检测到模板循环继承：{' -> '.join(chain + [parent])}")
-        if not os.path.isdir(os.path.join(_ASSET_ROOT, parent)):
+        if not os.path.isdir(os.path.join(_THEMES_ROOT, parent)):
             raise ValueError(f"模板“{current}”继承“{parent}”，但未找到父模板“{parent}”。")
         chain.insert(0, parent)
         seen.add(parent)
@@ -140,9 +160,13 @@ def resolve_theme_chain(theme_id: str) -> list[str]:
 
 
 def resolve_theme_file(theme_id: str, filename: str) -> str | None:
-    """Find a file in the chain, searching from the theme up to its base."""
+    """Find a file in a theme's chain, searching from the theme up to its base.
+
+    Only ``theme.css`` is per-theme now: the shell, the layout stylesheet, the
+    viewer script and the print sheet are shared assets (see the getters below).
+    """
     for name in reversed(resolve_theme_chain(theme_id)):
-        path = os.path.join(_ASSET_ROOT, name, filename)
+        path = os.path.join(_THEMES_ROOT, name, filename)
         if os.path.isfile(path):
             return path
     return None
@@ -157,7 +181,7 @@ def theme_css_chain(theme_id: str) -> str:
     chain = resolve_theme_chain(theme_id)
     parts: list[str] = []
     for name in chain:
-        text = _read_text(os.path.join(_ASSET_ROOT, name, "theme.css"))
+        text = _read_text(os.path.join(_THEMES_ROOT, name, "theme.css"))
         if text:
             parts.append(text)
             _logger.debug("已加载主题样式：%s/theme.css", name)
@@ -175,31 +199,67 @@ def theme_css_chain(theme_id: str) -> str:
 # ================================================================
 
 
-def viewer_shell_text(theme_id: str) -> str:
-    """Return the page shell (``viewer.html``) for a theme, or ``""``."""
-    return _read_text(resolve_theme_file(theme_id, "viewer.html"))
+def viewer_shell_text() -> str:
+    """Return the page shell every theme shares, or ``""``.
 
-
-def viewer_layout_css_text(theme_id: str) -> str:
-    """Return the layout/component stylesheet (``viewer.css``), or ``""``.
-
-    Colors and sizes arrive as CSS variables from the theme chain, so this file
-    is layout and components only.
+    Phase 6B made the shell a shared asset: it used to be resolved through the
+    theme chain (only the base template carried one), which no longer describes
+    the layout.
     """
-    return _read_text(resolve_theme_file(theme_id, "viewer.css"))
+    return _read_text(_VIEWER_SHELL)
+
+
+def viewer_layout_css_text() -> str:
+    """Return the shared layout/component stylesheet, or ``""``.
+
+    Colors and sizes arrive as CSS variables from the theme chain, so this file is
+    layout and components only.
+    """
+    return _read_text(_VIEWER_LAYOUT_CSS)
+
+
+def viewer_js_modules() -> list[str]:
+    """Return the viewer script's module names in load order.
+
+    ``viewer/js/manifest.json`` is the only declaration of that order; the
+    assembler and the tests both go through this function, so a reordered manifest
+    cannot be missed by one of them.
+    """
+    raw = _read_text(_VIEWER_JS_MANIFEST)
+    if not raw.strip():
+        raise ValueError(f"缺少 viewer 脚本清单：{_VIEWER_JS_MANIFEST}")
+    try:
+        manifest = json.loads(raw)
+    except ValueError as error:
+        raise ValueError(f"viewer 脚本清单无法解析：{_VIEWER_JS_MANIFEST}（{error}）") from error
+    files = manifest.get("files")
+    if not isinstance(files, list) or not files:
+        raise ValueError(f"viewer 脚本清单缺少 files 列表：{_VIEWER_JS_MANIFEST}")
+    return [str(name) for name in files]
 
 
 def shared_viewer_js_text() -> str:
-    """Return the viewer script that every document inlines, or ``""``.
+    """Return the viewer script every document inlines, assembled from the manifest.
 
-    One classic script today; Phase 6B concatenates the source modules in
-    ``manifest`` order here, which keeps the delivered document unchanged in
-    shape.
+    The modules are fragments of **one** IIFE in file order, so they are joined with
+    no separator: the result equals the pre-6B ``templates/viewer.js`` byte for byte
+    (locked by ``tests/test_viewer_assets_contract.py``). A module that does not end
+    with a newline would glue onto the next one, so that is refused rather than
+    patched.
     """
-    return _read_text(_SHARED_VIEWER_JS)
+    chunks: list[str] = []
+    for name in viewer_js_modules():
+        path = os.path.join(_VIEWER_ROOT, "js", name)
+        chunk = _read_text(path)
+        if not chunk:
+            raise ValueError(f"viewer 脚本模块缺失或为空：{path}")
+        if not chunk.endswith("\n"):
+            raise ValueError(f"viewer 脚本模块必须以换行结尾：{path}")
+        chunks.append(chunk)
+    return _VIEWER_JS_BOM + "".join(chunks)
 
 
 def shared_print_css_text() -> str:
     """Return the print stylesheet that every document inlines, or ``""``."""
-    return _read_text(_SHARED_PRINT_CSS)
+    return _read_text(_VIEWER_PRINT_CSS)
 

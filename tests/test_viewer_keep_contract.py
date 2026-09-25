@@ -65,7 +65,7 @@ ATTRIBUTES = ("data-theme", "data-auto-numbering", "data-id", "data-level", "--s
 
 
 def test_every_toolbar_and_layout_id_is_still_there():
-    shell = viewer_assets.viewer_shell_text("modern")
+    shell = viewer_assets.viewer_shell_text()
     missing = [name for name in DOM_IDS if f'id="{name}"' not in shell]
 
     assert shell.strip(), "viewer 外壳缺失"
@@ -84,7 +84,7 @@ def test_the_class_and_attribute_hooks_survive():
     surface = "".join(
         (
             viewer_assets.shared_viewer_js_text(),
-            viewer_assets.viewer_layout_css_text("modern"),
+            viewer_assets.viewer_layout_css_text(),
             viewer_assets.theme_css_chain("modern"),
         )
     )
