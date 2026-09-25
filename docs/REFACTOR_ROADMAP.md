@@ -331,8 +331,17 @@ PlantUML 当前只使用联网 server。
               checker closeout：srcset 按规范解析（不按逗号 split）、style 属性 CSS 参与扫描、
               证据按 occurrence 消费（degraded 先占位，author 声明不能遮蔽多余 occurrence）、
               link rel 判定（fetching token 优先于 metadata token）+ @import 字符串形式
-production renderer 仍未切换：cutover 是 5D 之后的**独立 checkpoint**（含**按 occurrence 计数**的 author provenance、
-                             packaging、demo 再生、rollback）
+cutover 是 5D 之后的**独立 checkpoint**，拆成一次只动一个架构层的 4 步：
+C1  PASS      作者 raw HTML provenance 通道：renderer 在 token 层记录（renderer/document/author_references.js）
+              → resources.author_references = [{ref, count}]（v2 additive；只记来源：不 fetch、不改 html、不进 items）
+              checker 缺省自动消费该通道（--author-refs 仍可覆盖），佐证计数与 ref 抽取同路径（修 &amp; 实体失配）
+              两侧共用 tests/fixtures/author_references.json：node 直测 scanner + spawn dist，pytest 走真实 dist
+C2            生产适配器切到 v2：core/renderer_v2.py + core/renderer_node.py 显式版本配置（不再靠 JS 探测协议），
+              并校验打包 Node >= 18
+C3            converter 在 v2 选中时改用 core/html_assembly.py 装配；_theme_body_class 归 core/config.py；v1 逐字节不变
+C4            默认 renderer 切换 + demo 再生 + 新产物过 standalone gate + release/selfcheck + rollback 证明
+              前置：packaging/MarkdownReader.spec 目前不含 renderer/dist/（KaTeX + Mermaid 约 +5.5 MB）
+production renderer 仍未切换（C2 起才动生产路径）
 ```
 
 ## 验收

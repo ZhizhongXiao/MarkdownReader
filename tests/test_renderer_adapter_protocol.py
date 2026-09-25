@@ -72,7 +72,7 @@ def test_required_keys_and_types():
     assert isinstance(envelope["features"], dict)
     assert isinstance(envelope["warnings"], list)
     # v2：resources 必在；资源细节契约见 tests/test_renderer_adapter_resources.py。
-    assert set(envelope["resources"]) == {"items", "styles", "scripts"}
+    assert set(envelope["resources"]) == {"items", "styles", "scripts", "author_references"}
     assert isinstance(envelope["resources"]["items"], list)
     assert isinstance(envelope["resources"]["styles"], list)
 

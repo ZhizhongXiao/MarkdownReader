@@ -24,6 +24,7 @@ const { createRenderer } = require("./upstream/create_renderer");
 const { collectHeadings, headingAnchorFallback } = require("./document/headings");
 const { detectFeatures } = require("./document/features");
 const { transformDocumentLinks } = require("./document/links");
+const { collectAuthorReferences } = require("./document/author_references");
 const { collectResources } = require("./resources/collector");
 const upstreamPaths = require("./upstream/paths");
 
@@ -54,6 +55,10 @@ async function renderRequest(request) {
   // document 层（Phase 4B）：parse 之后、render 之前只跑一次 —— `.md → .html` 重写与
   // WikiLink 目标解析都写进 token，避免 heading metadata + 正文两次 inline 渲染造成重复 warning。
   const documentLinks = transformDocumentLinks(tokens, request.context);
+  // document 层（Cutover C1）：作者 raw HTML 的 provenance 必须在这里记录 —— 此时 token 层
+  // 还知道哪些 HTML 是作者写的（html_block / html_inline），从最终 html 反推会丢掉这个区分。
+  // 只记录来源：不 fetch、不改 HTML、不进 resources.items（K13）。
+  const authorReferences = collectAuthorReferences(tokens);
   // 资源层（Phase 5A/5C）：同样在 parse 后、render 前只跑一次；只处理 Markdown 语义 token
   // （image 与 uml_diagram），raw HTML 里的引用保持原样。Phase 5C 起这里会并发抓取远程资源，
   // 因此 collectResources 是 async；stdout 仍只在全部完成后写一个 JSON envelope。
@@ -71,6 +76,7 @@ async function renderRequest(request) {
       items: resources.items,
       styles: resources.styles,
       scripts: resources.scripts,
+      author_references: authorReferences,
     },
   };
 }

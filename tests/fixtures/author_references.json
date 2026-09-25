@@ -1,0 +1,128 @@
+{
+  "raw_fragments": [
+    {
+      "name": "img_src",
+      "raw": "<img src=\"https://a.invalid/x.png\">",
+      "expected": [{ "ref": "https://a.invalid/x.png", "count": 1 }]
+    },
+    {
+      "name": "style_attribute_url",
+      "raw": "<div style=\"background:url(https://b.invalid/y.png)\">t</div>",
+      "expected": [{ "ref": "https://b.invalid/y.png", "count": 1 }]
+    },
+    {
+      "name": "duplicate_occurrences_are_counted",
+      "raw": "<img src=\"https://a.invalid/x.png\"><img src=\"https://a.invalid/x.png\">",
+      "expected": [{ "ref": "https://a.invalid/x.png", "count": 2 }]
+    },
+    {
+      "name": "srcset_candidates",
+      "raw": "<img srcset=\"https://s.invalid/a.png 1x, https://s.invalid/b.png 2x\">",
+      "expected": [
+        { "ref": "https://s.invalid/a.png", "count": 1 },
+        { "ref": "https://s.invalid/b.png", "count": 1 }
+      ]
+    },
+    {
+      "name": "srcset_data_uri_is_not_external",
+      "raw": "<img srcset=\"data:image/png;base64,AAAA 1x\">",
+      "expected": []
+    },
+    {
+      "name": "data_uri_is_not_external",
+      "raw": "<img src=\"data:image/png;base64,AAAA\">",
+      "expected": []
+    },
+    {
+      "name": "link_fetching_token_wins",
+      "raw": "<link rel=\"alternate stylesheet\" href=\"https://c.invalid/x.css\">",
+      "expected": [{ "ref": "https://c.invalid/x.css", "count": 1 }]
+    },
+    {
+      "name": "link_metadata_only_is_ignored",
+      "raw": "<link rel=\"canonical\" href=\"https://c.invalid/page\">",
+      "expected": []
+    },
+    {
+      "name": "link_unknown_rel_counts",
+      "raw": "<link rel=\"something-new\" href=\"https://c.invalid/y.css\">",
+      "expected": [{ "ref": "https://c.invalid/y.css", "count": 1 }]
+    },
+    {
+      "name": "style_element_url_and_import",
+      "raw": "<style>@import \"https://d.invalid/t.css\";\nbody{background:url('https://d.invalid/bg.png')}</style>",
+      "expected": [
+        { "ref": "https://d.invalid/t.css", "count": 1 },
+        { "ref": "https://d.invalid/bg.png", "count": 1 }
+      ]
+    },
+    {
+      "name": "script_content_is_not_scanned",
+      "raw": "<script>var s = \"<img src='https://f.invalid/in-js.png'>\";</script>",
+      "expected": []
+    },
+    {
+      "name": "commented_out_markup_is_not_scanned",
+      "raw": "<!-- <img src=\"https://e.invalid/hidden.png\"> -->",
+      "expected": []
+    },
+    {
+      "name": "navigation_anchor_is_not_a_subresource",
+      "raw": "<a href=\"https://nav.invalid/p\">链接</a>",
+      "expected": []
+    },
+    {
+      "name": "iframe_and_object_are_covered",
+      "raw": "<iframe src=\"https://g.invalid/frame.html\"></iframe><object data=\"https://g.invalid/o.svg\"></object>",
+      "expected": [
+        { "ref": "https://g.invalid/frame.html", "count": 1 },
+        { "ref": "https://g.invalid/o.svg", "count": 1 }
+      ]
+    }
+  ],
+  "documents": [
+    {
+      "name": "plain_document_reports_nothing",
+      "markdown": "# 标题\n\n普通文本 $a^2$。\n",
+      "expected": []
+    },
+    {
+      "name": "markdown_image_is_not_reported",
+      "markdown": "![m](https://md.invalid/a.png)\n",
+      "expected": []
+    },
+    {
+      "name": "inline_raw_html_in_a_paragraph",
+      "markdown": "正文 <img src=\"https://i.invalid/p.png\"> 结尾\n",
+      "expected": [{ "ref": "https://i.invalid/p.png", "count": 1 }]
+    },
+    {
+      "name": "raw_html_inside_a_heading",
+      "markdown": "## 标题 <img src=\"https://j.invalid/h.png\">\n",
+      "expected": [{ "ref": "https://j.invalid/h.png", "count": 1 }]
+    },
+    {
+      "name": "raw_html_inside_a_table_cell",
+      "markdown": "| a |\n| --- |\n| <img src=\"https://k.invalid/t.png\"> |\n",
+      "expected": [{ "ref": "https://k.invalid/t.png", "count": 1 }]
+    },
+    {
+      "name": "entities_in_a_raw_url_are_decoded",
+      "markdown": "正文 <img src=\"https://l.invalid/p.png?x=1&amp;y=2\"> 结尾\n",
+      "expected": [{ "ref": "https://l.invalid/p.png?x=1&y=2", "count": 1 }]
+    },
+    {
+      "name": "references_follow_first_occurrence_order",
+      "markdown": "<img src=\"https://m.invalid/1.png\">\n\n正文 <img src=\"https://m.invalid/2.png\"> 与 <img src=\"https://m.invalid/1.png\">\n",
+      "expected": [
+        { "ref": "https://m.invalid/1.png", "count": 2 },
+        { "ref": "https://m.invalid/2.png", "count": 1 }
+      ]
+    },
+    {
+      "name": "a_url_shared_with_a_markdown_image_counts_only_the_raw_occurrence",
+      "markdown": "<img src=\"https://n.invalid/a.png\">\n\n![m](https://n.invalid/a.png)\n",
+      "expected": [{ "ref": "https://n.invalid/a.png", "count": 1 }]
+    }
+  ]
+}

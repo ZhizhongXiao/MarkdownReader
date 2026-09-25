@@ -27,6 +27,10 @@
  *   resources.styles  = 需要 assembler 注入的 CSS：[{ id, css }]（目前只有 katex）
  *   resources.scripts = 需要 assembler 注入的脚本：[{ id, version, script, boot }]
  *                       （目前只有按需的 mermaid；5B 起是 v2 的 additive 通道，不升版本）
+ *   resources.author_references = 作者 raw HTML 的外部引用 provenance（Cutover C1；同为 v2 additive 通道）：
+ *                       [{ ref, count }]，count >= 1，同一 ref 只出现一条，顺序为作者 raw HTML 中的首次出现顺序。
+ *                       只记录来源：**不 fetch、不改 HTML、不进 resources.items**（K13 保持原样）；普通文档为 []。
+ *                       生产者在 Markdown token 层（html_block / html_inline）记录，绝不从最终 html 反推。
  * warnings 仍是**用户可读字符串数组**，只承载降级/缺失/不可读/抓取失败等需要注意的情况；
  * 成功内嵌不产生 warning；同一远程 URL 的同一失败只报一次（v1 的 envelope 属旧 production renderer）。
  *
@@ -86,11 +90,12 @@ function validateRequest(value) {
 }
 
 function emptyResources() {
-  return { items: [], styles: [], scripts: [] };
+  return { items: [], styles: [], scripts: [], author_references: [] };
 }
 
 // v2：resources 是**必在**字段；缺失或形状不对时归一成空结构，而不是让字段忽隐忽现。
-// scripts 是 5B 的 additive 通道：仍在 v2 之内，因此「必在」规则同样适用。
+// scripts（5B）与 author_references（Cutover C1）都是 additive 通道：仍在 v2 之内，
+// 因此「必在」规则同样适用于它们。
 function normalizeResources(value) {
   if (!isPlainObject(value)) {
     return emptyResources();
@@ -99,6 +104,7 @@ function normalizeResources(value) {
     items: Array.isArray(value.items) ? value.items : [],
     styles: Array.isArray(value.styles) ? value.styles : [],
     scripts: Array.isArray(value.scripts) ? value.scripts : [],
+    author_references: Array.isArray(value.author_references) ? value.author_references : [],
   };
 }
 

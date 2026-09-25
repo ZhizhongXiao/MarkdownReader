@@ -257,9 +257,15 @@ def collect_subresources(html: str) -> list[dict]:
     return found
 
 
+def _resources_channel(envelope: dict | None) -> dict:
+    """Return the envelope's `resources` object, tolerating a missing or malformed one."""
+    channel = (envelope or {}).get("resources") or {}
+    return channel if isinstance(channel, dict) else {}
+
+
 def _manifest_items(envelope: dict | None) -> dict[str, list[dict]]:
     """Index manifest items by reference; the manifest carries one item per occurrence."""
-    items = ((envelope or {}).get("resources") or {}).get("items") or []
+    items = _resources_channel(envelope).get("items") or []
     index: dict[str, list[dict]] = {}
     for item in items:
         reference = str((item or {}).get("ref") or "")
@@ -348,7 +354,18 @@ def scan(
     manifest = _manifest_items(envelope)
     warnings = list((envelope or {}).get("warnings") or [])
     fragment = str((envelope or {}).get("html") or "")
-    declared = _author_counts(author_owned_refs)
+    # 声明的来源：显式参数优先，否则用 envelope 自带的 provenance 通道（Cutover C1）。
+    written = (
+        author_owned_refs
+        if author_owned_refs
+        else _resources_channel(envelope).get("author_references") or ()
+    )
+    declared = _author_counts(written)
+    # 佐证计数与 ref 抽取走同一条路径（而不是裸子串计数）：`&amp;` 这类字符引用
+    # 会让同一 URL 的裸子串与抽取结果不一致。
+    fragment_references = _occurrences(
+        [entry["ref"] for entry in collect_subresources(fragment)]
+    )
 
     subresources = collect_subresources(html)
     occurrences = _occurrences(
@@ -370,7 +387,7 @@ def scan(
         kept_count = statuses.count("kept")
         warning = _warning_for(reference, warnings)
         declared_count = declared.get(reference, 0)
-        corroborated = min(declared_count, fragment.count(reference))
+        corroborated = min(declared_count, fragment_references.get(reference, 0))
 
         # 5C emits one warning per failing URL, so it covers every failed occurrence.
         # Degraded evidence claims occurrences first: a declaration can never turn a
@@ -469,7 +486,7 @@ def scan(
     # must actually describe the produced document.
     for reference in sorted(declared):
         declared_count = declared[reference]
-        corroborated = min(declared_count, fragment.count(reference))
+        corroborated = min(declared_count, fragment_references.get(reference, 0))
         if declared_count > corroborated:
             problems.append(
                 f"{reference}：声明了 {declared_count} 处作者 raw HTML，"
@@ -523,7 +540,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--author-refs",
         help='JSON 数组：声明为作者 raw HTML 的外部引用，例如 ["https://x/a.png"] '
-        '或 [{"ref": "https://x/a.png", "count": 2}]',
+        '或 [{"ref": "https://x/a.png", "count": 2}]；省略时自动使用 --envelope 里的 '
+        "resources.author_references 通道（Cutover C1）",
     )
     parser.add_argument("--injections", help="JSON 数组：assembler 注入账本（体积报告用）")
     return parser

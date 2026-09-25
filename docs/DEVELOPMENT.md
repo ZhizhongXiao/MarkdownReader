@@ -131,6 +131,11 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
   `uv run python tools/standalone_closure.py samples/demo.html`（生产 v1 产物基线 → standalone）、
   `uv run python tools/assemble_document.py --out build/smoke.html`（装配集成页：本地图片 + KaTeX + Mermaid）、
   `pwsh tools/run_browser_acceptance.ps1 -ExtraPage build/smoke.html`（opt-in：真实浏览器离线打开该页）。
+- author provenance（Cutover C1）：`renderer/document/author_references.js` 在 **token 层**记录作者 raw HTML 的外部
+  subresource 引用，产出 `resources.author_references = [{ ref, count }]`（每 ref 一条、首次出现顺序、普通文档 `[]`）；
+  只记录来源（不 fetch、不改 html、不进 `items`），因此 raw HTML 与 Markdown 生成的 html 始终可区分。
+  规则与 closure checker 同构，两侧由 `tests/fixtures/author_references.json` 强制对齐（node 直测 scanner +
+  spawn dist，pytest 走真实 dist）；`tools/standalone_closure.py` 缺省自动消费该通道，`--author-refs` 只在需要覆盖时使用。
 - 协议：v2（Phase 5A）——
   `{ "protocol_version": 2, "ok": true, "html", "headings", "features", "warnings", "resources": { "items": [], "styles": [] } }`；
   `resources` 是**必在**字段（没有资源时也是空结构）：`items` 是资源 manifest，`styles` 是交给 assembler 注入的 CSS；

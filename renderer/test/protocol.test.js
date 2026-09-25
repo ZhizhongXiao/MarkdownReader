@@ -64,7 +64,12 @@ test("resources is present and empty when the document has none", function () {
   const result = run({ markdown: "只有普通文本。\n" });
   assert.strictEqual(result.status, 0, describe(result));
   const envelope = JSON.parse(result.stdout);
-  assert.deepStrictEqual(envelope.resources, { items: [], styles: [], scripts: [] });
+  assert.deepStrictEqual(envelope.resources, {
+    items: [],
+    styles: [],
+    scripts: [],
+    author_references: [],
+  });
   assert.deepStrictEqual(envelope.warnings, []);
 });
 

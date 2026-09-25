@@ -53,6 +53,15 @@ def assemble_and_scan(
     return {"envelope": envelope, "assembled": assembled, "report": report}
 
 
+def author_refs_from_envelope(envelope: dict) -> list:
+    """Return the author provenance declarations an envelope carries (Cutover C1 channel).
+
+    Returns the `resources.author_references` entries as-is: the checker accepts both
+    `{"ref": ..., "count": n}` and plain refs, so no conversion is needed here.
+    """
+    return list(((envelope or {}).get("resources") or {}).get("author_references") or [])
+
+
 def labels(report: dict) -> list[str]:
     """Return the injected labels in document order."""
     return [part["label"] for part in report["payload"]["parts"]]

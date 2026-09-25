@@ -93,7 +93,7 @@ def manifest(envelope: dict, kind: str) -> list[dict]:
 
 def assert_manifest_shape(envelope: dict) -> None:
     resources = envelope["resources"]
-    assert set(resources) == {"items", "styles", "scripts"}, resources
+    assert set(resources) == {"items", "styles", "scripts", "author_references"}, resources
     assert isinstance(resources["items"], list) and isinstance(resources["styles"], list)
     assert isinstance(resources["scripts"], list)
     for item in resources["items"]:
@@ -109,6 +109,14 @@ def assert_manifest_shape(envelope: dict) -> None:
     for script in resources["scripts"]:
         assert set(script) == {"id", "version", "script", "boot"}, script
         assert all(isinstance(value, str) for value in script.values()), script
+    # author_references 是 Cutover C1 的 additive 通道：形状与「每 ref 一条 + count >= 1」也是契约。
+    assert isinstance(resources["author_references"], list)
+    for entry in resources["author_references"]:
+        assert set(entry) == {"ref", "count"}, entry
+        assert isinstance(entry["ref"], str) and entry["ref"], entry
+        assert isinstance(entry["count"], int) and entry["count"] >= 1, entry
+    references = [entry["ref"] for entry in resources["author_references"]]
+    assert len(references) == len(set(references)), "同一 ref 只允许一条（计数形式）"
 
 
 # --- envelope 形状 ---------------------------------------------------------
@@ -117,8 +125,13 @@ def assert_manifest_shape(envelope: dict) -> None:
 def test_resources_channel_is_always_present_even_when_empty():
     envelope = render("只有普通文本。\n")
 
-    assert set(envelope["resources"]) == {"items", "styles", "scripts"}
-    assert envelope["resources"] == {"items": [], "styles": [], "scripts": []}
+    assert set(envelope["resources"]) == {"items", "styles", "scripts", "author_references"}
+    assert envelope["resources"] == {
+        "items": [],
+        "styles": [],
+        "scripts": [],
+        "author_references": [],
+    }
     assert "assets" not in envelope, "v1 的 assets.css 不属于 v2"
     assert envelope["warnings"] == []
 
@@ -312,7 +325,14 @@ def test_raw_html_style_url_is_not_resolved(tmp_path: Path):
     envelope = render_doc("<div style=\"background-image:url('./pic.png')\">raw</div>\n", tmp_path)
 
     assert "url('./pic.png')" in envelope["html"]
-    assert envelope["resources"] == {"items": [], "styles": [], "scripts": []}
+    # raw HTML 里的 CSS 引用不进入资源层（K13）：既不 fetch，也不改写 html。
+    assert envelope["resources"]["items"] == []
+    assert envelope["resources"]["styles"] == []
+    assert envelope["resources"]["scripts"] == []
+    # Cutover C1：同一处引用进入作者 provenance 通道（只记录来源）。
+    assert envelope["resources"]["author_references"] == [
+        {"ref": "./pic.png", "count": 1}
+    ]
 
 
 def test_raw_html_and_markdown_images_of_the_same_file_differ(tmp_path: Path):
