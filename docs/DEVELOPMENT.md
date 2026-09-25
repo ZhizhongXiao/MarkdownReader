@@ -150,6 +150,15 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
   也由 `packaging/MarkdownReader.spec` 在构建期断言）属于 `core/renderer_node.py`。
   不做协议探测、不在 v2 失败时回退 v1、artifact 缺失给出构建提示；`options` 只对 v2 生效
   （v1 收到非空 options 报 `ValueError`，不静默忽略）。
+- converter 的 v2 路径（Cutover C3，K26）：`process_single` / `process_batch` 增加**内部** keyword
+  `renderer_version`（默认 `"v1"`）与 `renderer_options`。显式 `"v2"` 时 renderer 走 C2 的 bridge，
+  装配交给 `core/html_assembly.py`（含注入账本）；`report["warnings"]` 固定为
+  **renderer warnings + assembly warnings**（顺序即此顺序）。v2 的 production 内部默认是
+  `_V2_DEFAULT_OPTIONS = {"math": True, "fetch_remote_resources": True}`，`renderer_options` 在其上覆盖，
+  **不进 config.json**（Phase 8 才决定哪些 renderer 选项成为产品配置）。失败语义与 v1 对齐：
+  模板不可装配 → log + 返回 `None`（不写文件）；renderer / bridge 失败保留 actionable 异常
+  （缺 artifact 不被吞成静默无输出）。`core/converter.py` 运行期**不调用** closure checker
+  （它只是 test / release gate）。
 
 ## 命名与路径约定
 

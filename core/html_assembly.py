@@ -30,6 +30,7 @@ from core.config import (
     load_theme_chain,
     normalize_template_name,
     resolve_template_file,
+    theme_body_class,
 )
 from core.toc import generate_toc_html
 
@@ -43,18 +44,6 @@ _NUMBERING_AUTOSTART = (
     "});"
     "</script>"
 )
-
-
-def _theme_body_class(template_name: str) -> str:
-    """Return the stable CSS class for the active template.
-
-    TEMPORARY DUPLICATION of `core/converter.py::_theme_body_class`: Phase 5D
-    proves the new assembler while the production converter stays byte-identical,
-    so this shared helper is not unified here. Unify both into `core/config.py`
-    at the production cutover checkpoint, where two real consumers exist.
-    """
-    safe_name = "".join(ch.lower() if ch.isalnum() else "-" for ch in str(template_name)).strip("-")
-    return f"theme-{safe_name or 'default'}"
 
 
 def _read_text(path: str | None) -> str:
@@ -106,7 +95,7 @@ def assemble_document(
         if placeholder not in template_html:
             raise ValueError(f"模板“{resolved_template}”缺少占位符 {placeholder}，无法装配。")
     template_html = template_html.replace(
-        "<body>", f'<body class="{_theme_body_class(resolved_template)}">', 1
+        "<body>", f'<body class="{theme_body_class(resolved_template)}">', 1
     )
 
     injections: list[dict] = []

@@ -341,10 +341,14 @@ C2  PASS      生产 bridge 能**显式**调用 v2：新 core/renderer_v2.py（a
               probe_node_version / _require_v2_node_major / dispatch（默认 v1；不探测协议；不回退 v1）
               v2 冒烟离线且要求 dist/katex 真的加载；返回完整 envelope（不压缩）；Node 下限 major >= 18
               未做：converter 仍不调用 v2（C3）、renderer/dist/ 仍未进发布包（C4）、无 config.json 配置项（Phase 8）
-C3            converter 在 v2 选中时改用 core/html_assembly.py 装配；_theme_body_class 归 core/config.py；v1 逐字节不变
+C3  PASS      converter 能显式走完整 v2 pipeline：process_single/process_batch 增加内部 renderer_version /
+              renderer_options；v2 时 renderer 走 C2 bridge、装配交给 core/html_assembly.py
+              warnings 合并顺序 = renderer + assembly（固定）；v2 内部默认 math + fetch 由 converter 写死并允许覆盖
+              theme_body_class 收敛到 core/config.py（converter 与 assembler 共用）；runtime 不调用 closure checker
+              未做：默认仍是 v1、demo 未再生、renderer/dist 未进发布包、release gate 与 rollback（全属 C4）
 C4            默认 renderer 切换 + demo 再生 + 新产物过 standalone gate + release/selfcheck + rollback 证明
               前置：packaging/MarkdownReader.spec 目前不含 renderer/dist/（KaTeX + Mermaid 约 +5.5 MB）
-production renderer 仍未切换（默认 v1；C3 让 converter 会用 v2 装配，C4 才切默认）
+production renderer 仍未切换（默认 v1；C4 才有默认切换、packaging、demo 再生与 rollback）
 ```
 
 ## 验收

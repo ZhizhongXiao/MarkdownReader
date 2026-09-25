@@ -2,6 +2,11 @@
 
 Provides the three functions previously expected from main.py:
 collect_markdown_files, process_single, process_batch.
+
+Two renderer paths share everything up to the render context: v1 (default, the
+production path, assembled inline below) and v2 (explicitly selected, assembled
+by `core/html_assembly.py`). Cutover C3 wires the v2 path without changing the
+default; see K26.
 """
 
 import logging
@@ -17,6 +22,7 @@ from core.config import (
     load_theme_chain,
     normalize_template_name,
     resolve_template_file,
+    theme_body_class,
 )
 from core.conversion_plan import (
     build_conversion_plan,
@@ -24,17 +30,35 @@ from core.conversion_plan import (
     document_output_map,
 )
 from core.fm import parse_front_matter
+from core.html_assembly import assemble_document
 from core.index_builder import DEFAULT_INDEX_FILENAME, build_index
 from core.renderer_node import render_markdown_node
 from core.toc import generate_toc_html
 
 _logger = logging.getLogger(__name__)
 
+# v2 的 production 内部默认值（Cutover C3）：显式写下来，而不是依赖 renderer 当下的隐式默认，
+# 这样 adapter 默认值将来变化不会悄悄改变 MarkdownReader。**不进 config.json**（Phase 8 才决定
+# 哪些 renderer 选项成为产品配置）；timeout / retries / maxBytes 仍是 5C 的实现策略。
+_V2_DEFAULT_OPTIONS = {"math": True, "fetch_remote_resources": True}
 
-def _theme_body_class(template_name: str) -> str:
-    """Return a stable CSS class for the active template."""
-    safe_name = "".join(ch.lower() if ch.isalnum() else "-" for ch in str(template_name)).strip("-")
-    return f"theme-{safe_name or 'default'}"
+
+def _resolve_v2_options(overrides: dict | None) -> dict:
+    """Return the v2 render options: internal defaults plus explicit overrides."""
+    options = dict(_V2_DEFAULT_OPTIONS)
+    if overrides:
+        options.update(overrides)
+    return options
+
+
+def _write_output(output_path: str, template_html: str) -> str:
+    """Write the assembled document and return its path (both paths share this)."""
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(template_html)
+
+    _logger.info("已生成：%s", output_path)
+    return output_path
 
 
 # ── KaTeX resource fragments (centralised for future local embedding) ──
@@ -63,6 +87,9 @@ def process_single(
     cfg: dict,
     link_context: dict | None = None,
     report: dict | None = None,
+    *,
+    renderer_version: str = "v1",
+    renderer_options: dict | None = None,
 ) -> str | None:
     """Convert a single Markdown file to a standalone HTML document.
 
@@ -73,6 +100,13 @@ def process_single(
         link_context: Rendering context from the conversion plan. When
             omitted, the source and output paths are derived from this call so
             relative resources still resolve.
+        report: When given, receives the conversion warnings.
+        renderer_version: ``"v1"`` (default, the production path) or ``"v2"``.
+            This is an **internal** parameter on purpose: it is not part of
+            config.json yet (Cutover C3 / K26).
+        renderer_options: Renderer options; only the v2 path honours them.
+            ``None`` uses ``_V2_DEFAULT_OPTIONS``, supplied values are merged
+            over it. The v1 path rejects non-empty options.
 
     Returns:
         The output path on success, or None on failure. When the output already
@@ -106,10 +140,22 @@ def process_single(
         or os.path.splitext(os.path.basename(input_path))[0]
     )
 
-    # 4. Render Markdown → HTML body
+    # 4. Render → assemble. v1 是默认生产路径（下面原样保留）；v2 只在显式选择时走。
     render_context = dict(link_context or {})
     render_context.setdefault("source_path", input_path)
     render_context.setdefault("output_path", output_path)
+
+    if renderer_version == "v2":
+        return _convert_v2(
+            body_md=body_md,
+            render_context=render_context,
+            title=title,
+            template_name=template_name,
+            numbering=bool(cfg.get("numbering", False)),
+            output_path=output_path,
+            renderer_options=renderer_options,
+            report=report,
+        )
 
     render_result = render_markdown_node(
         body_md,
@@ -142,7 +188,7 @@ def process_single(
     with open(viewer_html_path, "r", encoding="utf-8") as f:
         template_html = f.read()
 
-    theme_class = _theme_body_class(template_name)
+    theme_class = theme_body_class(template_name)
     template_html = template_html.replace("<body>", f'<body class="{theme_class}">', 1)
 
     # 7. Collect CSS (viewer.css + theme chain) → inject into <head>
@@ -207,12 +253,52 @@ def process_single(
     template_html = template_html.replace(PLACEHOLDER_TOC, toc_html)
 
     # 11. Write output
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(template_html)
+    return _write_output(output_path, template_html)
 
-    _logger.info("已生成：%s", output_path)
-    return output_path
+
+def _convert_v2(
+    *,
+    body_md: str,
+    render_context: dict,
+    title: str,
+    template_name: str,
+    numbering: bool,
+    output_path: str,
+    renderer_options: dict | None,
+    report: dict | None,
+) -> str | None:
+    """Render with the v2 renderer and assemble with `core/html_assembly.py`.
+
+    Reachable only when a caller explicitly asks for ``renderer_version="v2"``
+    (Cutover C3 / K26); the production default stays v1. Failure semantics follow
+    v1: a template that cannot be assembled is logged and becomes ``None`` (nothing
+    written), while renderer or bridge failures keep their actionable exception --
+    a missing artifact must not be swallowed into a silent no-output.
+    """
+    envelope = render_markdown_node(
+        body_md,
+        context=render_context,
+        renderer_version="v2",
+        options=_resolve_v2_options(renderer_options),
+    )
+    try:
+        assembled = assemble_document(
+            envelope,
+            title=title,
+            template_name=template_name,
+            numbering=numbering,
+        )
+    except ValueError as error:
+        _logger.error("v2 装配失败：%s；原因：%s", output_path, error)
+        return None
+
+    if report is not None:
+        # renderer warnings 在前（网络降级、资源缺失），assembly warnings 在后（模板降级）。
+        report["warnings"] = list(envelope.get("warnings") or []) + list(
+            assembled.get("assembly_warnings") or []
+        )
+
+    return _write_output(output_path, assembled["html"])
 
 
 def process_batch(
@@ -224,6 +310,9 @@ def process_batch(
     collection_name: str = "",
     plan: dict | None = None,
     progress_callback=None,
+    *,
+    renderer_version: str = "v1",
+    renderer_options: dict | None = None,
 ) -> list[dict]:
     """Process multiple Markdown files.
 
@@ -234,6 +323,8 @@ def process_batch(
         source_root: Source directory used to preserve relative paths.
         index_filename: Generated batch index filename.
         collection_name: Source directory name displayed by the index.
+        renderer_version: Forwarded to ``process_single`` (internal, default v1).
+        renderer_options: Forwarded to ``process_single`` (only v2 honours them).
 
     Returns:
         List of result dicts with keys: filename, title, author, date, tags.
@@ -266,6 +357,8 @@ def process_batch(
                     "document_map": link_map,
                 },
                 report=render_report,
+                renderer_version=renderer_version,
+                renderer_options=renderer_options,
             )
         except Exception as e:
             _logger.error("转换失败：%s；原因：%s", input_path, e)

@@ -74,6 +74,16 @@ def normalize_template_name(template_name: str | None) -> str:
     return _TEMPLATE_ALIASES.get(name, name)
 
 
+def theme_body_class(template_name: str) -> str:
+    """Return the stable CSS class for the active template.
+
+    Single implementation for both the production (v1) converter and the v2
+    assembler; the class *name* itself stays an implementation detail.
+    """
+    safe_name = "".join(ch.lower() if ch.isalnum() else "-" for ch in str(template_name)).strip("-")
+    return f"theme-{safe_name or 'default'}"
+
+
 def _find_config(config_path: str | None = None) -> str | None:
     """Find the config.json file."""
     if config_path and os.path.isfile(config_path):
