@@ -42,7 +42,7 @@
 | K13 | local image standalone（data URI；失败保留原引用；`data:`、`file:`、原始 HTML 资源的既有策略） | `test_image_embedding.py`（14 项） |
 | K14 | **adapter contract（renderer → core）**：`headings` 保留顺序，并保留 `level`、`anchor`、`text`、`inline_html`、`toc_inline_html` 的语义；TOC 与 Viewer 只消费这套结果，编号识别只有一个来源。字段名与序列化形式可以迁移，但必须 producer、consumer、tests 同步改并在本文件登记 | `test_toc_heading_contract.py`（45 项）+ `test_markdown_anchor_contract.py` + Viewer NUM1/NUM2 |
 | K15 | warning 通道（可读路径、不阻断转换） | `test_renderer_links.py`、`test_conversion_edge_cases.py` |
-| K16 | standalone HTML 装配（自包含、标题转义、无 CDN） | `test_demo_generation.py`、`test_converter_integration.py` |
+| K16 | standalone HTML 装配（自包含、标题转义、无 CDN）—— **v1 生产路径**；v2 装配路径与 closure 判定见 K24（Phase 5D） | `test_demo_generation.py`、`test_converter_integration.py` |
 | K17 | Viewer / 索引页 / GUI 行为契约 | `tests/js` 层：viewer 22、index 9、GUI 9、selfcheck 5 |
 | K18 | 运行时归属与可靠调用：打包物只使用内置 Node（不借 PATH）、渲染前冒烟自检。**进程粒度不是契约**（见 IMPLEMENTATION DETAIL） | `test_node_runtime.py`（5 项） |
 | K19 | 覆盖语义：`overwrite=false` 跳过并保留原文件 | `test_conversion_edge_cases.py` |
@@ -50,6 +50,7 @@
 | K21 | 按需载荷：有公式才携带 KaTeX 资产，无公式不携带（体积纪律）。**具体信封键名不是契约** | `test_renderer_katex_assets.py`、`test_converter_integration.py` |
 | K22 | Mermaid runtime 按需（AGENTS §9）：只有文档真的含 Mermaid 时才携带 runtime；普通 Markdown 的 envelope 与 HTML 都不带。runtime 是 vendored 的正式 browser 构建（与 npm 包内 `dist/mermaid.min.js` 逐字节相同），build 与运行期各校验一次 SHA-256，且**离线可渲染**（零网络请求） | `tests/test_renderer_adapter_mermaid_runtime.py`（19 项）+ `tests/browser`（opt-in，5 项，真实浏览器） |
 | K23 | 远程资源（remote Markdown 图片 / PlantUML 图像）行为契约：联网成功 → data URI（`ref` 仍是作者原 URL，`resolved` 记最终 URL）；失败（超时 / 网络 / HTTP / 非图片 / 超限）→ **保留作者原引用 + 可读 warning + 转换继续**；同一 URL 的同一失败只报一次；`fetch_remote_resources=false` → kept 且不 warning；raw HTML 里的远程引用永不抓取。**timeout / retry / max-size / 并发数的数值是实现策略，不是契约**，但「数值越界一律回落默认值」与「body 读取阶段按 fetch 阶段同一规则分类、只有超限不 retry」属实现承诺（见 `renderer/resources/http_client.js`） | `tests/test_renderer_network.py`（26 项，127.0.0.1 loopback）+ `renderer/test/http_client.test.js`（26）+ `renderer/test/remote_resolver.test.js`（11） |
+| K24 | **standalone closure verdict（Phase 5D，只针对 v2 装配路径）**：`standalone`（没有外部 subresource）/ `degraded`（资源层本该闭包的抓取或内嵌失败、保留原引用，且有 manifest + 可读 warning 证据）/ `author_references`（作者显式 raw HTML 的外部引用：**声明且被 renderer fragment 佐证**，既非 fallback 也非失败）/ `failure`（应闭包却既无 fallback 证据、也非 author-owned）；severity `failure > degraded > author_references > standalone`，报告**同时保留四个桶**。只判定真正的 subresource（`img[src]`/`srcset`、`script[src]`、`link[href]`、`<style>` 内的 `url(...)`）；`<a href>` 导航与 `style="…"` 属性不参与。证据必须为**正**：未被声明又不在 manifest 的外部引用一律 `failure`（漏收集不得被重标成作者引用） | `tests/test_standalone_closure.py`（20 项，判定语义 + CLI）+ `tests/test_standalone_matrix.py`（18 项，真实 adapter + assembler + loopback + smoke 生成器）+ `tools/standalone_closure.py` |
 
 ## TRANSITIONAL：记录现状，路线图已定要改
 
@@ -172,7 +173,7 @@ KEEP 契约未受影响：`keep/plain-text-no-math` 用的是单个未配对 `$`
 
 比较范围之外：local image data URI 与 KaTeX CSS/fonts 载荷（**Phase 5A 已在 adapter 侧完成**，但通道形状与 old 的 `assets.css` 不同，仍不做 equality）、remote image 与抓取、Mermaid runtime、PlantUML 图像、standalone 资源闭包（属 5B/5C）。
 
-当前数字（按套件）：`test_renderer_semantic_parity.py` 12、`test_renderer_adapter_keep.py` 20、`test_renderer_adapter_targets.py` 14（4A 条目里的 13 项是那次提交当时的计数）、`test_renderer_adapter_compat.py` 35、`test_renderer_adapter_diagrams.py` 27、`test_renderer_adapter_protocol.py` 11、`test_renderer_adapter_resources.py` 26（Phase 5A）、`test_renderer_adapter_mermaid_runtime.py` 19 与 `test_renderer_build_assets.py` 3（Phase 5B）、`test_renderer_network.py` 26（Phase 5C，127.0.0.1 loopback）。
+当前数字（按套件）：`test_renderer_semantic_parity.py` 12、`test_renderer_adapter_keep.py` 20、`test_renderer_adapter_targets.py` 14（4A 条目里的 13 项是那次提交当时的计数）、`test_renderer_adapter_compat.py` 35、`test_renderer_adapter_diagrams.py` 27、`test_renderer_adapter_protocol.py` 11、`test_renderer_adapter_resources.py` 26（Phase 5A）、`test_renderer_adapter_mermaid_runtime.py` 19 与 `test_renderer_build_assets.py` 3（Phase 5B）、`test_renderer_network.py` 26（Phase 5C，127.0.0.1 loopback）、`test_standalone_closure.py` 20 与 `test_standalone_matrix.py` 18（Phase 5D）。
 
 全套：`uv run pytest -q` → 362 passed, 7 xfailed；renderer `npm test` → 61 passed；浏览器验收（opt-in）`pwsh tools/run_browser_acceptance.ps1` → 5 passed（默认 pytest 不含它）；`uv run pytest -q --runxfail tests/test_markdown_compat_target.py` → `7 failed, 2 passed`（TARGET 门禁仍是 strict xfail）；`uv run ruff check .` → All checks passed。
 
@@ -306,6 +307,16 @@ samples/demo.html                         → 未改动，快照契约仍成立
   * **数值 option 的范围 gate**（同一文件）：`resource_timeout_ms` / `resource_retries` / `resource_max_bytes` 原先只校验 `Number.isFinite`，负数与 0 会穿透；`resource_retries = -1` 会让 `for (attemptIndex = 0; attemptIndex <= retries; …)` 一次都不执行，最终返回「未发起请求」的 network 失败。现在 `timeout` / `max_bytes` 要求「有限且为正」、`retries` 要求「非负整数」，越界一律回落默认（8000 / 1 / 16 MiB）；范围判定只在 http_client 一处，collector 不再重复实现同一规则。
   * **反证**（node：注入 fake fetch 与可抛错的 body reader；端到端：loopback 新增 `/stall/<ms>` 与 `/truncate`）：body 阶段 `TimeoutError` → `reason=timeout` 且重试一次、两次请求的 `AbortSignal` 不同；body 阶段普通读错误 → `reason=network` 且重试一次；`message` 恰为 `too-large` 但 `name` 普通 → 仍归 `network`（锁定「按 name 不按 message」）；`resource_retries=-1` / `resource_timeout_ms=0` / `resource_max_bytes=0` 都走默认值并真的发出请求 / 内嵌成功（不是零次请求、不是立刻超时、不是超限）。
   证据：`tests/test_renderer_network.py` 21 → 26 项、`renderer/test/http_client.test.js` 20 → 26 项；全套 `362 → 367 passed, 7 xfailed`；`--runxfail` 仍 `7 failed, 2 passed`；renderer `npm test` 61 → 67 passed；bundle 1,135,968 → 1,136,353 B。
+
+- 2026-09-25（Phase 5D）：standalone closure —— 新 assembler + closure checker + 可执行矩阵 + opt-in 浏览器 smoke。**仍未切换 production renderer**：
+  * **assembler**（新 `core/html_assembly.py`）：消费 v2 envelope 的 `html` / `headings` / `resources.styles` / `resources.scripts`，产出完整 HTML 并返回**注入账本**（`position` / `label` / `id` / `bytes`）。注入顺序确定且与 v1 逐项对齐：`<head>` = viewer.css → theme 链 → `resources.styles`（manifest 顺序）→ print.css；`</body>` 前 = viewer.js → numbering → 每个 script 条目的 `script` 后 `boot`。TOC 复用 `core/toc.py`（K14 形状已一致），标题经 `escape`。**`core/converter.py` 一行未改**：`_theme_body_class` 的 3 行逻辑在 assembler 内临时重复，注释写明 cutover checkpoint 再统一到 `core/config.py`。
+  * **checker**（新 `tools/standalone_closure.py`，只用 stdlib `html.parser`，无新依赖）：扫描真正的 subresource（`img[src]`/`srcset`、`script[src]`、`link[href]`、`<style>` 内 `url(...)`；`<a href>` 导航与 `style="…"` 属性不计），输出四态 verdict + 逐条证据 + 体积报告；CLI `uv run python tools/standalone_closure.py <html> [--envelope …] [--author-refs …]`，`failure` 时退出码 1，缺 envelope 走 strict 模式。
+  * **fallback-aware verdict**（K24）：`degraded` 与 `author_references` 分开，`failure` 只能由「既无 manifest/warning 证据、又未被声明为作者 raw HTML」产生 —— 于是「断网仍转换」和「standalone 零外链」不再互斥。`author` 声明必须被 renderer fragment 佐证，且声明本身**不能遮蔽 regression**（漏收集的 Markdown image、manifest 说 `inlined` 却仍是外链，都判 `failure`）。
+  * **可执行矩阵**（`tests/test_standalone_matrix.py`）：普通 / KaTeX / Mermaid / remote 成功与失败 / PlantUML 成功与失败 / local 缺失 / local 无基准 / 作者 raw HTML / 双通道 / 生产基线，外加两个反证（凭空注入的引用；把 `inlined` 项换回原 URL）。生产基线 `samples/demo.html`（1,544,529 B）在 strict 扫描下是 `standalone`，而 checker 不搜 "http"（该页有 3 个 `<a href="http…">` 导航链接）。
+  * **opt-in 浏览器 smoke**：`uv run python tools/assemble_document.py --out build/smoke.html` 装配一份集成页（普通文本 + KaTeX + Mermaid + 本地图片），再由 `pwsh tools/run_browser_acceptance.ps1 -ExtraPage build/smoke.html` 用真实 Edge 离线打开，断言 Mermaid `<svg>`、`.katex`、图片为 `data:`、非 `file://` 请求为 0、无 pageerror / unhandledrejection。不传 `-ExtraPage` 时该用例整条跳过（默认 5 项不变）。这条链当场发现一个真 bug：相对 `source_path` 会在 node 子进程里按 `renderer/` 解析，导致本地图片静默不内嵌；已修为绝对路径。
+  * 明说未做的事：**没有新增任何 fetch 能力**；未接 Theme Registry / remote CSS / GUI options；未改 `templates/**`、未再生 `samples/demo.html`；**未切换 production renderer**（`core/renderer_node.py`、converter 默认实现、packaging、demo 再生、release/selfcheck、rollback 都属其后的 cutover checkpoint）。
+  * cutover 前置项（登记，本阶段不实现）：`author_references` 目前依赖**显式声明**，生产 CLI 无声明时作者 raw HTML 外链会判 `failure`。生产级 provenance 建议在 cutover 时二选一：renderer 侧 additive 通道 `resources.author_references = [ref, …]`（只记来源，不抓取、不内嵌，K13 与 `items` 语义不变），或由持有源文件的 converter 做独立 characterization。
+  证据：新增 `tests/test_standalone_closure.py`（20 项）+ `tests/test_standalone_matrix.py`（18 项，含 smoke 生成器的相对路径回归锁）；全套 `367 → 405 passed, 7 xfailed`；`--runxfail` 仍 `7 failed, 2 passed`；`test_demo_generation.py` 7 passed（生产装配逐字节未变）；浏览器验收默认 5 passed + 1 skipped、带 `-ExtraPage` 6 passed；renderer `npm test` 仍 67（未改 JS）；ruff 全绿。
 
 ## texmath 审计记录（Phase 4B，为什么不复用 `markdown-it-texmath`）
 

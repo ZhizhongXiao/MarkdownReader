@@ -323,8 +323,12 @@ PlantUML 当前只使用联网 server。
               并发 4 + 文档顺序写回；失败保留原 URL + warning + 转换继续；测试不访问公网（127.0.0.1 loopback）
               可靠性 closeout：body 读取阶段的 abort / socket 错误与 fetch 阶段同一分类（timeout / network 都可 retry，
               只有超限不 retry，且每次 retry 都是完整重新 GET）；timeout / retries / maxBytes 越界回落默认值
-5D  pending   standalone closure gate（外部子资源扫描 + 载荷纪律 + 体积报告）
-production renderer 仍未切换：cutover 依赖 5D 的 standalone 闭包
+5D  PASS      standalone closure：新 assembler（core/html_assembly.py：注入顺序契约 + 注入账本）+
+              closure checker（tools/standalone_closure.py：四态 verdict / 体积报告 / CLI，stdlib）
+              可执行矩阵：真实 adapter + assembler + loopback，含两个反证（凭空注入的引用、manifest 说 inlined 却仍是外链）
+              生产基线 samples/demo.html（1,544,529 B）strict 扫描 = standalone（checker 不搜 "http"）
+              opt-in 浏览器 smoke：Python assembler 产出的集成页在真实 Edge 离线渲染（Mermaid SVG / KaTeX / data: 图片 / 零请求）
+production renderer 仍未切换：cutover 是 5D 之后的**独立 checkpoint**（含 author provenance、packaging、demo 再生、rollback）
 ```
 
 ## 验收
@@ -338,6 +342,10 @@ production renderer 仍未切换：cutover 依赖 5D 的 standalone 闭包
 断网转换仍成功。
 
 PlantUML 网络失败不导致整个文档失败。
+
+装配出的最终 HTML 有可判定的 closure verdict（standalone / degraded / author_references / failure）。
+
+任何「应闭包却无证据」的外部 subresource 都会让 closure gate 失败。
 
 ---
 

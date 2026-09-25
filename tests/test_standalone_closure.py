@@ -1,0 +1,322 @@
+"""Phase 5D：standalone closure checker 的行为契约（不依赖 node / 网络）。
+
+这里用合成 HTML 固定 checker 的判定语义：哪些引用算 subresource、四种 verdict 各自的
+证据要求、以及「声明不能遮蔽真实 regression」的反遮蔽规则。真实 adapter + assembler
+的端到端矩阵在 `test_standalone_matrix.py`。
+"""
+
+import json
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from tools.standalone_closure import collect_subresources, main, scan  # noqa: E402
+
+EXTERNAL_IMAGE = "https://cdn.example.invalid/a.png"
+EXTERNAL_FONT = "https://cdn.example.invalid/font.woff2"
+
+
+def _page(body: str) -> str:
+    return "<!doctype html><html><head></head><body>" + body + "</body></html>"
+
+
+def _envelope(html: str = "", items=None, warnings=None) -> dict:
+    return {
+        "protocol_version": 2,
+        "ok": True,
+        "html": html,
+        "headings": [],
+        "warnings": list(warnings or []),
+        "resources": {"items": list(items or []), "styles": [], "scripts": []},
+    }
+
+
+def _image_item(status: str, ref: str = EXTERNAL_IMAGE, source: str = "remote") -> dict:
+    return {"kind": "image", "source": source, "ref": ref, "status": status}
+
+
+def _refs(found: list[dict]) -> list[str]:
+    return [entry["ref"] for entry in found]
+
+
+# --- subresource 识别 -------------------------------------------------------
+
+
+def test_collect_subresources_covers_img_script_link_and_controlled_css():
+    html = _page(
+        '<img src="' + EXTERNAL_IMAGE + '">'
+        '<script src="https://cdn.example.invalid/x.js"></script>'
+        '<link rel="stylesheet" href="https://cdn.example.invalid/x.css">'
+        "<style>@font-face{src:url(" + EXTERNAL_FONT + ")}</style>"
+    )
+
+    found = collect_subresources(html)
+
+    assert EXTERNAL_IMAGE in _refs(found)
+    assert "https://cdn.example.invalid/x.js" in _refs(found)
+    assert "https://cdn.example.invalid/x.css" in _refs(found)
+    assert EXTERNAL_FONT in _refs(found), "受控 CSS 的 url() 必须被发现"
+    assert [entry["element"] for entry in found if entry["ref"] == EXTERNAL_FONT] == ["style"]
+
+
+DATA_PNG = "data:image/png;base64,AAAA"
+
+
+def test_srcset_candidates_are_checked_individually():
+    html = _page(
+        '<img src="' + DATA_PNG + '" srcset="' + DATA_PNG + ' 1x, ' + EXTERNAL_IMAGE + ' 2x">'
+    )
+
+    report = scan(html)
+
+    assert _refs(collect_subresources(html)).count(EXTERNAL_IMAGE) == 1
+    assert report["verdict"] == "failure", report
+
+
+def test_navigation_links_and_plain_text_are_not_subresources():
+    html = _page(
+        '<a href="https://example.invalid/page">外链</a>'
+        '<a href="mailto:someone@example.invalid">邮件</a>'
+        "<p>正文里出现 http://example.invalid 也只是文字。</p>"
+    )
+
+    report = scan(html)
+
+    assert collect_subresources(html) == []
+    assert report["verdict"] == "standalone"
+    assert report["payload"]["total_bytes"] > 0
+
+
+def test_inline_style_attributes_are_out_of_scope():
+    """K13 边界：raw HTML 的 style 属性不参与内嵌，也不因此判 failure。"""
+    html = _page('<div style="background-image:url(' + EXTERNAL_IMAGE + ')">x</div>')
+
+    assert collect_subresources(html) == []
+    assert scan(html)["verdict"] == "standalone"
+
+
+def test_data_uri_and_fragment_references_are_inline():
+    html = _page(
+        '<img src="data:image/png;base64,AAAA">'
+        '<script src="#nothing"></script>'
+        "<style>body{background:url('data:image/gif;base64,AAAA')}</style>"
+    )
+
+    assert scan(html)["verdict"] == "standalone"
+
+
+# --- evidence 与 verdict ----------------------------------------------------
+
+
+def test_an_external_subresource_without_any_evidence_is_a_failure():
+    html = _page('<img src="' + EXTERNAL_IMAGE + '">')
+
+    report = scan(html)
+
+    assert report["verdict"] == "failure"
+    assert report["standalone"] is False
+    assert [entry["ref"] for entry in report["unexplained_external_resources"]] == [EXTERNAL_IMAGE]
+    assert report["problems"], "failure 必须给出原因"
+    assert report["degraded_resources"] == []
+    assert report["author_references"] == []
+
+
+def test_a_declared_author_reference_is_reported_separately_from_a_fallback():
+    html = _page('<img src="' + EXTERNAL_IMAGE + '">')
+    envelope = _envelope(html='<img src="' + EXTERNAL_IMAGE + '">')
+
+    report = scan(html, envelope=envelope, author_owned_refs=[EXTERNAL_IMAGE])
+
+    assert report["verdict"] == "author_references"
+    assert [entry["ref"] for entry in report["author_references"]] == [EXTERNAL_IMAGE]
+    assert report["degraded_resources"] == []
+    assert report["unexplained_external_resources"] == []
+    assert report["problems"] == []
+
+
+def test_a_declaration_the_renderer_never_produced_is_a_failure():
+    """声明必须被 renderer fragment 佐证，否则不能拿它遮蔽 regression。"""
+    html = _page('<img src="' + EXTERNAL_IMAGE + '">')
+    envelope = _envelope(html="<p>no image here</p>")
+
+    report = scan(html, envelope=envelope, author_owned_refs=[EXTERNAL_IMAGE])
+
+    assert report["verdict"] == "failure"
+    assert report["author_references"] == []
+    assert report["unexplained_external_resources"]
+
+
+def test_a_declaration_missing_from_the_document_is_a_failure():
+    html = _page("<p>没有图片</p>")
+    envelope = _envelope(html='<img src="' + EXTERNAL_IMAGE + '">')
+
+    report = scan(html, envelope=envelope, author_owned_refs=[EXTERNAL_IMAGE])
+
+    assert report["verdict"] == "failure"
+    assert any(EXTERNAL_IMAGE in problem for problem in report["problems"])
+
+
+def test_a_markdown_image_the_layer_never_claimed_cannot_be_declared_away():
+    """反遮蔽：Markdown 图片漏收集时，未声明的引用必须判 failure。"""
+    html = _page('<img src="' + EXTERNAL_IMAGE + '">')
+    envelope = _envelope(html='<img src="' + EXTERNAL_IMAGE + '">', items=[])
+
+    report = scan(html, envelope=envelope)
+
+    assert report["verdict"] == "failure"
+    assert report["author_references"] == []
+    assert [entry["ref"] for entry in report["unexplained_external_resources"]] == [EXTERNAL_IMAGE]
+
+def test_a_failed_manifest_item_with_a_warning_is_degraded():
+    html = _page('<img src="' + EXTERNAL_IMAGE + '">')
+    envelope = _envelope(
+        html='<img src="' + EXTERNAL_IMAGE + '">',
+        items=[_image_item("failed")],
+        warnings=["远程资源无法内嵌，保留原引用：" + EXTERNAL_IMAGE + "（HTTP 404）"],
+    )
+
+    report = scan(html, envelope=envelope)
+
+    assert report["verdict"] == "degraded"
+    assert report["unexplained_external_resources"] == []
+    item = report["degraded_resources"][0]
+    assert item["ref"] == EXTERNAL_IMAGE
+    assert item["evidence"]["status"] == "failed"
+    assert item["evidence"]["warning"]
+
+
+def test_a_failed_manifest_item_without_a_warning_is_a_failure():
+    html = _page('<img src="' + EXTERNAL_IMAGE + '">')
+    envelope = _envelope(
+        html='<img src="' + EXTERNAL_IMAGE + '">', items=[_image_item("failed")]
+    )
+
+    report = scan(html, envelope=envelope)
+
+    assert report["verdict"] == "failure"
+    assert any("warning" in problem for problem in report["problems"])
+
+
+def test_a_kept_manifest_item_does_not_require_a_warning():
+    """5C 的 kept（关闭联网、本地无基准）本来就不产生 warning。"""
+    html = _page('<img src="' + EXTERNAL_IMAGE + '">')
+    envelope = _envelope(
+        html='<img src="' + EXTERNAL_IMAGE + '">', items=[_image_item("kept")]
+    )
+
+    report = scan(html, envelope=envelope)
+
+    assert report["verdict"] == "degraded"
+    assert report["degraded_resources"][0]["evidence"]["status"] == "kept"
+
+
+def test_an_item_claimed_inlined_but_still_external_is_a_failure():
+    """反证：manifest 说内嵌了，文档里却还是外链 —— 这是真 regression。"""
+    html = _page('<img src="' + EXTERNAL_IMAGE + '">')
+    envelope = _envelope(
+        html='<img src="' + EXTERNAL_IMAGE + '">', items=[_image_item("inlined")]
+    )
+
+    report = scan(html, envelope=envelope)
+
+    assert report["verdict"] == "failure"
+    assert report["degraded_resources"] == []
+
+
+def test_degraded_outranks_author_references_and_keeps_both_buckets():
+    author_ref = "https://raw.example.invalid/author.png"
+    html = _page('<img src="' + EXTERNAL_IMAGE + '"><img src="' + author_ref + '">')
+    envelope = _envelope(
+        html='<img src="' + EXTERNAL_IMAGE + '"><img src="' + author_ref + '">',
+        items=[_image_item("failed")],
+        warnings=["远程资源无法内嵌，保留原引用：" + EXTERNAL_IMAGE + "（超时）"],
+    )
+
+    report = scan(html, envelope=envelope, author_owned_refs=[author_ref])
+
+    assert report["verdict"] == "degraded"
+    assert [entry["ref"] for entry in report["degraded_resources"]] == [EXTERNAL_IMAGE]
+    assert [entry["ref"] for entry in report["author_references"]] == [author_ref]
+    assert report["severity_order"][0] == "failure"
+    assert report["severity_order"][-1] == "standalone"
+
+
+def test_failure_outranks_degraded_and_keeps_every_bucket():
+    missing = "https://cdn.example.invalid/unexplained.png"
+    html = _page('<img src="' + EXTERNAL_IMAGE + '"><img src="' + missing + '">')
+    envelope = _envelope(
+        html='<img src="' + EXTERNAL_IMAGE + '"><img src="' + missing + '">',
+        items=[_image_item("failed")],
+        warnings=["远程资源无法内嵌，保留原引用：" + EXTERNAL_IMAGE + "（超时）"],
+    )
+
+    report = scan(html, envelope=envelope)
+
+    assert report["verdict"] == "failure"
+    assert report["degraded_resources"], "degraded 桶不得被 failure 吞掉"
+    assert report["unexplained_external_resources"]
+
+# --- 体积报告 ---------------------------------------------------------------
+
+
+def test_payload_report_uses_the_injection_ledger():
+    injections = [
+        {"position": "head", "label": "viewer-css", "id": None, "bytes": 100},
+        {"position": "head", "label": "theme", "id": None, "bytes": 200},
+        {"position": "head", "label": "style:katex", "id": "katex", "bytes": 300},
+        {"position": "body", "label": "viewer-js", "id": None, "bytes": 400},
+        {"position": "body", "label": "script:mermaid", "id": "mermaid", "bytes": 500},
+    ]
+
+    report = scan(_page("<p>" + "x" * 2000 + "</p>"), injections=injections)
+
+    payload = report["payload"]
+    assert payload["injected_bytes"] == 1500
+    assert payload["resource_payload_bytes"] == 800, "只有资源载荷计入"
+    assert payload["document_bytes"] == payload["total_bytes"] - 1500
+    assert payload["document_bytes"] > 0
+
+
+# --- CLI --------------------------------------------------------------------
+
+
+def test_cli_exits_zero_for_a_standalone_document(tmp_path, capsys):
+    page = tmp_path / "ok.html"
+    page.write_text(_page('<img src="data:image/png;base64,AAAA">'), encoding="utf-8")
+
+    code = main([str(page)])
+
+    report = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert report["verdict"] == "standalone"
+
+
+def test_cli_is_strict_without_an_envelope(tmp_path, capsys):
+    page = tmp_path / "external.html"
+    page.write_text(_page('<img src="' + EXTERNAL_IMAGE + '">'), encoding="utf-8")
+
+    code = main([str(page)])
+
+    report = json.loads(capsys.readouterr().out)
+    assert code == 1
+    assert report["verdict"] == "failure"
+
+
+def test_cli_accepts_envelope_and_author_declarations(tmp_path, capsys):
+    page = tmp_path / "author.html"
+    page.write_text(_page('<img src="' + EXTERNAL_IMAGE + '">'), encoding="utf-8")
+    envelope = tmp_path / "envelope.json"
+    envelope.write_text(
+        json.dumps(_envelope(html='<img src="' + EXTERNAL_IMAGE + '">')), encoding="utf-8"
+    )
+    refs = tmp_path / "author-refs.json"
+    refs.write_text(json.dumps([EXTERNAL_IMAGE]), encoding="utf-8")
+
+    code = main([str(page), "--envelope", str(envelope), "--author-refs", str(refs)])
+
+    report = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert report["verdict"] == "author_references"

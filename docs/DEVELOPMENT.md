@@ -124,6 +124,13 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
 - 测试**不依赖公共互联网**（Phase 5C gate）：`tests/renderer_adapter.py::render()` 默认注入 `fetch_remote_resources=false`，
   因此 `uv run pytest` / `npm test` 不会联网；真实联网语义只在 `tests/test_renderer_network.py` 里用
   127.0.0.1 loopback 服务器（`tests/loopback_http.py`）验证。
+- standalone closure（Phase 5D）：`core/html_assembly.py` 把 v2 envelope 装配成完整 HTML，注入顺序确定
+  （`<head>` = viewer.css → theme 链 → `resources.styles` → print.css；`</body>` 前 = viewer.js → numbering →
+  各 script 的 `script` 后 `boot`），并返回注入账本（label + position + bytes）；`tools/standalone_closure.py`
+  判定 closure（四态与 severity 见 K24），缺 `--envelope` 时走 strict 模式。自检入口：
+  `uv run python tools/standalone_closure.py samples/demo.html`（生产 v1 产物基线 → standalone）、
+  `uv run python tools/assemble_document.py --out build/smoke.html`（装配集成页：本地图片 + KaTeX + Mermaid）、
+  `pwsh tools/run_browser_acceptance.ps1 -ExtraPage build/smoke.html`（opt-in：真实浏览器离线打开该页）。
 - 协议：v2（Phase 5A）——
   `{ "protocol_version": 2, "ok": true, "html", "headings", "features", "warnings", "resources": { "items": [], "styles": [] } }`；
   `resources` 是**必在**字段（没有资源时也是空结构）：`items` 是资源 manifest，`styles` 是交给 assembler 注入的 CSS；

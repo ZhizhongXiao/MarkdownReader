@@ -41,6 +41,29 @@ MR_BROWSER_CHANNEL=chrome     # 改用系统 Chrome
 MR_BROWSER_CHANNEL=chromium   # 用 Playwright 自带 Chromium（需先 npx playwright install chromium）
 ```
 
+## Phase 5D：Python assembler 页面（同一条 opt-in 命令）
+
+5B 证明的是「envelope → JS 测试里的模拟装配 → Mermaid 离线可渲染」；这里补的是**Python 装配层**：
+
+```text
+真实 adapter（dist/renderer.cjs）
+        ↓  envelope（html + resources.styles / resources.scripts）
+core/html_assembly.py（新 assembler，注入顺序 + 注入账本）
+        ↓  最终 HTML（写盘）
+真实 Edge 打开 file:// 页面，拦截所有非 file:// 请求
+        ↓
+断言 Mermaid 容器生成 <svg>、.katex 存在、本地图片是 data:image/png、
+     非 file:// 请求为 0、无 pageerror、无 unhandledrejection
+```
+
+```powershell
+uv run python tools/assemble_document.py --out build/smoke.html
+pwsh tools/run_browser_acceptance.ps1 -ExtraPage build/smoke.html
+```
+
+这一步才会暴露 Python 装配层特有的问题：`<script>` / CSS 注入位置、HTML 序列化、runtime 与 boot 顺序、
+是否漏了某个 resources 通道。不传 `-ExtraPage` 时该用例整条跳过，默认 5 项验收不变。
+
 ## 为什么它不在默认测试里
 
 浏览器是平台工具，不是每次提交都必然存在的依赖；缺它时 pytest 不应假绿也不应阻塞。

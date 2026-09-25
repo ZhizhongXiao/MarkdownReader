@@ -13,12 +13,18 @@
     浏览器 channel，默认 msedge（用系统已装的 Edge，不下载浏览器）。
     可选 chrome；chromium 需先 `npx playwright install chromium`。
 
+.PARAMETER ExtraPage
+    额外用真实浏览器离线打开一份「Python assembler 装配出的 HTML」（Phase 5D 的窄集成 smoke）。
+    页面由 `uv run python tools/assemble_document.py --out <file>` 生成；
+    不传该参数时对应用例整条跳过，默认 5 项验收不变。
+
 .EXAMPLE
     pwsh tools/run_browser_acceptance.ps1
     pwsh tools/run_browser_acceptance.ps1 -Channel chromium
+    pwsh tools/run_browser_acceptance.ps1 -ExtraPage build/smoke.html
 #>
 
-param([string]$Channel = "msedge")
+param([string]$Channel = "msedge", [string]$ExtraPage = "")
 
 $ErrorActionPreference = "Stop"
 
@@ -26,6 +32,12 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $artifact = Join-Path $repoRoot "renderer\dist\renderer.cjs"
 if (-not (Test-Path $artifact)) {
     throw "缺少 $artifact ：先执行 cd renderer; npm ci; npm run build"
+}
+
+# 相对调用者当前目录解析，必须在 Push-Location 之前完成。
+$extraPagePath = ""
+if ($ExtraPage) {
+    $extraPagePath = (Resolve-Path $ExtraPage).Path
 }
 
 $browserDirectory = Join-Path $repoRoot "tests\browser"
@@ -39,6 +51,14 @@ try {
 
     $env:MR_BROWSER_CHANNEL = $Channel
     Write-Output "[browser] channel = $Channel"
+
+    if ($extraPagePath) {
+        $env:MR_EXTRA_PAGE = $extraPagePath
+        Write-Output "[browser] extra page = $extraPagePath"
+    }
+    else {
+        Remove-Item Env:\MR_EXTRA_PAGE -ErrorAction SilentlyContinue
+    }
 
     $specs = Get-ChildItem -Filter "*.test.mjs" | ForEach-Object { $_.Name }
     node --test --test-reporter spec $specs
