@@ -47,9 +47,10 @@ skip 并说明原因，不会静默通过。自动化测试不覆盖 GUI 运行�
 
 ```text
 core/                 转换计划、front matter、TOC、渲染调度、索引生成
+core/viewer_assets.py 阅读器/主题资产的唯一来源（外壳、脚本、样式链、注册表）
 gui/                  pywebview 界面与静态资源（gui/assets/）
-node_renderer/        当前生产 renderer（markdown-it、footnote、texmath、KaTeX）
-renderer/             新 renderer adapter（Phase 3–4B，与 node_renderer 并存，尚未接入生产）
+renderer/             生产 renderer（v2 adapter，产物 renderer/dist 随包发布）
+node_renderer/        v1 回退 renderer（markdown-it、footnote、texmath、KaTeX）
 templates/default/    共享阅读器外壳
 templates/Modern|Office|Vscode/   视觉主题（继承 default）
 templates/index/      批量索引模板
@@ -171,10 +172,16 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
   `node.exe` 对 v1 与 v2 各冒烟一次。实机验收记录必须与当前 production renderer 对应
   （`docs/QA-CHECKLIST-1.0.0-rc1-v2.md`；v1 时代记录只作历史，`release_freeze` 只认 `--qa-record` 指定的那份）。
 
+- 阅读器资产层（Phase 6A）：`core/viewer_assets.py` 是"阅读器由哪些文件组成"的唯一来源（页面外壳、viewer 脚本、
+  打印样式、样式链、主题注册表）。`core/config.py` 只管 config.json 与 bundle 路径，且**不反向依赖**它；
+  `core/converter.py`（v1 回退）与 `core/html_assembly.py`（v2）都只经它取资产，`gui/api.py` 的主题列表也来自它。
+  契约清单与"哪些可以改"见 [Viewer 契约](VIEWER_CONTRACT.md)；Phase 6B 把资产搬到 `viewer/` 与
+  `themes/builtin/<id>/` 时**只改这一个模块**。
+
 ## 命名与路径约定
 
 - 项目名、窗口标题与产物统一 `MarkdownReader`；npm 包标识为小写 `markdownreader-node-renderer`。
-- 模板目录按实际路径写 `templates/Modern|Office|Vscode/`，配置中的模板 ID 是 `modern|office|vscode`。
+- 模板目录按实际路径写 `templates/Modern|Office|Vscode/`，配置中的模板 ID 是 `modern|office|vscode`（Phase 6B 计划改为 `themes/builtin/<id>/`，届时目录名与 id 统一；契约见 [Viewer 契约](VIEWER_CONTRACT.md)）。
 - 浏览器存储键统一 `markdownreader-*`；配置文件为 `config.json`（仓库只保留 `config.example.json`）。
 - WebView2 数据目录为 `%LOCALAPPDATA%\MarkdownReader\WebView2`。
 

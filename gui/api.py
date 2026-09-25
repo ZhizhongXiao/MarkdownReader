@@ -14,14 +14,9 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from core.config import (
-    CONFIG_FILENAME,
-    PROJECT_ROOT,
-    TEMPLATES_DIR,
-    load_config,
-    normalize_template_name,
-)
+from core.config import CONFIG_FILENAME, PROJECT_ROOT, load_config
 from core.conversion_plan import build_conversion_plan, document_output_map
+from core.viewer_assets import normalize_theme_id, theme_ids
 
 _logger = logging.getLogger("gui")
 
@@ -185,21 +180,7 @@ class BridgeApi:
 
     def get_templates(self) -> list[str]:
         """Return list of available template names."""
-        names = []
-        if os.path.isdir(TEMPLATES_DIR):
-            for entry in os.listdir(TEMPLATES_DIR):
-                full = os.path.join(TEMPLATES_DIR, entry)
-                if os.path.isdir(full) and os.path.isfile(
-                    os.path.join(full, "metadata.json")
-                ):
-                    try:
-                        with open(os.path.join(full, "metadata.json"), "r", encoding="utf-8") as f:
-                            metadata = json.load(f)
-                    except Exception:
-                        metadata = {}
-                    if not metadata.get("hidden", False):
-                        names.append(entry)
-        return sorted(names) if names else ["modern"]
+        return theme_ids() or ["modern"]
 
     # ── Config ──────────────────────────────────────────────
 
@@ -216,7 +197,7 @@ class BridgeApi:
         if "output" in cfg:
             cfg["output"] = _normalize_config_path(str(cfg["output"]))
         if "template" in cfg:
-            cfg["template"] = normalize_template_name(cfg["template"])
+            cfg["template"] = normalize_theme_id(cfg["template"])
         self._write_json(cfg)
 
     def _write_json(self, cfg: dict) -> None:
@@ -275,7 +256,7 @@ class BridgeApi:
 
         # Build runtime overrides
         overrides = {
-            "template": normalize_template_name(template),
+            "template": normalize_theme_id(template),
             "output": output_dir,
             "overwrite": overwrite,
             "build_index": build_index,

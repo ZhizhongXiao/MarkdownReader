@@ -1,8 +1,13 @@
+import sys
 from pathlib import Path
 
-from core.config import load_config
-from core.conversion_plan import build_conversion_plan
-from core.converter import process_batch
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from core.config import load_config  # noqa: E402
+from core.conversion_plan import build_conversion_plan  # noqa: E402
+from core.converter import process_batch  # noqa: E402
 
 
 def test_batch_conversion_writes_footnotes_and_cross_document_html_links(tmp_path: Path):

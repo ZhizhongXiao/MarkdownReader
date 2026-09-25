@@ -440,6 +440,21 @@ VS Code
 
 现有 Viewer contract 全部通过。
 
+### 状态
+
+```text
+6A  PASS    contract + asset loader consolidation
+            docs/VIEWER_CONTRACT.md（KEEP 清单：DOM id / 存储键 / class / 两个独立状态 / file:// 单脚本约束）
+            core/viewer_assets.py（外壳、viewer 脚本、打印样式、样式链、注册表的唯一来源）
+            core/config.py 只留配置职责且不反向依赖；converter / html_assembly / gui.api 只经资产层取资产
+            行为与产物不变：samples/demo.html SHA-256 不变（1018DB5A…F755，1547612 bytes）
+            新增 tests/test_viewer_assets_contract.py（注册表 / hidden / 单主题内嵌 / 源码级 SSOT 锁）
+                  tests/test_viewer_keep_contract.py（13 id + 8 存储键 + class/属性钩子冻结）
+6B          资产搬迁（viewer/ + themes/builtin/<id>/）与 viewer 拆分，行为零变化（未开始）
+6C          三套 builtin 主题内嵌进同一 HTML + 主题切换器（含 print 特异性修复，未开始）
+6D          清理旧目录与文档收口（未开始）
+```
+
 ---
 
 # Phase 7 — External Theme

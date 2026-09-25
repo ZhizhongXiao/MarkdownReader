@@ -18,12 +18,7 @@ from core.config import (
     PLACEHOLDER_TITLE,
     PLACEHOLDER_TOC,
     PRODUCTION_RENDERER_VERSION,
-    get_shared_print_css_path,
-    get_shared_viewer_js_path,
-    load_theme_chain,
     normalize_template_name,
-    resolve_template_file,
-    theme_body_class,
 )
 from core.conversion_plan import (
     build_conversion_plan,
@@ -35,6 +30,14 @@ from core.html_assembly import assemble_document
 from core.index_builder import DEFAULT_INDEX_FILENAME, build_index
 from core.renderer_node import render_markdown_node
 from core.toc import generate_toc_html
+from core.viewer_assets import (
+    shared_print_css_text,
+    shared_viewer_js_text,
+    theme_body_class,
+    theme_css_chain,
+    viewer_layout_css_text,
+    viewer_shell_text,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -180,45 +183,32 @@ def process_single(
     numbering = cfg.get("numbering", False)
     toc_html = generate_toc_html(headings) if headings else ""
 
-    # 6. Load template files via chain
-    viewer_html_path = resolve_template_file(template_name, "viewer.html")
-    viewer_css_path = resolve_template_file(template_name, "viewer.css")
-    viewer_js_path = get_shared_viewer_js_path()
-    print_css_path = get_shared_print_css_path()
-
-    if viewer_html_path is None:
+    # 6. Load the reader assets through the asset layer (Phase 6A)
+    template_html = viewer_shell_text(template_name)
+    if not template_html:
         _logger.error("模板“%s”缺少 viewer.html。", template_name)
         return None
 
-    with open(viewer_html_path, "r", encoding="utf-8") as f:
-        template_html = f.read()
-
-    theme_class = theme_body_class(template_name)
-    template_html = template_html.replace("<body>", f'<body class="{theme_class}">', 1)
+    template_html = template_html.replace(
+        "<body>", f'<body class="{theme_body_class(template_name)}">', 1
+    )
 
     # 7. Collect CSS (viewer.css + theme chain) → inject into <head>
     css_parts = []
-    if viewer_css_path and os.path.isfile(viewer_css_path):
-        with open(viewer_css_path, "r", encoding="utf-8") as f:
-            css_parts.append(f.read())
+    layout_css = viewer_layout_css_text(template_name)
+    if layout_css:
+        css_parts.append(layout_css)
     try:
-        css_parts.append(load_theme_chain(template_name))
+        css_parts.append(theme_css_chain(template_name))
     except Exception as e:
         _logger.warning("加载模板样式链失败：%s", e)
     combined_css = "\n".join(css_parts)
 
     # 8. Collect JS → inject before </body>
-    js_parts = []
-    if viewer_js_path and os.path.isfile(viewer_js_path):
-        with open(viewer_js_path, "r", encoding="utf-8") as f:
-            js_parts.append(f.read())
-    combined_js = "\n".join(js_parts)
+    combined_js = shared_viewer_js_text()
 
     # 9. Collect print CSS
-    print_css = ""
-    if print_css_path and os.path.isfile(print_css_path):
-        with open(print_css_path, "r", encoding="utf-8") as f:
-            print_css = f.read()
+    print_css = shared_print_css_text()
 
     # ── Inject CSS into <head> ──────────────────────────────────
     head_fragments = []

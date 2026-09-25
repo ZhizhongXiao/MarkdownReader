@@ -1,7 +1,10 @@
 """MarkdownReader configuration management.
 
-Handles loading config.json, merging with runtime overrides, and providing
-template paths with inheritance chain resolution.
+Handles loading config.json and merging it with runtime overrides.
+
+Reader assets -- the page shell, the shared viewer script, the themes and their
+inheritance chain -- live in `core/viewer_assets.py`; that layer is the only
+place that knows where those files are.
 """
 
 import json
@@ -42,12 +45,10 @@ PROJECT_ROOT = get_application_dir()
 # Cutover C4 sets this to "v2"; v1 stays available for rollback.
 PRODUCTION_RENDERER_VERSION = "v2"
 
-# Templates root directory
+# Templates root directory. Assets are located through `core/viewer_assets.py`;
+# this constant stays because it is a bundle path, and because the index page
+# surface (`core/index_builder.py`) shares the same root.
 TEMPLATES_DIR = os.path.join(BUNDLE_ROOT, "templates")
-
-# Shared files (all templates use these)
-_SHARED_VIEWER_JS = os.path.join(TEMPLATES_DIR, "viewer.js")
-_SHARED_PRINT_CSS = os.path.join(TEMPLATES_DIR, "print.css")
 
 # Template placeholders
 PLACEHOLDER_TITLE = "{{TITLE}}"
@@ -82,16 +83,6 @@ def normalize_template_name(template_name: str | None) -> str:
     """Normalize user-facing template aliases to canonical template ids."""
     name = str(template_name or _DEFAULTS["template"]).strip().lower()
     return _TEMPLATE_ALIASES.get(name, name)
-
-
-def theme_body_class(template_name: str) -> str:
-    """Return the stable CSS class for the active template.
-
-    Single implementation for both the production (v1) converter and the v2
-    assembler; the class *name* itself stays an implementation detail.
-    """
-    safe_name = "".join(ch.lower() if ch.isalnum() else "-" for ch in str(template_name)).strip("-")
-    return f"theme-{safe_name or 'default'}"
 
 
 def _find_config(config_path: str | None = None) -> str | None:
@@ -157,107 +148,3 @@ def load_config(
                 cfg[key] = value
     cfg["template"] = normalize_template_name(cfg.get("template"))
     return cfg
-
-
-# ================================================================
-# Template chain resolution
-# ================================================================
-
-
-def _read_metadata(template_name: str) -> dict:
-    """Read metadata.json from a template directory."""
-    path = os.path.join(TEMPLATES_DIR, template_name, "metadata.json")
-    if os.path.isfile(path):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            _logger.warning("解析模板元数据失败：%s；原因：%s", path, e)
-    return {}
-
-
-def resolve_template_chain(template_name: str) -> list[str]:
-    """Build the template inheritance chain.
-
-    Returns list of template names from base to child.
-    E.g. for "office" that extends "default": ["default", "office"].
-
-    Raises ValueError if template not found or circular.
-    """
-    template_name = normalize_template_name(template_name)
-
-    if not os.path.isdir(os.path.join(TEMPLATES_DIR, template_name)):
-        raise ValueError(f"未找到模板：“{template_name}”")
-
-    chain = [template_name]
-    seen = {template_name}
-    current = template_name
-
-    while True:
-        meta = _read_metadata(current)
-        parent = meta.get("extends")
-        if parent is None:
-            break
-        if parent in seen:
-            raise ValueError(
-                f"检测到模板循环继承：{' -> '.join(chain + [parent])}"
-            )
-        if not os.path.isdir(os.path.join(TEMPLATES_DIR, parent)):
-            raise ValueError(
-                f"模板“{current}”继承“{parent}”，但未找到父模板“{parent}”。"
-            )
-        chain.insert(0, parent)
-        seen.add(parent)
-        current = parent
-
-    return chain
-
-
-def resolve_template_file(template_name: str, filename: str) -> str | None:
-    """Find a file in the template chain, starting from child.
-
-    Returns path to the file, or None if not found in any template.
-    """
-    chain = resolve_template_chain(template_name)
-    # Search from child to parent (last in chain first)
-    for name in reversed(chain):
-        path = os.path.join(TEMPLATES_DIR, name, filename)
-        if os.path.isfile(path):
-            return path
-    return None
-
-
-def load_theme_chain(template_name: str) -> str:
-    """Load and concatenate theme.css files from the inheritance chain.
-
-    Base template's theme.css is loaded first, then each child's theme.css
-    is appended. This ensures children override parent variables (CSS cascade).
-
-    Returns concatenated CSS string. Raises ValueError on error.
-    """
-    chain = resolve_template_chain(template_name)
-    parts: list[str] = []
-    for name in chain:
-        theme_path = os.path.join(TEMPLATES_DIR, name, "theme.css")
-        if os.path.isfile(theme_path):
-            with open(theme_path, "r", encoding="utf-8") as f:
-                parts.append(f.read())
-            _logger.debug("已加载模板样式：%s/theme.css", name)
-        else:
-            _logger.debug("模板 %s 没有 theme.css，已跳过。", name)
-    if not parts:
-        raise ValueError(
-            f"模板“{template_name}”的继承链中没有 theme.css。"
-            f"继承链：{' -> '.join(chain)}"
-        )
-    return "\n".join(parts)
-
-
-def get_shared_viewer_js_path() -> str:
-    """Get path to the shared viewer.js."""
-    return _SHARED_VIEWER_JS
-
-
-def get_shared_print_css_path() -> str:
-    """Get path to the shared print.css."""
-    return _SHARED_PRINT_CSS

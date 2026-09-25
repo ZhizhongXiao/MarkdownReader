@@ -2,9 +2,10 @@
 
 Phase 5D. The v2 adapter returns a body fragment plus resource channels
 (`resources.styles` / `resources.scripts`); the page shell, the TOC and the
-viewer wiring belong to core. This module performs that assembly **for the new
-renderer path only**: `core/converter.py` still owns the production (v1) path and
-is deliberately untouched, because production cutover is a separate checkpoint.
+viewer wiring belong to core. This module performs that assembly for the v2
+renderer path, while `core/converter.py` assembles the v1 rollback path inline.
+Reader assets -- page shell, viewer script, theme chain, print sheet -- come from
+`core/viewer_assets.py`, which is the only layer that knows where they live.
 
 Deterministic injection order (mirrors the v1 order in `core/converter.py`, so a
 later cutover swaps the resource source instead of changing page structure):
@@ -18,21 +19,23 @@ of the final document came from which resource.
 """
 
 import logging
-import os
 from html import escape
 
 from core.config import (
     PLACEHOLDER_CONTENT,
     PLACEHOLDER_TITLE,
     PLACEHOLDER_TOC,
-    get_shared_print_css_path,
-    get_shared_viewer_js_path,
-    load_theme_chain,
     normalize_template_name,
-    resolve_template_file,
-    theme_body_class,
 )
 from core.toc import generate_toc_html
+from core.viewer_assets import (
+    shared_print_css_text,
+    shared_viewer_js_text,
+    theme_body_class,
+    theme_css_chain,
+    viewer_layout_css_text,
+    viewer_shell_text,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -44,14 +47,6 @@ _NUMBERING_AUTOSTART = (
     "});"
     "</script>"
 )
-
-
-def _read_text(path: str | None) -> str:
-    """Return the file text, or an empty string when the file does not exist."""
-    if not path or not os.path.isfile(path):
-        return ""
-    with open(path, "r", encoding="utf-8") as handle:
-        return handle.read()
 
 
 def _byte_size(fragment: str) -> int:
@@ -86,11 +81,9 @@ def assemble_document(
     headings = envelope.get("headings") or []
     resolved_template = normalize_template_name(template_name)
 
-    viewer_html_path = resolve_template_file(resolved_template, "viewer.html")
-    if viewer_html_path is None:
+    template_html = viewer_shell_text(resolved_template)
+    if not template_html:
         raise ValueError(f"模板“{resolved_template}”缺少 viewer.html，无法装配。")
-
-    template_html = _read_text(viewer_html_path)
     for placeholder in (PLACEHOLDER_TITLE, PLACEHOLDER_CONTENT, PLACEHOLDER_TOC):
         if placeholder not in template_html:
             raise ValueError(f"模板“{resolved_template}”缺少占位符 {placeholder}，无法装配。")
@@ -103,12 +96,12 @@ def assemble_document(
 
     # ── <head>: viewer.css, theme chain, resource styles, print.css ──
     head_fragments: list[tuple[str, str, str | None]] = []
-    viewer_css = _read_text(resolve_template_file(resolved_template, "viewer.css"))
+    viewer_css = viewer_layout_css_text(resolved_template)
     if viewer_css:
         head_fragments.append((f"<style>\n{viewer_css}\n</style>", "viewer-css", None))
 
     try:
-        theme_css = load_theme_chain(resolved_template)
+        theme_css = theme_css_chain(resolved_template)
     except Exception as error:  # 模板样式问题只降级，不阻断装配
         theme_css = ""
         message = f"加载模板样式链失败：{error}"
@@ -125,7 +118,7 @@ def assemble_document(
         resource_id = str(entry.get("id") or f"style-{index}")
         head_fragments.append((f"<style>\n{css}\n</style>", f"style:{resource_id}", resource_id))
 
-    print_css = _read_text(get_shared_print_css_path())
+    print_css = shared_print_css_text()
     if print_css:
         head_fragments.append((f'<style media="print">\n{print_css}\n</style>', "print", None))
 
@@ -144,7 +137,7 @@ def assemble_document(
 
     # ── </body>: viewer wiring, numbering, then on-demand resource scripts ──
     body_fragments: list[tuple[str, str, str | None]] = []
-    viewer_js = _read_text(get_shared_viewer_js_path())
+    viewer_js = shared_viewer_js_text()
     if viewer_js:
         body_fragments.append((f"<script>\n{viewer_js}\n</script>", "viewer-js", None))
     if numbering:

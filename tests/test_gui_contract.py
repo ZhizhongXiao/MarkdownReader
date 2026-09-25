@@ -1,8 +1,11 @@
+import sys
 from pathlib import Path
 
-from gui.app import load_gui_document
-
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from gui.app import load_gui_document  # noqa: E402
 
 
 def test_gui_exposes_multiselect_drop_and_conversion_list_contract():

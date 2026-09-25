@@ -3,7 +3,7 @@
 ## 分层与数据流
 
 ```text
-core/           Python 调度：配置、转换计划、front matter、目录、渲染调度、索引生成
+core/           Python 调度：配置、转换计划、front matter、目录、渲染调度、索引生成、阅读器资产定位
 gui/            pywebview 桌面界面与静态资源
 node_renderer/  Node 渲染服务：markdown-it 与插件、KaTeX
 templates/      阅读器外壳与主题、索引模板、共享交互与打印样式
@@ -16,7 +16,8 @@ Markdown 文件
   → core/fm.py                front matter 解析（页面标题）
   → core/renderer_node.py     子进程调用 Node，得到正文 HTML 与标题列表
   → core/toc.py               由标题列表生成嵌套目录
-  → templates/                把正文、目录、样式与脚本组装成单文件 HTML
+  → core/viewer_assets.py     阅读器资产：外壳、viewer 脚本、打印样式、主题样式链、主题注册表
+  → 装配                      正文 + 目录 + 资产 → 单文件 HTML（v2 在 core/html_assembly.py，v1 回退在 core/converter.py）
   → 浏览器                    负责全部阅读交互
 ```
 
@@ -35,12 +36,16 @@ Markdown 文件
 - 负责 Markdown 解析、脚注、公式排版与本地图片内嵌，不生成完整阅读器页面。
 - 选项与插件范围见 [兼容范围](MARKDOWN.md)。
 
-### 模板（templates）
+### 模板（templates）与阅读器资产层
 
+- `core/viewer_assets.py`（Phase 6A）是"阅读器由哪些文件组成、它们在哪"的唯一来源：外壳、viewer 脚本、
+  打印样式、主题样式链、主题注册表。两条装配路径与 GUI 都只经它取资产，因此 Phase 6B 搬迁目录时只改这一处。
 - `default` 提供阅读器外壳与可继承的排版结构；Modern、Office、VS Code 只覆盖视觉。
-- `viewer.js` 承载全部阅读交互：目录跳转与定位、折叠、状态持久化、代码复制、图片灯箱、主题、编号与打印。
+- `viewer.js` 承载全部阅读交互：目录跳转与定位、折叠、状态持久化、代码复制、图片灯箱、明暗、编号与打印。
+  拆分（Phase 6B）只能在**装配期**合并成一个 classic script：交付物以 `file://` 打开，ES module 会被 CORS 拦下。
 - `print.css` 负责共用打印机械项（隐藏交互控件、分页与缩放规则），纸面观感由各主题自己的打印规则决定。
-- `templates/index/` 是独立的索引页模板，读取三份资源后内嵌成单文件 HTML。
+- `templates/index/` 是独立的索引页模板，读取三份资源后内嵌成单文件 HTML；它不属于阅读器资产层。
+- KEEP 表面（DOM id、localStorage 键、class、两个独立状态）见 [Viewer 契约](VIEWER_CONTRACT.md)。
 
 ### 打包（packaging）
 
