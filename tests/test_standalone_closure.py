@@ -72,8 +72,26 @@ def test_srcset_candidates_are_checked_individually():
 
     report = scan(html)
 
-    assert _refs(collect_subresources(html)).count(EXTERNAL_IMAGE) == 1
+    assert _refs(collect_subresources(html)) == [DATA_PNG, DATA_PNG, EXTERNAL_IMAGE]
     assert report["verdict"] == "failure", report
+
+
+def test_a_data_uri_srcset_produces_no_pseudo_reference():
+    """data URI 自带逗号：按逗号 split 会凭空造出外部引用（5D 首轮就是这个 bug）。"""
+    html = _page('<img srcset="' + DATA_PNG + ' 1x">')
+
+    found = collect_subresources(html)
+    report = scan(html)
+
+    assert _refs(found) == [DATA_PNG]
+    assert report["verdict"] == "standalone"
+    assert report["unexplained_external_resources"] == []
+
+
+def test_srcset_descriptors_and_line_breaks_stay_out_of_the_references():
+    html = _page('<img srcset="a.png 1x, b.png 2x,\n             c.png 480w">')
+
+    assert _refs(collect_subresources(html)) == ["a.png", "b.png", "c.png"]
 
 
 def test_navigation_links_and_plain_text_are_not_subresources():
@@ -90,12 +108,25 @@ def test_navigation_links_and_plain_text_are_not_subresources():
     assert report["payload"]["total_bytes"] > 0
 
 
-def test_inline_style_attributes_are_out_of_scope():
-    """K13 边界：raw HTML 的 style 属性不参与内嵌，也不因此判 failure。"""
+def test_inline_style_attribute_urls_are_scanned():
+    """K13 只说不改 raw HTML，不等于浏览器不会加载它：style 属性的 url() 必须被扫描。"""
     html = _page('<div style="background-image:url(' + EXTERNAL_IMAGE + ')">x</div>')
 
-    assert collect_subresources(html) == []
-    assert scan(html)["verdict"] == "standalone"
+    found = collect_subresources(html)
+
+    assert _refs(found) == [EXTERNAL_IMAGE]
+    assert [entry["origin"] for entry in found] == ["style-attr"]
+    assert scan(html)["verdict"] == "failure"
+
+
+def test_a_declared_style_attribute_url_is_an_author_reference():
+    html = _page('<div style="background-image:url(' + EXTERNAL_IMAGE + ')">x</div>')
+
+    report = scan(html, envelope=_envelope(html=html), author_owned_refs=[EXTERNAL_IMAGE])
+
+    assert report["verdict"] == "author_references"
+    assert [entry["ref"] for entry in report["author_references"]] == [EXTERNAL_IMAGE]
+    assert report["problems"] == []
 
 
 def test_data_uri_and_fragment_references_are_inline():
@@ -184,7 +215,8 @@ def test_a_failed_manifest_item_with_a_warning_is_degraded():
     assert report["unexplained_external_resources"] == []
     item = report["degraded_resources"][0]
     assert item["ref"] == EXTERNAL_IMAGE
-    assert item["evidence"]["status"] == "failed"
+    assert item["occurrences"] == 1
+    assert item["evidence"]["failed"] == 1
     assert item["evidence"]["warning"]
 
 
@@ -210,7 +242,7 @@ def test_a_kept_manifest_item_does_not_require_a_warning():
     report = scan(html, envelope=envelope)
 
     assert report["verdict"] == "degraded"
-    assert report["degraded_resources"][0]["evidence"]["status"] == "kept"
+    assert report["degraded_resources"][0]["evidence"]["kept"] == 1
 
 
 def test_an_item_claimed_inlined_but_still_external_is_a_failure():
@@ -258,6 +290,156 @@ def test_failure_outranks_degraded_and_keeps_every_bucket():
     assert report["verdict"] == "failure"
     assert report["degraded_resources"], "degraded 桶不得被 failure 吞掉"
     assert report["unexplained_external_resources"]
+
+# --- occurrence 多重性 -------------------------------------------------------
+
+
+def _same_url_html(count: int) -> str:
+    single = '<img src="' + EXTERNAL_IMAGE + '">'
+    return _page(single * count)
+
+
+def test_an_inlined_manifest_still_allows_the_author_occurrence():
+    """同 URL：Markdown 图片已内嵌，作者 raw HTML 的那一份仍是 author_references。"""
+    html = _same_url_html(1)
+    envelope = _envelope(html=html, items=[_image_item("inlined")])
+
+    report = scan(html, envelope=envelope, author_owned_refs=[EXTERNAL_IMAGE])
+
+    assert report["verdict"] == "author_references"
+    assert [entry["ref"] for entry in report["author_references"]] == [EXTERNAL_IMAGE]
+    assert report["unexplained_external_resources"] == []
+    assert report["occurrences"] == [
+        {
+            "ref": EXTERNAL_IMAGE,
+            "final": 1,
+            "degraded": 0,
+            "author": 1,
+            "unexplained": 0,
+            "manifest": {"inlined": 1, "failed": 0, "kept": 0},
+            "declared_author": 1,
+            "warning": None,
+        }
+    ]
+
+
+def test_an_author_declaration_cannot_cover_extra_occurrences():
+    """同 URL：inlined manifest + 1 处声明，但最终 2 处外链 → failure。"""
+    html = _same_url_html(2)
+    envelope = _envelope(html=html, items=[_image_item("inlined")])
+
+    report = scan(html, envelope=envelope, author_owned_refs=[EXTERNAL_IMAGE])
+
+    assert report["verdict"] == "failure"
+    assert report["author_references"][0]["occurrences"] == 1
+    assert report["unexplained_external_resources"][0]["occurrences"] == 1
+    assert [entry["status"] for entry in report["subresources"]] == ["author", "unexplained"]
+
+
+def test_a_failed_occurrence_and_an_author_occurrence_share_one_url():
+    """同 URL：Markdown 抓取失败 + 作者 raw HTML → degraded 1 处 + author 1 处。"""
+    html = _same_url_html(2)
+    envelope = _envelope(
+        html=html,
+        items=[_image_item("failed")],
+        warnings=["远程资源无法内嵌，保留原引用：" + EXTERNAL_IMAGE + "（超时）"],
+    )
+
+    report = scan(html, envelope=envelope, author_owned_refs=[EXTERNAL_IMAGE])
+
+    assert report["verdict"] == "degraded"
+    assert report["degraded_resources"][0]["occurrences"] == 1
+    assert report["author_references"][0]["occurrences"] == 1
+    assert report["unexplained_external_resources"] == []
+    assert [entry["status"] for entry in report["subresources"]] == ["degraded", "author"]
+
+
+def test_one_warning_covers_every_failed_occurrence_of_a_url():
+    """5C 同一 URL 的同一失败只报一次 warning，因此 warning 按 ref 共享。"""
+    html = _same_url_html(3)
+    envelope = _envelope(
+        html=html,
+        items=[_image_item("failed")] * 3,
+        warnings=["远程资源无法内嵌，保留原引用：" + EXTERNAL_IMAGE + "（HTTP 404）"],
+    )
+
+    report = scan(html, envelope=envelope)
+
+    assert report["verdict"] == "degraded"
+    assert report["degraded_resources"][0]["occurrences"] == 3
+    assert report["problems"] == []
+
+
+def test_a_declaration_with_an_explicit_count_is_honoured():
+    html = _same_url_html(2)
+
+    report = scan(
+        html,
+        envelope=_envelope(html=html),
+        author_owned_refs=[{"ref": EXTERNAL_IMAGE, "count": 2}],
+    )
+
+    assert report["verdict"] == "author_references"
+    assert report["author_references"][0]["occurrences"] == 2
+
+
+def test_a_declaration_beyond_the_renderer_fragment_is_a_failure():
+    """声明数量不得超过 renderer fragment 里真实产生的次数。"""
+    html = _same_url_html(2)
+    envelope = _envelope(html=_same_url_html(1))
+
+    report = scan(
+        html,
+        envelope=envelope,
+        author_owned_refs=[{"ref": EXTERNAL_IMAGE, "count": 2}],
+    )
+
+    assert report["verdict"] == "failure"
+    assert any("只有 1 处" in problem for problem in report["problems"])
+    assert report["author_references"][0]["occurrences"] == 1
+    assert report["unexplained_external_resources"][0]["occurrences"] == 1
+
+
+# --- link rel 与 @import -----------------------------------------------------
+
+
+def test_a_canonical_link_is_not_a_subresource():
+    html = _page('<link rel="canonical" href="https://example.invalid/page">')
+
+    assert collect_subresources(html) == []
+    assert scan(html)["verdict"] == "standalone"
+
+
+def test_stylesheet_icon_preload_and_rel_less_links_are_subresources():
+    href = "https://cdn.example.invalid/x.css"
+    for rel in ("stylesheet", "icon", "preload", None):
+        markup = (
+            "<link href=\"" + href + "\">"
+            if rel is None
+            else '<link rel="' + rel + '" href="' + href + '">'
+        )
+
+        assert [entry["ref"] for entry in collect_subresources(_page(markup))] == [href], rel
+        assert scan(_page(markup))["verdict"] == "failure", rel
+
+
+def test_a_string_form_import_is_a_subresource():
+    html = _page('<style>@import "https://cdn.example.invalid/theme.css";</style>')
+
+    found = collect_subresources(html)
+
+    assert [entry["attribute"] for entry in found] == ["@import"]
+    assert scan(html)["verdict"] == "failure"
+
+
+def test_a_url_form_import_is_still_a_subresource():
+    html = _page("<style>@import url(https://cdn.example.invalid/theme.css);</style>")
+
+    found = collect_subresources(html)
+
+    assert [entry["attribute"] for entry in found] == ["url()"]
+    assert scan(html)["verdict"] == "failure"
+
 
 # --- 体积报告 ---------------------------------------------------------------
 

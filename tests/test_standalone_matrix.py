@@ -150,7 +150,7 @@ def test_a_local_image_without_a_base_directory_is_kept_without_a_warning():
     report = result["report"]
     assert result["envelope"]["warnings"] == []
     assert report["verdict"] == "degraded"
-    assert report["degraded_resources"][0]["evidence"]["status"] == "kept"
+    assert report["degraded_resources"][0]["evidence"]["kept"] == 1
 
 # --- remote 与 PlantUML（5C 的联网与降级路径） ------------------------------
 
@@ -231,6 +231,71 @@ def test_an_author_reference_never_hides_a_real_degradation(loopback):
     assert [entry["ref"] for entry in report["author_references"]] == [AUTHOR_REF]
     assert [entry["ref"] for entry in report["degraded_resources"]] == [url]
     assert report["unexplained_external_resources"] == []
+
+
+# --- 同 URL 的多重来源（occurrence 证据） ------------------------------------
+
+
+def test_raw_html_and_markdown_sharing_a_url_keep_the_author_bucket(loopback):
+    """同 URL：Markdown 抓取成功变 data URI，作者 raw HTML 的那份仍是 author_references。"""
+    url = loopback.png("shared.png")
+    markdown = '<img src="' + url + '">\n\n![Markdown 图片](' + url + ')\n'
+
+    result = assemble_and_scan(markdown, allow_network=True, author_owned_refs=[url])
+
+    report = result["report"]
+    assert report["verdict"] == "author_references", report["problems"]
+    assert [entry["ref"] for entry in report["author_references"]] == [url]
+    assert report["unexplained_external_resources"] == []
+    assert 'src="data:image/png' in result["assembled"]["html"]
+
+
+def test_raw_html_and_failing_markdown_sharing_a_url_keep_both_buckets(loopback):
+    """同 URL：Markdown 抓取失败 + 作者 raw HTML → degraded 1 处 + author 1 处。"""
+    url = loopback.url("/status/404")
+    markdown = '<img src="' + url + '">\n\n![Markdown 图片](' + url + ')\n'
+
+    result = assemble_and_scan(markdown, allow_network=True, author_owned_refs=[url])
+
+    report = result["report"]
+    assert report["verdict"] == "degraded"
+    assert report["degraded_resources"][0]["occurrences"] == 1
+    assert report["author_references"][0]["occurrences"] == 1
+    assert report["unexplained_external_resources"] == []
+
+
+def test_a_raw_html_style_attribute_url_is_an_author_reference():
+    reference = "https://raw.example.invalid/bg.png"
+    markdown = '<div style="background-image:url(' + reference + ')">x</div>\n'
+
+    result = assemble_and_scan(markdown, author_owned_refs=[reference])
+
+    report = result["report"]
+    assert report["verdict"] == "author_references"
+    assert [entry["ref"] for entry in report["author_references"]] == [reference]
+    assert result["envelope"]["resources"]["items"] == []
+
+
+def test_an_injected_extra_occurrence_beats_an_author_declaration():
+    """反证：凭空多出的同 URL occurrence 不能被已有的 author 声明吸收。"""
+    baseline = assemble_and_scan(RAW_HTML_DOCUMENT, author_owned_refs=[AUTHOR_REF])
+    assert baseline["report"]["verdict"] == "author_references"
+    assert baseline["report"]["author_references"][0]["occurrences"] == 1
+
+    html = baseline["assembled"]["html"].replace(
+        "</body>", '<img src="' + AUTHOR_REF + '">\n</body>', 1
+    )
+
+    report = scan(
+        html,
+        envelope=baseline["envelope"],
+        injections=baseline["assembled"]["injections"],
+        author_owned_refs=[AUTHOR_REF],
+    )
+
+    assert report["verdict"] == "failure"
+    assert report["author_references"][0]["occurrences"] == 1
+    assert report["unexplained_external_resources"][0]["occurrences"] == 1
 
 
 # --- 生产基线 ---------------------------------------------------------------

@@ -127,7 +127,7 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
 - standalone closure（Phase 5D）：`core/html_assembly.py` 把 v2 envelope 装配成完整 HTML，注入顺序确定
   （`<head>` = viewer.css → theme 链 → `resources.styles` → print.css；`</body>` 前 = viewer.js → numbering →
   各 script 的 `script` 后 `boot`），并返回注入账本（label + position + bytes）；`tools/standalone_closure.py`
-  判定 closure（四态与 severity 见 K24），缺 `--envelope` 时走 strict 模式。自检入口：
+  判定 closure（四态与 severity 见 K24，证据按 occurrence 消费），缺 `--envelope` 时走 strict 模式。自检入口：
   `uv run python tools/standalone_closure.py samples/demo.html`（生产 v1 产物基线 → standalone）、
   `uv run python tools/assemble_document.py --out build/smoke.html`（装配集成页：本地图片 + KaTeX + Mermaid）、
   `pwsh tools/run_browser_acceptance.ps1 -ExtraPage build/smoke.html`（opt-in：真实浏览器离线打开该页）。

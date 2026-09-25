@@ -328,7 +328,10 @@ PlantUML 当前只使用联网 server。
               可执行矩阵：真实 adapter + assembler + loopback，含两个反证（凭空注入的引用、manifest 说 inlined 却仍是外链）
               生产基线 samples/demo.html（1,544,529 B）strict 扫描 = standalone（checker 不搜 "http"）
               opt-in 浏览器 smoke：Python assembler 产出的集成页在真实 Edge 离线渲染（Mermaid SVG / KaTeX / data: 图片 / 零请求）
-production renderer 仍未切换：cutover 是 5D 之后的**独立 checkpoint**（含 author provenance、packaging、demo 再生、rollback）
+              checker closeout：srcset 按规范解析（不按逗号 split）、style 属性 CSS 参与扫描、
+              证据按 occurrence 消费（degraded 先占位，author 声明不能遮蔽多余 occurrence）、link rel 判定 + @import 字符串形式
+production renderer 仍未切换：cutover 是 5D 之后的**独立 checkpoint**（含**按 occurrence 计数**的 author provenance、
+                             packaging、demo 再生、rollback）
 ```
 
 ## 验收
