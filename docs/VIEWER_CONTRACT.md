@@ -143,3 +143,19 @@ viewer 脚本是**按 `viewer/js/manifest.json` 顺序、空分隔拼接**的同
 Phase 6B 之后"v1 回退"仅表示 renderer 语义回退，不表示回退整套 Viewer 文件（视觉层只有一套）。
 
 Phase 6D 只做文档收口：本清单里的名字、键与钩子一个都没有变，`samples/demo.html` 逐字节不变。
+
+## 9. 外置主题（Phase 7）
+
+```text
+安装位置   assets/themes/external/<id>/（用户资产，永不随包）
+加载协议   与 builtin 同一个 loader：metadata.json 的 id / name / extends / files
+文档载荷   base + 全部 builtin + 本次选中且已安装的外置（账本 theme:<id>）
+菜单       装配期生成；阅读器零 JS 改动即可切换（第 3、6 节依旧成立）
+```
+
+- 外置主题**只做视觉**：禁止 JS、禁止自定义 Viewer DOM、禁止 `@import` 与远程 `url()`；本地资源在装配期内嵌成 data URI，
+  因此**删掉主题后已生成的 HTML 仍可用**（Phase 7 验收第 3 条，`tests/browser/external_theme.test.mjs` 实测）。
+- 保留 ID：`base` / `modern` / `office` / `vscode`（以及历史名 `default`）不得作为外置主题 id；
+  id 形如 `^[a-z][a-z0-9-]{1,31}$`，安装目录名即 id。
+- 主题必须把所有规则 scoped 到 `html[data-theme-id="<自己的 id>"]`（第 3 节），组件规则再加 `body.theme-<id>`。
+- `config.json` 的 `external_themes` 只写 id（不写路径）；不存在或已删除的 id 忽略并记 warning，不阻断转换（第 5 节）。

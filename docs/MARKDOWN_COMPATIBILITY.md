@@ -199,7 +199,7 @@ KEEP 契约未受影响：`keep/plain-text-no-math` 用的是单个未配对 `$`
 | TOC | K14 |
 | 三个 builtin themes | T2 现状；Phase 6B：`tests/js/viewer.test.js`（30 条）与 `test_demo_generation.py`；Phase 6C：`tests/test_theme_bundle_contract.py`（8 项）+ `tests/browser/theme_matrix.test.mjs`（3 主题 × 明暗） |
 | HTML theme switching | Phase 6C 已交付：`tests/js/viewer.test.js` THEME1–THEME8 + `tests/browser/theme_matrix.test.mjs` |
-| external theme | Phase 7（尚未实现） |
+| external theme | Phase 7 已交付：`tests/test_external_theme_contract.py`（24 项）+ `tests/browser/external_theme.test.mjs`（真实 Edge，含删主题后仍可用） |
 | dark/light | `tests/js/viewer.test.js` |
 | Viewer state | `tests/js/viewer.test.js`（30 条） |
 | 中文路径 / 含空格路径 | `test_renderer_links.py`、`test_conversion_plan.py`、`test_image_embedding.py` |
@@ -397,6 +397,14 @@ samples/demo.html                         → 未改动，快照契约仍成立
   * **current-state 行**：K16 由"v1 生产路径"改为"production 走 v2 + v1 显式回退"；K17 的 `viewer 22` → `viewer 30`；验收覆盖表四处：Mermaid/PlantUML 不再声称 xfail、三个 builtin themes 补 6C 持有者、`HTML theme switching` 与 `external theme` 拆开（前者 6C 已交付、后者 Phase 7）、Viewer state 22 → 30 条、无网络 fallback 改为 Phase 5C 已交付。带日期与 Phase 的历史证据行一律未动。
   * **静态守卫**：`tests/test_viewer_assets_contract.py` 的旧路径黑名单补上 `templates/base|modern|office|vscode`，并新增白名单断言 `templates/` 下只有 `index` —— Phase 6 的最终 ownership（`viewer/`、`themes/builtin/`、`templates/index/`）由此可执行。
   证据：`uv run pytest -q` = **531 passed / 0 failed / 0 xfailed**（与 6C follow-up 相同：本次只扩既有守卫，未加测试函数）；浏览器验收 **8 passed, 1 skipped, 0 failed**；`uv run python tools/generate_demo.py` 之后 `samples/demo.html` 的 `git status` 为空（即逐字节不变）；standalone verdict 仍为 `standalone`；onefile + onedir 重建后 `validate_release --mode both` **PASS**；ruff 全绿。
+
+- 2026-09-25（Phase 7A–7F：External Theme，从路径到浏览器验收）：建立统一 Theme Registry 与 CSS-only 外置主题链路。**未改变任何既有产物**：未安装外置主题时 `samples/demo.html` 仍逐字节相同（`BFD53709…`）。
+  * **7A 路径**：新增 `core/paths.py`（source `.runtime/`、onedir `<app>/data/`、onefile `%LOCALAPPDATA%/MarkdownReader/`，三者都含 `profile/assets/runtime`），`sys.frozen` / `_MEIPASS` 只出现在这里（静态守卫：core/gui/tools 其余文件不得出现）；`core/config.py` 委托且 `BUNDLE_ROOT` / `PROJECT_ROOT` / `CONFIG_FILENAME` 名字不变。config.json 移入 `profile/`、日志移入 `runtime/` 仍属 Phase 10/11，因此 7A 不移动任何用户文件。
+  * **7B Registry**：同一个 loader 读两个来源（`BUNDLE_ROOT/themes/builtin` 与 `assets/themes/external/`），builtin 优先、保留 ID 不可被 shadow；`theme_ids()` 变为「已安装的可选主题」、`builtin_theme_ids()` 回到 builtin-only 扫描、新增 `selectable_theme_ids(selection)`；metadata 增加 `files` 声明（四个 builtin 声明 `["theme.css"]`），`theme_css_text()` / `theme_css_chain()` 按声明读取；GUI 下拉按决策 7 钉回 builtin。
+  * **7C/7D 校验与操作**：新增 `core/external_themes.py`。导入期拒绝：保留 ID 与非法 slug、非 CSS 或缺失的声明文件、逃逸主题目录的路径、超限体积，以及会执行代码、突破 `<style>` 或触网的 CSS（任何 `@import`、远程 `url()`）。本地资源由 `inline_theme_css()` 在装配期转成 data URI；`themes/template/` 是**真主题**（id `my-theme`、四个 CSS、`assets/`），导出后可直接导入，`export -> edit -> import` 无需改名。参考策略与 `tools/standalone_closure.py` 同一套，并用契约测试锁住两处定义不漂移。
+  * **7E 装配**：`theme_bundle()` 是「本文档携带哪些主题」的唯一答案（base + 全部 builtin + 本次选中且已安装的外置），两条装配路径共用；账本逐主题 `theme:<id>`；菜单仍由装配期生成，阅读器**零 JS 改动**即可切到外置主题；配置了但未安装的 id 忽略，文档默认主题是外置主题时自动补入并告警。
+  * **7F 交付物**：`themes/template/` 随包（spec `REQUIRED_FILES` 与 `validate_release::RUNTIME_FILES` 各加条目；真实 onefile + onedir 重建后 `validate_release --mode both` PASS）；新增 `tests/browser/external_theme.test.mjs`（真实 Edge：主题生效、本地资源已内嵌为 data URI、零非 file:// 请求、零异常，以及**删掉主题目录后文档仍可用**并仍能切回 builtin）。
+  证据：`uv run pytest -q` = **572 passed / 0 failed / 0 xfailed**（6D 为 531）；浏览器验收 **10 passed, 1 skipped, 0 failed**；`tests/test_external_theme_contract.py` 24 项、`tests/test_paths_contract.py` 8 项、`tests/test_theme_bundle_contract.py` 12 项；ruff 全绿；demo 字节不变。
 
 ## texmath 审计记录（Phase 4B，为什么不复用 `markdown-it-texmath`）
 

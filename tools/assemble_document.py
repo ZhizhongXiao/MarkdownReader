@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from core import viewer_assets  # noqa: E402
 from core.html_assembly import assemble_document  # noqa: E402
 from tools.standalone_closure import scan  # noqa: E402
 
@@ -88,7 +89,9 @@ def render_envelope(markdown: str, context: dict) -> dict:
     return envelope
 
 
-def build(out_path: Path, template_name: str = "modern") -> dict:
+def build(
+    out_path: Path, template_name: str = "modern", external_themes: list[str] | None = None
+) -> dict:
     """Render, assemble and scan the built-in smoke document; write `out_path`.
 
     Paths are resolved first: the renderer runs as a child process whose cwd is
@@ -106,7 +109,12 @@ def build(out_path: Path, template_name: str = "modern") -> dict:
         "output_path": str(out_path.parent / (out_path.stem + ".html")),
     }
     envelope = render_envelope(DOCUMENT, context)
-    assembled = assemble_document(envelope, title=TITLE, template_name=template_name)
+    assembled = assemble_document(
+        envelope,
+        title=TITLE,
+        template_name=template_name,
+        external_themes=external_themes,
+    )
     out_path.write_text(assembled["html"], encoding="utf-8")
 
     report = scan(assembled["html"], envelope=envelope, injections=assembled["injections"])
@@ -120,9 +128,29 @@ def main(argv=None) -> int:
     )
     parser.add_argument("--out", required=True, help="输出 HTML 路径")
     parser.add_argument("--template", default="modern", help="模板 id（默认 modern）")
+    parser.add_argument(
+        "--external-theme",
+        action="append",
+        default=[],
+        help="额外携带的外置主题 id（可重复）；用于浏览器验收",
+    )
+    parser.add_argument(
+        "--external-root",
+        default="",
+        help="外置主题安装目录；给定后覆盖用户资产根（仅测试用）",
+    )
     args = parser.parse_args(argv)
 
-    built = build(Path(args.out), template_name=args.template)
+    if args.external_root:
+        # 只测试用：把「用户主题装在哪」指向临时目录，避免污染仓库自己的用户数据。
+        root = str(Path(args.external_root).resolve())
+        viewer_assets.external_themes_root = lambda: root
+
+    built = build(
+        Path(args.out),
+        template_name=args.template,
+        external_themes=args.external_theme,
+    )
     report = built["report"]
     summary = {
         "out": built["out"],

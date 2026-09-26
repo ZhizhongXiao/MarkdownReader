@@ -469,6 +469,15 @@ VS Code
              templates/ 只剩索引页锁进静态守卫（旧路径黑名单 + 目录白名单）
              samples/demo.html 逐字节不变（BFD53709…，1,574,223 B）；531 passed / 0 xfailed
 Phase 6 封板：6A 9bde750 / 6B d5b6b1b / 6C b7c372b + cc1bff9 / 6D 2a9f1c5
+7A  PASS    core/paths.py：source .runtime/、onedir data/、onefile %LOCALAPPDATA%/MarkdownReader
+             sys.frozen / _MEIPASS 只此一处（静态守卫）；config.json 与日志搬迁留给 Phase 10/11
+7B  PASS    统一 Theme Registry：builtin + assets/themes/external；builtin 优先、保留 ID 不可 shadow
+             theme_ids()=已安装；builtin_theme_ids()=打包集；selectable_theme_ids(选中)；metadata files 声明
+7C  PASS    契约先行（红）：校验规则 / 安装 / 删除 / 导出模板 / 资源内嵌 / 与 checker 的策略一致性
+7D  PASS    实现：core/external_themes.py + themes/template/（真主题，导出即可导入）
+7E  PASS    装配：theme_bundle() 统一两条路径；菜单带外置；账本 theme:<id>；阅读器零 JS 改动
+7F  PASS    浏览器：真实 Edge 外置主题、零网络、删主题后仍可用；themes/template/ 随包 + validate PASS
+Phase 7 封板：7A 3df3df6 / 7B a09e59d / 7C+7D e180651 / 7E 3d86e33 / 7F（本提交）
 ```
 
 ---

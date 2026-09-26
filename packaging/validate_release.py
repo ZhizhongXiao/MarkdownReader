@@ -39,6 +39,8 @@ RUNTIME_FILES = (
     ("themes", "builtin", "modern", "theme.css"),
     ("themes", "builtin", "office", "theme.css"),
     ("themes", "builtin", "vscode", "theme.css"),
+    ("themes", "template", "metadata.json"),
+    ("themes", "template", "variables.css"),
     ("templates", "index", "index.js"),
     ("gui", "assets", "index.html"),
 )
