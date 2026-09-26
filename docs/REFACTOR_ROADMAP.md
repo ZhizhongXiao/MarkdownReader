@@ -468,7 +468,7 @@ VS Code
              VIEWER_CONTRACT、MARKDOWN_COMPATIBILITY（K16/K17 + 验收覆盖表 current-state 单元格）
              templates/ 只剩索引页锁进静态守卫（旧路径黑名单 + 目录白名单）
              samples/demo.html 逐字节不变（BFD53709…，1,574,223 B）；531 passed / 0 xfailed
-Phase 6 封板：6A 9bde750 / 6B d5b6b1b / 6C b7c372b + cc1bff9 / 6D <本提交>
+Phase 6 封板：6A 9bde750 / 6B d5b6b1b / 6C b7c372b + cc1bff9 / 6D 2a9f1c5
 ```
 
 ---
