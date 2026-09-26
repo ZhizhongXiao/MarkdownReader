@@ -585,6 +585,8 @@ invalid    = configured 中已安装、但当前 use-time gate 不通过的 ID
 主题暂时缺失时保留 `configured`，只在 `selected` 里忽略并给 warning（AGENTS §17）。
 `template` 指向已删除 / 已损坏 / 非可选（如 `base`）的主题时保留配置值并给 warning，转换仍按 Phase 7 规则 hard failure。
 
+`missing` / `invalid` 的边界由 registry 定义（Phase 8 audit follow-up #2）：registry 只认「目录可读、`metadata.json` 解析成非空 JSON object、metadata 未声明 hidden、id 不是保留名」的目录（根不是 object 与解析失败同类：warning + 跳过；metadata 缺失或为空 object 则安静跳过），因此 `missing` = registry 从未发现这个 id，`invalid` = 发现了但 use-time gate（目录名 == metadata id / slug / CSS 策略 / 体积预算）不通过；`invalid` 在转换侧仍是 hard failure。
+
 ## 验收
 
 重新启动 MarkdownReader 后：

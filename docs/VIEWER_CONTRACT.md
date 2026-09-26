@@ -119,7 +119,7 @@ GUI 自己的 `gui-theme` 属于应用外壳，不属于生成文档。
 Phase 6A 起，viewer/theme 资产的定位与读取集中在 `core/viewer_assets.py`：
 
 ```text
-theme_ids()               已安装的可选主题（builtin + 用户主题；有 metadata.json 且非 hidden）
+theme_ids()               已安装的可选主题（builtin + 用户主题；有 metadata.json、根为非空 JSON object，且非 hidden）
 external_theme_ids()      已安装的用户主题（保留 id 不复现）
 theme_metadata(id)        metadata.json
 theme_body_class(id)      body class（theme-<id>）
@@ -133,6 +133,8 @@ viewer_layout_css_text()  布局/组件样式（只消费变量）
 shared_viewer_js_text()   viewer 脚本（按 manifest 拼接）
 shared_print_css_text()   打印样式
 ```
+
+`metadata.json` 只有**根是非空 JSON object** 才算数：解析失败、根是字符串 / 数组 / 数字、以及根是空 object（`{}`）都与「没有 `metadata.json`」同类（目录不算主题，`configured` 里的 id 因而归 `missing`；缺失文件与空 object 安静跳过，解析失败与非 object 各记一条 warning），所以 `theme_metadata()` 之外没有任何调用点需要处理非 mapping 的返回值（Phase 8 audit follow-up #2 的 F1）。
 
 `core/config.py` 只管 config.json 与 bundle 路径，不反向依赖该模块；`core/converter.py`（v1 回退路径）与 `core/html_assembly.py`（v2）都只经它取资产；`gui/api.py` 的主题列表也来自它。
 
@@ -177,8 +179,13 @@ CSS 分析在 `core/css_audit.py`：validator / inliner / closure checker 共用
   invalid     configured 中「已安装，但当前 use-time gate 不通过」的 id
   ```
 
-  installed 沿用 Phase 7 registry 语义：目录存在但没有有效 `metadata.json`（或 id 非法 / 属保留名）**不算 installed**，
-  因此归 `missing` 而不是 `invalid`。文档默认主题（`template`）单独判定，顺序与装配期一致：先 `viewer_assets.validate_theme()`
+  `missing` 与 `invalid` 的边界只看一件事：**registry 是否发现了这个 id**。`viewer_assets.external_theme_ids()`
+  只按「目录存在、`metadata.json` 解析成**非空** JSON object、metadata 未声明 `hidden`、id 不是保留名」发现主题，
+  它**不校验 id 形状、也不读 CSS**：目录缺失、`metadata.json` 缺失 / 解析失败 / 根不是 object / 根是空 object、属保留名 → 从未被发现 → `missing`；
+  一旦被发现（`installed` 里有它），use-time gate（`validate_installed_theme()`：目录名 == metadata id、slug 与保留 ID 规则、
+  声明文件与资源的 containment、CSS 策略与体积预算）失败 → `invalid`。一个手工复制进来、id 非法的目录因此是
+  `installed` + `invalid`，不是 `missing`；「非法 id 必须失败」只在转换侧执行（文档不能带一个无法按 id 作用域生效的主题）。
+  文档默认主题（`template`）单独判定，顺序与装配期一致：先 `viewer_assets.validate_theme()`
   （不存在 / `hidden` / 非可选 / 继承不成立），仅当它是外置主题时再跑 use-time gate；失败只给 warning，配置值永不改写，
   转换期仍是 hard failure。
 - **extends 只能是 `base` 或 null**（Phase 7 audit follow-up 收紧）。selectable builtin（modern/office/vscode）在 6C 之后把

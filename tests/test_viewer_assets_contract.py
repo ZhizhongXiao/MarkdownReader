@@ -142,6 +142,42 @@ def test_a_user_theme_may_not_shadow_a_builtin_id(tmp_path, monkeypatch):
     assert "--fake" not in viewer_assets.theme_css_text("modern")
 
 
+@pytest.mark.parametrize("payload", ('"broken"', "[1]", "{}"))
+def test_unusable_metadata_is_not_an_installed_theme(
+    tmp_path, monkeypatch, payload
+):
+    """F1：根不是 object（或为空 object）的 metadata.json 不得击穿 registry。
+
+    `_metadata_at()` 声明返回 `dict`，而 `_scan_theme_ids()` 直接对它 `.get()`，所以
+    `"broken"` / `[1]` 这样的文件必须与「缺失 / 解析失败」同类：目录不算主题，
+    configured 里出现它归 `missing`，状态查询与转换选择都不能抛 AttributeError。
+    `"broken"` / `[1]` 是这次的红用例，`"{}"`（object 但为空）是边界锁 —— 它修复前
+    也走 `if not metadata` 分支、本来就绿，用来钉住契约里「object 为空」这一句。
+    """
+    external = tmp_path / "external"
+    broken = external / "broken"
+    broken.mkdir(parents=True)
+    (broken / "metadata.json").write_text(payload, encoding="utf-8")
+    write_theme(
+        external, "paper", files=[("theme.css", 'html[data-theme-id="paper"]{--p:1}\n')]
+    )
+    monkeypatch.setattr(viewer_assets, "external_themes_root", lambda: str(external))
+
+    from core import external_themes
+
+    assert viewer_assets.external_theme_ids() == ["paper"]
+    assert viewer_assets.theme_ids() == ["modern", "office", "paper", "vscode"]
+    assert viewer_assets.theme_metadata("broken") == {}
+
+    with pytest.raises(ValueError):
+        viewer_assets.validate_theme("broken")
+
+    selection = external_themes.resolve_theme_selection(["broken", "paper"])
+
+    assert selection["external_ids"] == ["paper"]
+    assert any("broken" in warning for warning in selection["warnings"])
+
+
 def test_selectable_themes_are_builtins_plus_the_selected_external_ones(tmp_path, monkeypatch):
     """文档携带哪些主题：builtin 永远全带 + 本次选中的已安装外置主题。"""
     external = tmp_path / "external"

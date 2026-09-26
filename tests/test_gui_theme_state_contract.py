@@ -144,6 +144,68 @@ def test_the_state_read_never_prunes_the_configuration(sandbox, monkeypatch):
     assert core_config.load_config()["external_themes"] == ["paper", "ghost"]
 
 
+@pytest.mark.parametrize("payload", ('"broken"', "[1]", "{}"))
+def test_unusable_metadata_is_missing_not_fatal(
+    sandbox, tmp_path, monkeypatch, payload
+):
+    """F1：根不是 object（或为空 object）的 metadata.json 不算安装，也不得炸掉状态读取。
+
+    registry 是否发现一个目录，是「这次能不能恢复它」的唯一入口。这类文件必须与
+    「metadata 缺失 / 解析失败」一样被排除，configured 里的 id 因此归 `missing`。
+    `"{}"` 是边界锁（修复前也走 `if not metadata` 分支），钉住契约里「object 为空」这一句。
+    """
+    root = tmp_path / "external"
+    broken = root / "broken"
+    broken.mkdir(parents=True)
+    (broken / "metadata.json").write_text(payload, encoding="utf-8")
+    monkeypatch.setattr("core.viewer_assets.external_themes_root", lambda: str(root))
+    core_config.save_config({"external_themes": ["broken", "ghost"]})
+
+    state = BridgeApi().get_theme_state()
+
+    assert state["configured"] == ["broken", "ghost"]
+    assert state["installed"] == []
+    assert state["selected"] == []
+    assert state["missing"] == ["broken", "ghost"]
+    assert state["invalid"] == []
+    assert any("broken" in warning for warning in state["warnings"])
+    assert any("ghost" in warning for warning in state["warnings"])
+
+
+def test_a_discovered_theme_with_an_illegal_id_is_invalid_not_missing(
+    sandbox, tmp_path, monkeypatch
+):
+    """F2：registry 只按「有可解析的 metadata object」发现目录，不校验 id 形状。
+
+    手工放入一个 id 非法的目录：它仍会被发现（因此 `installed` 里有它），随后在
+    use-time gate 的 `_check_id()` 失败 —— 那是 `invalid`，不是 `missing`。
+    Phase 9 因此可以直接读状态字段，不必从 warning 文本反推状态。
+    """
+    root = tmp_path / "external"
+    directory = root / "Bad ID"
+    directory.mkdir(parents=True)
+    (directory / "metadata.json").write_text(
+        json.dumps({"id": "Bad ID", "name": "Bad", "files": ["theme.css"]}),
+        encoding="utf-8",
+    )
+    (directory / "theme.css").write_text(
+        'html[data-theme-id="Bad ID"]{}', encoding="utf-8"
+    )
+    monkeypatch.setattr("core.viewer_assets.external_themes_root", lambda: str(root))
+    core_config.save_config({"external_themes": ["Bad ID"]})
+
+    state = BridgeApi().get_theme_state()
+
+    assert state["configured"] == ["Bad ID"]
+    assert state["installed"] == ["Bad ID"]
+    assert state["selected"] == []
+    assert state["missing"] == []
+    assert state["invalid"] == ["Bad ID"]
+    assert any("Bad ID" in warning for warning in state["warnings"])
+
+
+
+
 def test_set_configs_persists_the_theme_selection_through_core(
     sandbox, monkeypatch, tmp_path
 ):

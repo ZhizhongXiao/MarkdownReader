@@ -538,3 +538,48 @@ def test_the_conversion_gate_and_the_reader_state_share_rules_not_verdicts(
     assert state["missing"] == ["ghost"]
     assert str(failure.value) in state["warnings"]
     assert any("ghost" in warning for warning in state["warnings"])
+
+
+def test_a_metadata_root_that_is_not_an_object_is_simply_not_installed(install_root):
+    """F1（转换侧）：根节点不是 object 的 metadata.json 让目录不算主题 —— warning + 跳过。
+
+    与状态侧同一条规则：这类目录不是 installed，configured 里出现它只是一条 warning，
+    不能让整个主题选择抛 AttributeError。
+    """
+    broken = install_root / "broken"
+    broken.mkdir()
+    (broken / "metadata.json").write_text('"broken"', encoding="utf-8")
+
+    assert viewer_assets.external_theme_ids() == []
+
+    selection = external_themes.resolve_theme_selection(["broken"])
+
+    assert selection["external_ids"] == []
+    assert any("broken" in warning for warning in selection["warnings"])
+
+
+def test_a_discovered_theme_with_an_illegal_id_still_fails_the_conversion(install_root):
+    """F2（配对）：registry 发现目录但不校验 slug；非法 id 在 use-time gate 仍是硬失败。
+
+    状态侧把同一条消息变成 warning（`invalid`），转换侧必须继续拒绝：文档不能带上一个
+    无法按 id 作用域生效的主题。
+    """
+    directory = install_root / "Bad ID"
+    directory.mkdir()
+    (directory / "metadata.json").write_text(
+        json.dumps({"id": "Bad ID", "name": "Bad", "files": ["theme.css"]}),
+        encoding="utf-8",
+    )
+    (directory / "theme.css").write_text('html[data-theme-id="Bad ID"]{}', encoding="utf-8")
+
+    assert viewer_assets.external_theme_ids() == ["Bad ID"]
+
+    with pytest.raises(external_themes.ExternalThemeError) as failure:
+        external_themes.resolve_theme_selection(["Bad ID"])
+
+    state = external_themes.theme_state(["Bad ID"])
+
+    assert state["selected"] == []
+    assert state["missing"] == []
+    assert state["invalid"] == ["Bad ID"]
+    assert str(failure.value) in state["warnings"]

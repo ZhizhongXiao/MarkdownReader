@@ -94,22 +94,37 @@ def external_themes_root() -> str:
 
 
 def _metadata_at(directory: str) -> dict:
-    """Return the ``metadata.json`` inside ``directory``, or ``{}``."""
+    """Return the ``metadata.json`` inside ``directory``, or ``{}``.
+
+    Only a JSON *object* counts: a file that parses to a string, list or number is as
+    unusable as one that does not parse, and both become ``{}`` after a warning. An
+    object that carries nothing is ``{}`` too -- no warning, because the file is there
+    and merely empty -- and ``_scan_theme_ids()`` skips falsy metadata, so either way
+    the directory stays out of the registry: a configured id for it is then ``missing``.
+    The declared ``dict`` return type is what every caller below relies on.
+    """
     path = os.path.join(directory, "metadata.json")
     if os.path.isfile(path):
         try:
             with open(path, "r", encoding="utf-8") as handle:
-                return json.load(handle)
+                metadata = json.load(handle)
         except Exception as error:
             _logger.warning("解析主题元数据失败：%s；原因：%s", path, error)
+            return {}
+        if isinstance(metadata, dict):
+            return metadata
+        _logger.warning(
+            "主题元数据根节点不是对象：%s；实际是 %s", path, type(metadata).__name__
+        )
     return {}
 
 
 def _scan_theme_ids(root: str, *, include_hidden: bool) -> list[str]:
     """Return the ids of the theme directories under ``root``, sorted.
 
-    A directory counts as a theme when it carries a ``metadata.json`` -- the index
-    page therefore never appears here.
+    A directory counts as a theme when it carries a ``metadata.json`` whose root is a
+    non-empty object -- the index page therefore never appears here, and neither does a
+    directory whose metadata is missing, empty, unparseable or not an object.
     """
     names = []
     if os.path.isdir(root):
