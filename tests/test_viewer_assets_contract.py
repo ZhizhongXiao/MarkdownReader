@@ -282,12 +282,10 @@ def test_the_config_module_no_longer_owns_asset_paths():
 def test_the_gui_registry_comes_from_the_asset_layer():
     # Phase 7B: theme_ids() also reports installed user themes, so the existing
     # dropdown asks for the builtin set explicitly until Phase 9 adds their surface.
-    # Phase 8C adds the two questions the state API must answer from the same layer:
-    # which user themes are installed, and where one id comes from.
+    # Phase 8C keeps the theme state aggregation in core/external_themes.py, so the
+    # bridge does not read the registry itself -- only the two names it always did.
     assert imported_from("gui/api.py", "core.viewer_assets") == {
         "builtin_theme_ids",
-        "external_theme_ids",
         "normalize_theme_id",
-        "theme_source",
     }
     assert "TEMPLATES_DIR" not in (ROOT / "gui" / "api.py").read_text(encoding="utf-8")

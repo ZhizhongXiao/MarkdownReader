@@ -208,7 +208,8 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
   **显式路径 > `paths.config_path()`（profile）> `PROJECT_ROOT/config.json`（legacy）> defaults**；profile 一旦存在
   即权威（损坏时 warning + defaults，不回落 legacy），写入只走 profile，不搬迁 legacy。
   `build.template`（文档默认主题）与 `build.external_themes`（额外携带列表）是两个独立概念，只写 id、永不写路径；
-  `BridgeApi.get_theme_state()` 区分 `configured` / `selected` / `missing`，GUI 控件属 Phase 9。
+  `BridgeApi.get_theme_state()` 区分 `configured` / `selected` / `missing` / `invalid`（后两者分别是「不在 registry」与「在
+  registry 但过不了 use-time gate」），判定与转换同源于 `external_themes._classify_configured_theme()`；GUI 控件属 Phase 9。
 
 ## 命名与路径约定
 

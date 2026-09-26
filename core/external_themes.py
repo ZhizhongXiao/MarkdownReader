@@ -347,6 +347,103 @@ def inline_theme_css(theme_id: str) -> str:
     return "\n".join(parts)
 
 
+# The three facts one configured user theme can be. Both aggregators below share this
+# table and differ only in what they do with "invalid": a document must not embed a
+# theme it cannot trust, while the reader's state has to keep answering questions about
+# every other id.
+_STATE_MISSING = "missing"
+_STATE_INVALID = "invalid"
+_STATE_VALID = "valid"
+
+
+def _classify_configured_theme(
+    theme_id: str, installed: set[str]
+) -> tuple[str, ExternalThemeError | None]:
+    """Return ``(state, error)`` for one configured user theme id.
+
+    It answers one question about one id: not ordering, not a whole selection and not
+    the document default. ``resolve_theme_selection()`` and ``theme_state()`` both use
+    it, so a rule change lands in one place -- and the exception object travels
+    unchanged, so the conversion path keeps raising exactly what Phase 7 locked in.
+    """
+    if theme_id not in installed:
+        return _STATE_MISSING, None
+    try:
+        validate_installed_theme(theme_id)
+    except ExternalThemeError as error:
+        return _STATE_INVALID, error
+    return _STATE_VALID, None
+
+
+def _document_default_warning(default: str | None) -> str | None:
+    """Return why a document default theme is unusable, or ``None``.
+
+    The order copies the two assembly paths exactly: ``viewer_assets.validate_theme()``
+    first (missing / hidden / not selectable / broken inheritance), then the external
+    theme's use-time gate. A non-selectable id such as ``base`` is already refused by the
+    first gate, so it never reaches the external check by accident.
+    """
+    default_id = str(default) if default else ""
+    if not default_id:
+        return None
+    try:
+        viewer_assets.validate_theme(default_id)
+    except ValueError as error:
+        return "文档默认主题当前不可用：" + default_id + "（" + str(error) + "）"
+    if viewer_assets.theme_source(default_id) != viewer_assets.SOURCE_EXTERNAL:
+        return None
+    try:
+        validate_installed_theme(default_id)
+    except ExternalThemeError as error:
+        return "文档默认主题当前不可用：" + default_id + "（" + str(error) + "）"
+    return None
+
+
+def theme_state(configured: list[str] | None = None, *, default: str | None = None) -> dict:
+    """Return what the configured user themes are worth right now (Phase 8C).
+
+    ``resolve_theme_selection()`` answers "what does this document carry" and fails on a
+    theme that must not be embedded; a reader's state has to answer "what can be restored
+    today" instead, so a broken theme becomes a warning and every other id is still
+    classified -- one bad theme must neither hide the ones that are fine nor the ones
+    that are simply missing.
+
+    Returns ``{"installed", "selected", "missing", "invalid", "warnings"}``.
+    ``selected`` is a subsequence of the configured list, so it keeps the user's own
+    order; the bundle's ``external_ids`` keeps its own deterministic sort.
+    """
+    installed = set(viewer_assets.external_theme_ids())
+    selected: list[str] = []
+    missing: list[str] = []
+    invalid: list[str] = []
+    warnings: list[str] = []
+
+    for item in configured or []:
+        theme_id = str(item)
+        if theme_id in selected or theme_id in missing or theme_id in invalid:
+            continue
+        state, error = _classify_configured_theme(theme_id, installed)
+        if state == _STATE_VALID:
+            selected.append(theme_id)
+        elif state == _STATE_MISSING:
+            missing.append(theme_id)
+            warnings.append("外置主题当前未安装：" + theme_id)
+        else:
+            invalid.append(theme_id)
+            warnings.append(str(error) if error else "外置主题当前不可用：" + theme_id)
+
+    default_warning = _document_default_warning(default)
+    if default_warning:
+        warnings.append(default_warning)
+    return {
+        "installed": sorted(installed),
+        "selected": selected,
+        "missing": missing,
+        "invalid": invalid,
+        "warnings": warnings,
+    }
+
+
 def resolve_theme_selection(
     requested: list[str] | None = None, *, default: str | None = None
 ) -> dict:
@@ -366,6 +463,10 @@ def resolve_theme_selection(
       otherwise be embedded into the document as it is;
     * a document default that is an installed user theme is added even when the
       selection forgot it, with a warning.
+
+    The classification comes from ``_classify_configured_theme()``, which ``theme_state()``
+    uses for the reader's UI: the same facts, a different verdict for "installed but
+    unusable" -- this function refuses to embed it, that one warns.
     """
     installed = set(viewer_assets.external_theme_ids())
     chosen: list[str] = []
@@ -375,10 +476,12 @@ def resolve_theme_selection(
         theme_id = str(item)
         if theme_id in chosen:
             continue
-        if theme_id not in installed:
+        state, error = _classify_configured_theme(theme_id, installed)
+        if state == _STATE_MISSING:
             warnings.append("已忽略未安装的外置主题：" + theme_id)
             continue
-        validate_installed_theme(theme_id)
+        if error is not None:
+            raise error
         chosen.append(theme_id)
 
     default_id = str(default) if default else ""

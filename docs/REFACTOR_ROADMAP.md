@@ -565,20 +565,25 @@ gui/api.py      set_configs() 只做 GUI 特有的路径规范化，然后委托
 - profile 文件一旦存在就是权威：损坏时 warning + defaults，**不**回落 legacy。
 - 落盘字段只限已有持久化语义的那些 + `build.external_themes`（`title` / `overwrite` 仍是运行期覆盖）。
 
-GUI 启动时恢复选择（Phase 8C；控件本身属 Phase 9）：
+GUI 启动时恢复选择（Phase 8C + audit follow-up；控件本身属 Phase 9）：
 
 ```text
-get_theme_state() → default / installed / configured / selected / missing / warnings
+get_theme_state() → default / installed / configured / selected / missing / invalid / warnings
 ```
 
 ```text
-configured = config.json 记住的选择（持久事实）
-selected   = 其中当前已安装且有效的子集（运行态）
-missing    = configured 中当前不存在的 ID
+configured = config.json 记住的选择（持久事实，永不裁剪）
+selected   = 其中当前已安装且通过 use-time gate 的子集（运行态，保持配置顺序）
+missing    = configured 中当前不属于 installed registry 的 ID
+invalid    = configured 中已安装、但当前 use-time gate 不通过的 ID
 ```
+
+转换与状态**共用判断规则、不共用聚合语义**：`_classify_configured_theme()` 只判定单个 id；
+`resolve_theme_selection()` 对 `invalid` 抛错（原异常原样传播，消息与排序不变），`theme_state()` 把它变成 warning
+并继续分类其余 id。
 
 主题暂时缺失时保留 `configured`，只在 `selected` 里忽略并给 warning（AGENTS §17）。
-`template` 指向已删除的外置主题时保留配置值，转换仍按 Phase 7 规则 hard failure。
+`template` 指向已删除 / 已损坏 / 非可选（如 `base`）的主题时保留配置值并给 warning，转换仍按 Phase 7 规则 hard failure。
 
 ## 验收
 

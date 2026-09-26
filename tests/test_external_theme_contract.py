@@ -507,3 +507,34 @@ def test_the_checker_fails_the_gate_on_css_it_cannot_parse():
     )
 
     assert [item["ref"] for item in found][0].startswith("css-unparseable(style)")
+
+
+def test_the_conversion_gate_and_the_reader_state_share_rules_not_verdicts(
+    tmp_path, install_root
+):
+    """8C follow-up：同一份坏主题 —— 转换必须 hard fail，阅读器状态只 warning。
+
+    两条链共用 `_classify_configured_theme()` 的判断，但聚合语义不同：文档不能带上
+    不可信的 CSS，而状态必须继续把其余 configured ID 分类。warning 文本就是转换抛出的
+    同一条消息，因此分类结果不可能在两条链之间漂移。
+    """
+    source = theme_files(tmp_path, "my-theme", {"theme.css": scoped("my-theme")})
+    external_themes.import_theme(str(source))
+    (install_root / "my-theme" / "theme.css").write_text(
+        scoped(
+            "my-theme",
+            'background-image:image-set("https://example.invalid/x.png" 1x)',
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(external_themes.ExternalThemeError) as failure:
+        external_themes.resolve_theme_selection(["my-theme"])
+
+    state = external_themes.theme_state(["my-theme", "ghost"])
+
+    assert state["selected"] == []
+    assert state["invalid"] == ["my-theme"]
+    assert state["missing"] == ["ghost"]
+    assert str(failure.value) in state["warnings"]
+    assert any("ghost" in warning for warning in state["warnings"])

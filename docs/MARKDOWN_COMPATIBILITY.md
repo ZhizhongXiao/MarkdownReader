@@ -431,6 +431,22 @@ samples/demo.html                         → 未改动，快照契约仍成立
   * **current-state 收口**：`core/html_assembly.py` 的「`assembly_warnings` 恒为空」与 `core/converter.py::_convert_v2` 的「后者今天恒为空」改为当前事实（非致命主题选择提示走 `assembly_warnings` -> report；不安全 / 损坏的主题载荷是硬失败）。
   证据：新增 `tests/test_config_contract.py`（11 项）与 `tests/test_gui_theme_state_contract.py`（5 项），涵盖 profile>legacy、profile 损坏不复活 legacy、`save_config()` 失败旧文件逐字节保留 + 临时文件清理、`configured/selected/missing` 在「删主题 -> 重启」下的关系；demo 字节不变（config 不进产物）。
 
+- 2026-09-26（Phase 8 audit follow-up：主题状态与转换选择共用判断、不共用聚合语义）：远端审计发现 `get_theme_state()` 直接复用
+  为转换设计的 `resolve_theme_selection()`，于是任一「已安装但损坏」的主题会让整个状态聚合作废 —— 已判定成功的 valid 被一起清空，
+  它之前生成的 missing warning 也随异常丢失；`default` 的可用性则只查了 `theme_source`（存在性），未查可用性。
+  * **一个分类器**：新增 `external_themes._classify_configured_theme()`，只对单个 configured id 给出 `missing` / `invalid` / `valid`，
+    并原样带走 `ExternalThemeError` 对象；`resolve_theme_selection()` 改为复用它（missing → warning + 跳过，invalid → `raise error`，
+    消息与排序不变），`theme_state()` 成为第二个聚合器（invalid → warning 且继续分类，`selected` 保持配置顺序）。
+  * **状态字段**：`get_theme_state()` 新增 `invalid`，与 `missing` 语义不重叠（installed 沿用 Phase 7 registry：目录存在但没有有效
+    `metadata.json` 仍算未安装）；桥接层不再自己做有效性聚合，`gui/api.py` 从 `core.viewer_assets` 导入的集合回到原来的两个名字。
+  * **default 可用性**：新增 `_document_default_warning()`，顺序复制装配期（`viewer_assets.validate_theme()` → 仅外置主题再跑
+    use-time gate），因此 `base` 这类「存在但不可选」在第一道闸就成为 warning；配置值永不改写，转换期仍是 hard failure。
+  证据：新增配对契约「同一份坏主题：转换 raise / 状态 warn，且 warning 文本 == 抛出的异常文本」、GUI 状态四分类
+  （valid + missing + broken + valid，证明坏主题既不清空前面的 valid 也不阻止后面的 valid）、真实主题树的 default 损坏、
+  `template="base"`、状态读取不裁剪配置；`tests/test_gui_theme_state_contract.py` 8 项、`tests/test_external_theme_contract.py` 67 项
+  （66 passed / 1 skipped）；全套 **639 passed / 0 failed / 1 skipped**；Phase 7 三组主题契约全绿（转换路径未被软化）；
+  demo 内容不变（`samples/` diff 为空，归一化后 sha256 `BFD53709…` / 1,574,223 B）。
+
 ## texmath 审计记录（Phase 4B，为什么不复用 `markdown-it-texmath`）
 
 `markdown-it-texmath@1.0.0` 的注册方式是固定的：

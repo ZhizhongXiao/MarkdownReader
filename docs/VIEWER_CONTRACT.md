@@ -164,8 +164,23 @@ CSS 分析在 `core/css_audit.py`：validator / inliner / closure checker 共用
   id 形如 `^[a-z][a-z0-9-]{1,31}$`，安装目录名即 id。
 - 主题必须把所有规则 scoped 到 `html[data-theme-id="<自己的 id>"]`（第 3 节），组件规则再加 `body.theme-<id>`。
 - `config.json` 的 `external_themes` 只写 id（不写路径）；不存在或已删除的 id 忽略并记 warning，不阻断转换（第 5 节）。
-  配置位置与读取顺序（Phase 8B）：显式路径 > `paths.config_path()`（profile）> legacy > defaults，profile 存在即权威；
-  `BridgeApi.get_theme_state()` 用 `configured` / `selected` / `missing` 区分「记住的选择」与「当前可恢复的选择」。
+  配置位置与读取顺序（Phase 8B）：显式路径 > `paths.config_path()`（profile）> legacy > defaults，profile 存在即权威。
+- **主题状态与转换选择共用判断、不共用结论**（Phase 8C）：`external_themes._classify_configured_theme()` 只判定**单个**
+  configured id，`resolve_theme_selection()`（转换）与 `theme_state()`（阅读器状态 / GUI）各自决定如何处理它 —— 转换对 `invalid`
+  hard fail（文档不能带上不可信的 CSS），状态把它变成 warning 并继续分类其余 id（一个坏主题不清掉其他 valid，也不吞掉先前的
+  missing warning）。`BridgeApi.get_theme_state()` 因此返回四个互不重叠的字段：
+
+  ```text
+  configured  config.json 记住的外置主题 id，永不因当前环境裁剪
+  selected    configured 中「当前已安装且通过 use-time gate」的子集（保持配置顺序，非 bundle 的 sorted 顺序）
+  missing     configured 中「当前不属于 installed registry」的 id
+  invalid     configured 中「已安装，但当前 use-time gate 不通过」的 id
+  ```
+
+  installed 沿用 Phase 7 registry 语义：目录存在但没有有效 `metadata.json`（或 id 非法 / 属保留名）**不算 installed**，
+  因此归 `missing` 而不是 `invalid`。文档默认主题（`template`）单独判定，顺序与装配期一致：先 `viewer_assets.validate_theme()`
+  （不存在 / `hidden` / 非可选 / 继承不成立），仅当它是外置主题时再跑 use-time gate；失败只给 warning，配置值永不改写，
+  转换期仍是 hard failure。
 - **extends 只能是 `base` 或 null**（Phase 7 audit follow-up 收紧）。selectable builtin（modern/office/vscode）在 6C 之后把
   规则 scoped 到各自 id，external 继承它们是语义假的；真要"基于 Office 做 Paper"需要另行设计 selector rebasing / token
   inheritance，而不是 metadata 写个 `extends`。

@@ -16,13 +16,8 @@ from pathlib import Path
 
 from core.config import load_config, save_config
 from core.conversion_plan import build_conversion_plan, document_output_map
-from core.external_themes import ExternalThemeError, resolve_theme_selection
-from core.viewer_assets import (
-    builtin_theme_ids,
-    external_theme_ids,
-    normalize_theme_id,
-    theme_source,
-)
+from core.external_themes import theme_state
+from core.viewer_assets import builtin_theme_ids, normalize_theme_id
 
 _logger = logging.getLogger("gui")
 
@@ -215,39 +210,31 @@ class BridgeApi:
         save_config(cfg)
 
     def get_theme_state(self) -> dict:
-        """Return the remembered, selectable and missing user themes for this session.
+        """Return the remembered, selectable, missing and unusable user themes.
 
         `configured` is what config.json remembers -- a persistent fact -- while
-        `selected` is the subset that is installed and valid right now and `missing` is
-        the difference. Phase 9 needs that split: saving an unrelated setting with only
-        `selected` in hand would erase the choice of a theme the user merely uninstalled
-        for a moment. An installed theme that no longer validates is reported as a warning
-        and leaves `selected` empty, because a conversion would refuse it.
+        `selected` is the subset that is installed and valid right now, `missing` is the
+        part that is not installed, and `invalid` is the part that is installed but no
+        longer usable. Phase 9 needs all four: saving an unrelated setting with only
+        `selected` in hand would erase a theme the user merely uninstalled for a moment,
+        and "temporarily gone" and "present but broken" deserve different UI states.
+
+        The classification belongs to `core.external_themes.theme_state()`, which shares
+        its rules with the conversion path; this bridge only merges it with what the
+        configuration remembers.
         """
         cfg = load_config()
         configured = list(cfg.get("external_themes") or [])
-        installed = external_theme_ids()
-        warnings: list[str] = []
-        selected: list[str] = []
-        try:
-            selection = resolve_theme_selection(configured)
-        except ExternalThemeError as error:
-            warnings.append(str(error))
-        else:
-            selected = list(selection["external_ids"])
-            warnings.extend(selection["warnings"])
         default = str(cfg.get("template") or "")
-        if default and not theme_source(default):
-            warnings.append("文档默认主题当前不可用：" + default)
+        state = theme_state(configured, default=default)
         return {
             "default": default,
-            "installed": installed,
+            "installed": state["installed"],
             "configured": configured,
-            "selected": selected,
-            "missing": [
-                theme_id for theme_id in configured if theme_id not in installed
-            ],
-            "warnings": warnings,
+            "selected": state["selected"],
+            "missing": state["missing"],
+            "invalid": state["invalid"],
+            "warnings": state["warnings"],
         }
 
     # ── Conversion ──────────────────────────────────────────
