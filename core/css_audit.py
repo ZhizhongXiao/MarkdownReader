@@ -16,7 +16,10 @@ exactly what was scanned.
 Fail-closed: whatever the scanner cannot prove it understands is refused --
 unterminated comments or strings, unbalanced parentheses, a CSS escape inside a
 `url()` target (so `url("https\\3a //example.invalid/x")` cannot hide a scheme), NUL and
-control characters, and a bare `url()` argument containing parentheses.
+control characters, a bare `url()` argument containing parentheses, and the resource
+functions this subset does not audit (`image-set()` takes a plain string as an image
+URL, `src()` is the other spelling of <url>, and `image()`/`cross-fade()`/`element()`
+are unproven here). A gradient needs no refusal: it cannot name a file or a host.
 """
 
 import re
@@ -37,6 +40,20 @@ class CssReference:
     end: int
     raw: str
 
+
+# Resource functions this subset does not audit. `image-set()` accepts a bare
+# <string> as an image URL and `src()` is the other spelling of <url> (CSS Values 4),
+# so a legal stylesheet could name a remote image without ever writing `url(`.
+# Refusing them keeps the "zero network" promise provable, and a gradient stays legal:
+# it cannot name a file or a host.
+UNAUDITED_RESOURCE_FUNCTIONS = (
+    "-webkit-image-set(",
+    "image-set(",
+    "cross-fade(",
+    "element(",
+    "image(",
+    "src(",
+)
 
 _URL_FUNCTION = "url("
 _IMPORT_RULE = "@import"
@@ -160,6 +177,16 @@ def scan_references(css: str) -> list[CssReference]:
         if char in _QUOTES:
             cursor = _skip_string(css, cursor)
             continue
+        unaudited = next(
+            (
+                name
+                for name in UNAUDITED_RESOURCE_FUNCTIONS
+                if css[cursor : cursor + len(name)].lower() == name
+            ),
+            None,
+        )
+        if unaudited:
+            raise CssAuditError("未审计的 CSS 资源函数（本阶段直接拒绝）：" + unaudited)
         if css[cursor : cursor + len(_URL_FUNCTION)].lower() == _URL_FUNCTION:
             reference = _read_url_reference(css, cursor)
             references.append(reference)

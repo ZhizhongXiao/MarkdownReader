@@ -413,6 +413,73 @@ def test_an_asset_reached_through_a_symlink_is_refused(tmp_path, install_root):
         external_themes.import_theme(str(source))
 
 
+@pytest.mark.parametrize(
+    "declaration",
+    (
+        'background-image:image-set("https://example.invalid/x.png" 1x)',
+        'background:-webkit-image-set("https://example.invalid/x.png" 1x)',
+        'background:src("https://example.invalid/x.png")',
+        'background:image("https://example.invalid/x.png")',
+        'background:cross-fade(url(a.png), url(b.png), 50%)',
+        'background:element(#probe)',
+    ),
+)
+def test_unscanned_resource_functions_fail_closed(tmp_path, install_root, declaration):
+    """审计 follow-up #2：image-set()/src() 等能命名远程资源的函数一律拒绝。
+
+    `image-set()` 接受裸 <string> 作为图片 URL，`src()` 是 <url> 的另一种拼写，因此
+    "只认 url() 与 @import" 的扫描器会被合法 CSS 绕过。
+    """
+    source = theme_files(tmp_path, "my-theme", {"theme.css": scoped("my-theme", declaration)})
+
+    with pytest.raises(external_themes.ExternalThemeError) as failure:
+        external_themes.import_theme(str(source))
+    assert "未审计" in str(failure.value), str(failure.value)
+
+
+def test_a_gradient_stays_legal(tmp_path, install_root):
+    """正例对照：gradient 不能命名文件或主机，因此不需要拒绝。"""
+    source = theme_files(
+        tmp_path,
+        "my-theme",
+        {"theme.css": scoped("my-theme", "background:linear-gradient(#fff,#000)")},
+    )
+
+    assert external_themes.import_theme(str(source)) == "my-theme"
+
+
+def test_a_tampered_theme_cannot_smuggle_image_set_after_install(tmp_path, install_root):
+    """同一条规则在消费期也生效：安装后写入 image-set("https://…") 必须被拒。"""
+    source = theme_files(tmp_path, "my-theme", {"theme.css": scoped("my-theme")})
+    external_themes.import_theme(str(source))
+    (install_root / "my-theme" / "theme.css").write_text(
+        scoped("my-theme", 'background-image:image-set("https://example.invalid/x.png" 1x)'),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(external_themes.ExternalThemeError):
+        external_themes.inline_theme_css("my-theme")
+
+
+def test_the_standalone_example_still_works_after_the_refusal(tmp_path, install_root):
+    """收尾正例：允许的写法（data URI + 本地资源）仍然照常安装并内嵌。"""
+    source = theme_files(
+        tmp_path,
+        "my-theme",
+        {
+            "theme.css": scoped(
+                "my-theme",
+                'background:url(assets/bg.png);color:var(--x)',
+            )
+        },
+    )
+    (source / "assets").mkdir()
+    (source / "assets" / "bg.png").write_bytes(b"\x89PNG")
+
+    assert external_themes.import_theme(str(source)) == "my-theme"
+    assert "data:image/png;base64," in external_themes.inline_theme_css("my-theme")
+
+
 def test_the_checker_uses_the_shared_scanner():
     """一个扫描器、三条消费链：checker 不得自带第二套 URL 解析。"""
     source = (ROOT / "tools" / "standalone_closure.py").read_text(encoding="utf-8")

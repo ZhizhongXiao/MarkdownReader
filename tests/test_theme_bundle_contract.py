@@ -179,6 +179,22 @@ def test_a_tampered_requested_theme_fails_the_conversion(tmp_path, monkeypatch):
         )
 
 
+def test_the_menu_renders_the_snapshot_without_rescanning(tmp_path, monkeypatch):
+    """SSOT（audit follow-up #2）：菜单只消费已解析快照，不再回查 registry。
+
+    若菜单重新扫描 installed root，则一个在 bundle 之后、菜单之前被删除的主题会造成
+    "CSS 已在页面里、菜单却没有它" 的分叉 —— 这正是 resolve_theme_selection 要消除的。
+    """
+    external = tmp_path / "external"
+    external.mkdir()
+    monkeypatch.setattr(viewer_assets, "external_themes_root", lambda: str(external))
+
+    markup = viewer_assets.theme_menu_markup(["modern", "office", "vscode", "ghost"])
+
+    assert 'data-theme-id="ghost"' in markup, "快照里的 id 必须照原样出现"
+    assert markup.count("theme-option") == 4
+
+
 def make_user_theme(root, theme_id, css, **metadata):
     """Write an installed user theme under ``root``."""
     directory = root / theme_id

@@ -145,25 +145,31 @@ def test_a_user_theme_may_not_shadow_a_builtin_id(tmp_path, monkeypatch):
 def test_selectable_themes_are_builtins_plus_the_selected_external_ones(tmp_path, monkeypatch):
     """文档携带哪些主题：builtin 永远全带 + 本次选中的已安装外置主题。"""
     external = tmp_path / "external"
-    write_theme(external, "paper", files=[("theme.css", ":root{--paper:1}\n")])
-    write_theme(external, "academic", files=[("theme.css", ":root{--academic:1}\n")])
+    write_theme(
+        external, "paper", files=[("theme.css", 'html[data-theme-id="paper"]{--paper:1}\n')]
+    )
+    write_theme(
+        external,
+        "academic",
+        files=[("theme.css", 'html[data-theme-id="academic"]{--academic:1}\n')],
+    )
     monkeypatch.setattr(viewer_assets, "external_themes_root", lambda: str(external))
 
-    assert viewer_assets.selectable_theme_ids(["paper"]) == [
-        "modern",
-        "office",
-        "paper",
-        "vscode",
-    ]
-    assert viewer_assets.selectable_theme_ids(["paper", "academic"]) == [
+    from core import external_themes
+
+    def menu_of(requested):
+        return external_themes.resolve_theme_selection(requested)["menu_ids"]
+
+    assert menu_of(["paper"]) == ["modern", "office", "paper", "vscode"]
+    assert menu_of(["paper", "academic"]) == [
         "academic",
         "modern",
         "office",
         "paper",
         "vscode",
     ]
-    assert viewer_assets.selectable_theme_ids(["ghost"]) == SELECTABLE
-    assert viewer_assets.selectable_theme_ids([]) == SELECTABLE
+    assert menu_of(["ghost"]) == SELECTABLE
+    assert menu_of([]) == SELECTABLE
 
 
 def test_every_builtin_declares_the_css_files_it_contributes():

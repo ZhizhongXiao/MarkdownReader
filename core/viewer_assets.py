@@ -189,20 +189,6 @@ def builtin_theme_ids() -> list[str]:
     return _scan_theme_ids(_THEMES_ROOT, include_hidden=False)
 
 
-def builtin_themes() -> list[tuple[str, str]]:
-    """Return ``(theme_id, display name)`` for every selectable builtin theme.
-
-    The display name comes from ``metadata.json`` ("Modern", "Office", "VS Code"),
-    which is what the switcher shows; the delivered document never needs the
-    directory layout to know it.
-    """
-    pairs: list[tuple[str, str]] = []
-    for theme_id in builtin_theme_ids():
-        name = str(theme_metadata(theme_id).get("name") or theme_id)
-        pairs.append((theme_id, name))
-    return pairs
-
-
 def external_theme_ids(*, include_hidden: bool = False) -> list[str]:
     """Return the installed user themes, sorted.
 
@@ -231,37 +217,28 @@ def theme_files(theme_id: str) -> list[str]:
     return ["theme.css"]
 
 
-def selectable_theme_ids(selected_external: list[str] | None = None) -> list[str]:
-    """Return the themes a document carries: every builtin plus the selected installed ones.
-
-    Builtin themes are always embedded, so only user themes are a per-document choice.
-    Unknown or reserved ids in the selection are ignored on purpose: a document must
-    still assemble when a configured theme has been removed (AGENTS section 17).
-    """
-    selected = {str(item) for item in (selected_external or [])}
-    installed = set(external_theme_ids())
-    return sorted(set(builtin_theme_ids()) | (selected & installed))
-
-
 def normalize_theme_id(theme_id: str | None) -> str:
     """Normalize a theme selector (aliases included) to its canonical id."""
     return normalize_template_name(theme_id)
 
 
-def theme_menu_markup(extra_ids: list[str] | None = None) -> str:
+def theme_menu_markup(menu_ids: list[str] | None = None) -> str:
     """Return the theme menu markup for the shell's ``{{THEME_MENU}}`` placeholder.
 
-    The menu ships inside the document instead of being built by the viewer script:
-    the options and their names are registry facts, and the page must be correct
-    before any script runs (Phase 6C). ``extra_ids`` are the user themes this
-    document carries (Phase 7E); the order stays builtin first, then theirs.
+    The options are exactly the ids it is given. The caller resolved the document's
+    theme selection once -- installed, validated, a snapshot -- and the menu must not
+    look at the registry again: a theme deleted between the bundle and the menu would
+    otherwise ship its CSS without an option to select it, which is exactly the
+    divergence `resolve_theme_selection()` exists to prevent. Names come from
+    `metadata.json`, and an id is its own label when a name is missing. The markup
+    ships inside the document (Phase 6C), so the page is correct before any script
+    runs.
     """
-    entries = list(builtin_themes())
-    known = {theme_id for theme_id, _ in entries}
-    for theme_id in selectable_theme_ids(extra_ids):
-        if theme_id in known:
-            continue
-        entries.append((theme_id, str(theme_metadata(theme_id).get("name") or theme_id)))
+    ids = [str(item) for item in (menu_ids or [])]
+    entries = [
+        (theme_id, str(theme_metadata(theme_id).get("name") or theme_id))
+        for theme_id in dict.fromkeys(ids)
+    ]
     options = "".join(
         '<button type="button" class="theme-option" data-theme-id="'
         + escape(theme_id, quote=True)

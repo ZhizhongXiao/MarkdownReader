@@ -119,14 +119,14 @@ GUI 自己的 `gui-theme` 属于应用外壳，不属于生成文档。
 Phase 6A 起，viewer/theme 资产的定位与读取集中在 `core/viewer_assets.py`：
 
 ```text
-theme_ids()               可选的 builtin 主题（有 metadata.json 且非 hidden）
-builtin_themes()          [(id, 可读名称)]，名称来自 metadata.json，供菜单使用
+theme_ids()               已安装的可选主题（builtin + 用户主题；有 metadata.json 且非 hidden）
+external_theme_ids()      已安装的用户主题（保留 id 不复现）
 theme_metadata(id)        metadata.json
 theme_body_class(id)      body class（theme-<id>）
 theme_css_text(id)        单个主题的 theme.css（bundle 用；缺失即失败）
 builtin_theme_css_text()  base + 每个可选主题，各一次，顺序固定（交付文档的主题载荷）
 theme_css_chain(id)       单主题样式链（诊断/外置主题用，不再是 production 载荷来源）
-theme_menu_markup()       主题菜单标记（shell 的 {{THEME_MENU}}）
+theme_menu_markup(ids)    主题菜单标记（shell 的 {{THEME_MENU}}；只渲染给定快照，不回查 registry）
 validate_theme(id)        主题可用性校验（存在 / 继承可解 / 可选），装配路径第一步
 viewer_shell_text()       页面外壳
 viewer_layout_css_text()  布局/组件样式（只消费变量）
@@ -143,6 +143,11 @@ viewer 脚本是**按 `viewer/js/manifest.json` 顺序、空分隔拼接**的同
 Phase 6B 之后"v1 回退"仅表示 renderer 语义回退，不表示回退整套 Viewer 文件（视觉层只有一套）。
 
 Phase 6D 只做文档收口：本清单里的名字、键与钩子一个都没有变，`samples/demo.html` 逐字节不变。
+
+主题选择只解析一次：`core/external_themes.py::resolve_theme_selection(requested, default)` 返回
+`{external_ids, menu_ids, warnings}`，bundle、菜单、账本与 warning 全部由它驱动（Phase 7E/7G）——
+菜单不再回查 registry，否则会出现"CSS 已内嵌、菜单却没有该主题"的分叉。
+CSS 分析在 `core/css_audit.py`：validator / inliner / closure checker 共用同一个 fail-closed 扫描器。
 
 ## 9. 外置主题（Phase 7）
 
@@ -175,3 +180,7 @@ Phase 6D 只做文档收口：本清单里的名字、键与钩子一个都没�
   不是目录大小。
 - **warning 走正式通道**：selection 解析产生的 warning 进入装配返回的 `assembly_warnings`，v2 合并进 conversion report，
   v1 追加进自己的 report —— 不再只有日志。
+- **未审计的资源函数一律拒绝**（audit follow-up #2）：`image-set()` 接受裸 `<string>` 作为图片 URL、`src()` 是 `<url>` 的
+  另一种拼写，因此"只认 `url()` 与 `@import`"的扫描器会被合法 CSS 绕过。当前拒绝 `image-set(` / `-webkit-image-set(` /
+  `src(` / `image(` / `cross-fade(` / `element(`；gradient 不需要拒绝（它不能命名文件或主机）。closure checker 在同一处
+  规则下，把无法解析的 CSS 判成 gate failure。

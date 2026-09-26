@@ -207,7 +207,7 @@ def assemble_document(
     # menu is part of the shell, so neither depends on a script having run.
     template_html = template_html.replace(PLACEHOLDER_THEME_ID, resolved_template)
     template_html = template_html.replace(
-        PLACEHOLDER_THEME_MENU, theme_menu_markup(selection["external_ids"])
+        PLACEHOLDER_THEME_MENU, theme_menu_markup(selection["menu_ids"])
     )
 
     return {"html": template_html, "injections": injections, "assembly_warnings": assembly_warnings}

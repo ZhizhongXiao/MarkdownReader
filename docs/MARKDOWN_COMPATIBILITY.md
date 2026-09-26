@@ -415,6 +415,13 @@ samples/demo.html                         → 未改动，快照契约仍成立
   * **其余收口**：data URI MIME 白名单（SVG 暂不放行）；真实路径 containment（symlink/junction 无法把主题外的文件带进来）；体积改为按最终内嵌载荷（含 base64 膨胀）计算；ghost 与自动补入的 warning 进入 `assembly_warnings` -> conversion report；`core/converter.py` 两处与 `core/paths.py` 一处的 C4 前措辞修正。
   证据：`tests/test_external_theme_contract.py` 57 项（56 passed / 1 skipped：当前环境无法创建 symlink）、`tests/test_theme_bundle_contract.py` 16 项、`tests/test_converter_v2_integration.py` 17 项；全套 **608 passed / 0 failed / 1 skipped**；浏览器外置主题用例未受影响；demo 字节不变；ruff 全绿。
 
+- 2026-09-25（Phase 7 audit follow-up #2：关闭 `image-set()`/`src()` 绕过与菜单重扫分叉）：第二轮远端审计发现扫描器虽被三条链共用，却仍只认 `url()` 与 `@import`，而 CSS Images 4 允许 `image-set("<string>")` 把字符串当图片 URL、CSS Values 4 把 `<url>` 定义为 `url()` 或 `src()`，所以"零网络"承诺仍可被合法 CSS 绕过；同时 `theme_menu_markup()` 仍回查 registry，与 selection 快照形成 TOCTOU 型分叉。**产物仍零变化**。
+  * **未审计的资源函数 fail closed**：`image-set(` / `-webkit-image-set(` / `src(` / `image(` / `cross-fade(` / `element(` 在 `core/css_audit.scan_references()` 中直接拒绝；validator / inliner / checker 同一条规则（checker 把无法解析的 CSS 判为 gate failure）；gradient 不拒绝。
+  * **菜单消费快照**：`theme_menu_markup(menu_ids)` 只渲染给定 id，不再回查 installed root；`resolve_theme_selection()` 成为唯一解析入口，`builtin_themes()` 与 `selectable_theme_ids()` 被删除（已被它取代）。
+  * **预算语义与实现一致**：声明 CSS 的 UTF-8 字节现在计入 `MAX_PAYLOAD_BYTES`（`MAX_CSS_BYTES` 保留为更严格的 CSS 单项上限）。
+  * **措辞**：`_convert_v2()` docstring 去掉"只有显式请求 v2 才可达"这个 C3 时代限定。
+  证据：`tests/test_external_theme_contract.py`（含 image-set/src/webkit/image/cross-fade/element 拒绝与 gradient 正例对照）、`tests/test_theme_bundle_contract.py`（菜单快照不回扫）、`tests/test_standalone_closure.py`（image-set 反证判 failure）；全套 **619 passed / 0 failed / 1 skipped**；浏览器 10 passed + 1 skipped；onefile/onedir + `validate_release --mode both` PASS；demo 字节不变；ruff 全绿。
+
 ## texmath 审计记录（Phase 4B，为什么不复用 `markdown-it-texmath`）
 
 `markdown-it-texmath@1.0.0` 的注册方式是固定的：

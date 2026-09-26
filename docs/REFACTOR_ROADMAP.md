@@ -483,6 +483,8 @@ Phase 7 audit follow-up（远端审计 a910981 的 5 处阻断 + 3 处收口，�
                    validator / inliner / checker 共用扫描器；scope 必检；extends 收紧为 base|null
                    data MIME 白名单；realpath containment；载荷预算；三处 C4 前措辞
   fix-2  9ce5c4a  resolve_theme_selection() 成为 SSOT：bundle / menu / 账本 / warning 同源并进 report
+  fix-3  第二轮审计：scanner 拒绝未审计的资源函数（image-set / -webkit-image-set / src / image / cross-fade / element）
+                   theme_menu_markup(ids) 只消费 selection 快照（不再回扫 registry）；预算计入声明 CSS；_convert_v2 措辞
 ```
 
 ---

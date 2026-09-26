@@ -469,6 +469,18 @@ def test_a_string_form_import_is_a_subresource():
     assert scan(html)["verdict"] == "failure"
 
 
+def test_an_image_set_string_url_fails_the_gate():
+    """审计 follow-up #2：image-set() 能命名远程资源，checker 必须判 failure。"""
+    html = _page(
+        '<style>a{background-image:image-set("https://example.invalid/x.png" 1x)}</style>'
+    )
+
+    found = collect_subresources(html)
+
+    assert found and found[0]["ref"].startswith("css-unparseable(")
+    assert scan(html)["verdict"] == "failure"
+
+
 def test_a_url_form_import_is_still_a_subresource():
     """`@import url(...)` 仍必须让 gate 失败；Phase 7 follow-up 后按 at-rule 记一次账。
 

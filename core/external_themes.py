@@ -186,7 +186,11 @@ def validate_theme_directory(directory: str) -> dict:
         if not text:
             raise ExternalThemeError(f"主题缺少声明的 CSS 文件：{filename}")
 
-        css_total += len(text.encode("utf-8"))
+        css_bytes = len(text.encode("utf-8"))
+        css_total += css_bytes
+        # The payload budget is what ends up in the document, so the CSS counts too;
+        # MAX_CSS_BYTES stays as the stricter cap on CSS alone.
+        payload_total += css_bytes
         if css_total > MAX_CSS_BYTES:
             raise ExternalThemeError(f"主题 CSS 总量超过上限 {MAX_CSS_BYTES // 1024} KiB")
 

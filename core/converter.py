@@ -218,7 +218,7 @@ def process_single(
     # Phase 6C：默认主题在标记里就已生效，主题菜单也是 shell 的一部分，都不依赖脚本。
     template_html = template_html.replace(PLACEHOLDER_THEME_ID, template_name)
     template_html = template_html.replace(
-        PLACEHOLDER_THEME_MENU, theme_menu_markup(selection["external_ids"])
+        PLACEHOLDER_THEME_MENU, theme_menu_markup(selection["menu_ids"])
     )
 
     # 7. Collect CSS (viewer.css + 主题 bundle) → inject into <head>
@@ -292,7 +292,7 @@ def _convert_v2(
 ) -> str | None:
     """Render with the v2 renderer and assemble with `core/html_assembly.py`.
 
-    Reachable only when a caller explicitly asks for ``renderer_version="v2"``
+    Reachable when a caller asks for ``renderer_version="v2"``
     (Cutover C3 / K26); the production default is v2 since Cutover C4. Failure semantics follow
     v1: a template that cannot be assembled is logged and becomes ``None`` (nothing
     written), while renderer or bridge failures keep their actionable exception --
