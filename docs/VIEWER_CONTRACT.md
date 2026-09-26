@@ -159,3 +159,19 @@ Phase 6D 只做文档收口：本清单里的名字、键与钩子一个都没�
   id 形如 `^[a-z][a-z0-9-]{1,31}$`，安装目录名即 id。
 - 主题必须把所有规则 scoped 到 `html[data-theme-id="<自己的 id>"]`（第 3 节），组件规则再加 `body.theme-<id>`。
 - `config.json` 的 `external_themes` 只写 id（不写路径）；不存在或已删除的 id 忽略并记 warning，不阻断转换（第 5 节）。
+- **extends 只能是 `base` 或 null**（Phase 7 audit follow-up 收紧）。selectable builtin（modern/office/vscode）在 6C 之后把
+  规则 scoped 到各自 id，external 继承它们是语义假的；真要"基于 Office 做 Paper"需要另行设计 selector rebasing / token
+  inheritance，而不是 metadata 写个 `extends`。
+- **每次读取都重新校验**（audit follow-up）：主题 CSS 会被原样放进 `<style>`，而安装目录是持久用户资产（将来还有编辑入口），
+  所以 `import_theme()` 的校验不是永久凭证 —— `inline_theme_css()` 与 selection 解析都会先跑 `validate_installed_theme()`：
+  目录名 == metadata id、声明文件与资源不逃逸（realpath containment）、体积与内嵌载荷在预算内、CSS 通过策略检查。
+  损坏的**已安装**主题是硬失败；只是**未安装**（ghost id）才忽略 + warning。
+- **CSS 策略由 `core/css_audit.py` 的一个 fail-closed 扫描器执行**：每条规则必须 scoped 到 canonical 的
+  `html[data-theme-id="<id>"]`（`@media`/`@supports` 递归；其余 at-rule 一律拒绝 —— `@keyframes`/`@font-face` 拥有全局命名、
+  `@page` 无法 scope、`@charset`/`@layer`/`@namespace` 对"按 UTF-8 读取并拼接"的文件没有意义）；`url()` 目标禁止 CSS 转义
+  （因此 `https\3a //…` 无法伪装 scheme）；data URI 走 MIME 白名单（SVG 暂不放行）；注释/字符串未闭合、括号不平衡等
+  无法证明安全的写法直接拒绝。closure checker 共用这个**扫描器**，但保留自己"什么算 inline"的策略。
+- **体积按最终载荷计算**：声明 CSS 的 UTF-8 字节 + 每一次实际 `data:` 展开的 base64 字节与前缀（重复引用计两次），
+  不是目录大小。
+- **warning 走正式通道**：selection 解析产生的 warning 进入装配返回的 `assembly_warnings`，v2 合并进 conversion report，
+  v1 追加进自己的 report —— 不再只有日志。

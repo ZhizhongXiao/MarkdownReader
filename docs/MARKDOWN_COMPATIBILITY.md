@@ -406,6 +406,15 @@ samples/demo.html                         → 未改动，快照契约仍成立
   * **7F 交付物**：`themes/template/` 随包（spec `REQUIRED_FILES` 与 `validate_release::RUNTIME_FILES` 各加条目；真实 onefile + onedir 重建后 `validate_release --mode both` PASS）；新增 `tests/browser/external_theme.test.mjs`（真实 Edge：主题生效、本地资源已内嵌为 data URI、零非 file:// 请求、零异常，以及**删掉主题目录后文档仍可用**并仍能切回 builtin）。
   证据：`uv run pytest -q` = **572 passed / 0 failed / 0 xfailed**（6D 为 531）；浏览器验收 **10 passed, 1 skipped, 0 failed**；`tests/test_external_theme_contract.py` 24 项、`tests/test_paths_contract.py` 8 项、`tests/test_theme_bundle_contract.py` 12 项；ruff 全绿；demo 字节不变。
 
+- 2026-09-25（Phase 7 audit follow-up：`d4b7736` + `9ce5c4a`，把"导入时安全"升级为"每次进 HTML 前都安全"）：远端审计在 `a910981` 上发现 5 处阻断 + 若干需收口项，全部修复并补反证测试。**产物仍零变化**（未安装外置主题时 `samples/demo.html` 逐字节相同）。
+  * **消费时重新校验**（阻断）：原先只有 `import_theme()` 校验，安装目录被改坏（例如手工写入 `</style><script>`）或手工复制进来的主题都不再受检，会被原样塞进 `<style>`。新增 `validate_installed_theme()`（目录名 == metadata id + 全套策略 + 真实路径 containment），`inline_theme_css()` 与 selection 解析在读取前调用。
+  * **URL 解析不再是正则**（阻断）：旧 `CSS_URL_PATTERN` 看不见合法的 `url("…/a(b).png")`，且 checker 共用同一正则，于是"两边一致"只保证"一起错"。新增 `core/css_audit.py::scan_references()`：fail-closed 扫描器、返回 span；validator 用它做策略，inliner 按 span 替换（不再有第二套 URL 解析），checker 也用它且遇到无法解析的 CSS 直接判 gate 失败。
+  * **菜单与 bundle 同源**（阻断）：`template` 指向未在 selection 里的外置主题时 bundle 补入了它、菜单没有，切走就回不来。新增 `resolve_theme_selection(requested, default)`，bundle / 菜单 / 账本 / warning 全部出自这一次解析。
+  * **继承收紧**（阻断）：`extends` 由任意已安装主题收紧为 `base | null`，external -> external 明确拒绝。
+  * **scope 必检 + at-rule 白名单**（决策项）：每条规则必须 canonical scoped；`@media`/`@supports` 递归；`@keyframes`/`@font-face`/`@page`/`@charset`/`@layer`/`@namespace` 一律拒绝。
+  * **其余收口**：data URI MIME 白名单（SVG 暂不放行）；真实路径 containment（symlink/junction 无法把主题外的文件带进来）；体积改为按最终内嵌载荷（含 base64 膨胀）计算；ghost 与自动补入的 warning 进入 `assembly_warnings` -> conversion report；`core/converter.py` 两处与 `core/paths.py` 一处的 C4 前措辞修正。
+  证据：`tests/test_external_theme_contract.py` 57 项（56 passed / 1 skipped：当前环境无法创建 symlink）、`tests/test_theme_bundle_contract.py` 16 项、`tests/test_converter_v2_integration.py` 17 项；全套 **608 passed / 0 failed / 1 skipped**；浏览器外置主题用例未受影响；demo 字节不变；ruff 全绿。
+
 ## texmath 审计记录（Phase 4B，为什么不复用 `markdown-it-texmath`）
 
 `markdown-it-texmath@1.0.0` 的注册方式是固定的：

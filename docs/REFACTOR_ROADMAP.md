@@ -478,6 +478,11 @@ Phase 6 封板：6A 9bde750 / 6B d5b6b1b / 6C b7c372b + cc1bff9 / 6D 2a9f1c5
 7E  PASS    装配：theme_bundle() 统一两条路径；菜单带外置；账本 theme:<id>；阅读器零 JS 改动
 7F  PASS    浏览器：真实 Edge 外置主题、零网络、删主题后仍可用；themes/template/ 随包 + validate PASS
 Phase 7 封板：7A 3df3df6 / 7B a09e59d / 7C+7D e180651 / 7E 3d86e33 / 7F（本提交）
+Phase 7 audit follow-up（远端审计 a910981 的 5 处阻断 + 3 处收口，两条提交）
+  fix-1  d4b7736  消费时重新校验（validate_installed_theme）+ core/css_audit.py fail-closed 扫描器
+                   validator / inliner / checker 共用扫描器；scope 必检；extends 收紧为 base|null
+                   data MIME 白名单；realpath containment；载荷预算；三处 C4 前措辞
+  fix-2  9ce5c4a  resolve_theme_selection() 成为 SSOT：bundle / menu / 账本 / warning 同源并进 report
 ```
 
 ---
