@@ -42,8 +42,8 @@
 | K13 | local image standalone（data URI；失败保留原引用；`data:`、`file:`、原始 HTML 资源的既有策略） | `test_image_embedding.py`（14 项） |
 | K14 | **adapter contract（renderer → core）**：`headings` 保留顺序，并保留 `level`、`anchor`、`text`、`inline_html`、`toc_inline_html` 的语义；TOC 与 Viewer 只消费这套结果，编号识别只有一个来源。字段名与序列化形式可以迁移，但必须 producer、consumer、tests 同步改并在本文件登记 | `test_toc_heading_contract.py`（45 项）+ `test_markdown_anchor_contract.py` + Viewer NUM1/NUM2 |
 | K15 | warning 通道（可读路径、不阻断转换） | `test_renderer_links.py`、`test_conversion_edge_cases.py` |
-| K16 | standalone HTML 装配（自包含、标题转义、无 CDN）—— **v1 生产路径**；v2 装配路径与 closure 判定见 K24（Phase 5D） | `test_demo_generation.py`、`test_converter_integration.py` |
-| K17 | Viewer / 索引页 / GUI 行为契约 | `tests/js` 层：viewer 22、index 9、GUI 9、selfcheck 5 |
+| K16 | standalone HTML 装配（自包含、标题转义、无 CDN）—— **production 走 v2**（`core/html_assembly.py`），v1 仅作显式回退；v2 装配路径与 closure 判定见 K24（Phase 5D） | `test_demo_generation.py`、`test_converter_integration.py` |
+| K17 | Viewer / 索引页 / GUI 行为契约 | `tests/js` 层：viewer 30、index 9、GUI 9、selfcheck 5 |
 | K18 | 运行时归属与可靠调用：打包物只使用内置 Node（不借 PATH）、渲染前冒烟自检。**进程粒度不是契约**（见 IMPLEMENTATION DETAIL） | `test_node_runtime.py`（5 项） |
 | K19 | 覆盖语义：`overwrite=false` 跳过并保留原文件 | `test_conversion_edge_cases.py` |
 | K20 | 发布门禁与产物校验 | `test_release_freeze.py`、`test_release_validation.py` |
@@ -191,18 +191,19 @@ KEEP 契约未受影响：`keep/plain-text-no-math` 用的是单个未配对 `$`
 | KEEP 语料在 adapter 上的对照 | `tests/test_renderer_adapter_keep.py`（20 项，15/15 KEEP case 全覆盖，footnote 于 Phase 4B 补齐） |
 | Mermaid / PlantUML（adapter 侧） | Phase 4C：`tests/test_renderer_adapter_diagrams.py`（27 项）+ `renderer/test/mermaid_predicate.test.js`（node:test）；Phase 5B：`tests/test_renderer_adapter_mermaid_runtime.py`（19 项）+ `tests/browser`（opt-in 5 项，真实浏览器离线渲染）；Phase 5C：PlantUML 抓图见 `tests/test_renderer_network.py` |
 | KaTeX | K9 |
-| Mermaid / PlantUML | TARGET G6–G7（旧 production 仍 7 strict xfail）；adapter 侧 Phase 4C：`tests/test_renderer_adapter_diagrams.py`（27 项） |
+| Mermaid / PlantUML | TARGET G6–G7（已由 production renderer v2 以普通断言保证，无 xfail/skip）；adapter 侧 Phase 4C：`tests/test_renderer_adapter_diagrams.py`（27 项） |
 | local image / remote image | K13（remote 同时登记为 T1，Phase 5C 已改写）；adapter 侧 Phase 5A：`tests/test_renderer_adapter_resources.py`（26 项）；联网语义 Phase 5C：`tests/test_renderer_network.py`（26 项，127.0.0.1 loopback） |
 | `.md → .html` | K12 |
 | Front Matter | K10 |
 | heading anchor | K1 |
 | TOC | K14 |
-| 三个 builtin themes | T2 现状；Phase 6 起由 `tests/js` 与 `test_demo_generation.py` 承担 |
-| external theme / HTML theme switching | Phase 6–7（今天不存在） |
+| 三个 builtin themes | T2 现状；Phase 6B：`tests/js/viewer.test.js`（30 条）与 `test_demo_generation.py`；Phase 6C：`tests/test_theme_bundle_contract.py`（8 项）+ `tests/browser/theme_matrix.test.mjs`（3 主题 × 明暗） |
+| HTML theme switching | Phase 6C 已交付：`tests/js/viewer.test.js` THEME1–THEME8 + `tests/browser/theme_matrix.test.mjs` |
+| external theme | Phase 7（尚未实现） |
 | dark/light | `tests/js/viewer.test.js` |
-| Viewer state | `tests/js/viewer.test.js`（22 条） |
+| Viewer state | `tests/js/viewer.test.js`（30 条） |
 | 中文路径 / 含空格路径 | `test_renderer_links.py`、`test_conversion_plan.py`、`test_image_embedding.py` |
-| 无网络 fallback | 今天语义不存在（T1），Phase 5 建立 |
+| 无网络 fallback | T1 已改写（Phase 5C）：`tests/test_renderer_network.py`；远程资源失败保留原 URL + warning，不阻断转换 |
 | onedir / onefile | 不在 pytest 范围：`packaging/*` 与人工验收清单（见 DEVELOPMENT.md） |
 
 ## TARGET 门禁规则
@@ -388,6 +389,14 @@ samples/demo.html                         → 未改动，快照契约仍成立
   * **新增必需占位符纳入装配前校验**：`{{THEME_ID}}` / `{{THEME_MENU}}` 与标题、正文、目录同为必需，`core/html_assembly.py` 的完整性循环扩到 5 个；并补参数化窄测试（逐个删掉任一占位符 → 装配必须抛错）。此前这两个占位符缺失不会被拦，只会表现为"主题不对/菜单没有"。
 
 
+
+- 2026-09-25（Phase 6D：清理旧目录与文档收口，产物零变化）：把 Phase 6 之前的过期路径与术语收到当前事实，并把最终目录 ownership 锁进静态守卫。**`samples/demo.html` 在收口前后逐字节相同**（`BFD53709…` / 1,574,223 B），因为本次只动注释、docstring 与文档：
+  * **源码 docstring**：`core/converter.py` 顶部不再写"v1 是 production"（C4 后 production = v2，v1 为显式回退）；`core/viewer_assets.py` 的继承链示例由 `extends default` 改为 `extends base`，并把"逐字节等于 pre-6B `templates/viewer.js`"这类点名死路径的表述改为不依赖旧路径的说法；`core/html_assembly.py` 的 numbering 注释改为"同 v1 回退路径"（它描述的历史语义）。
+  * **用户可见术语**：`README.md` 的"三套阅读模板 / 选择模板 / 部分模板依赖字体"改为"主题"，并把阅读器交互写成"主题切换、明暗模式"；`docs/ROADMAP.md` 把已完成的**主题系统 v2 移出"下一步"**，明确它只存在于 `refactor/vscode-office-integration` 分支、尚未进入 1.0.0-rc1；剩余部分（外置主题规范与 GUI Theme Builder）合并为新的下一步条目，并删掉指向 `templates/` 的过期提法。
+  * **架构与阶段终态**：`docs/ARCHITECTURE.md` 的分层树补上 `renderer/`（v2 production）、`viewer/`、`themes/builtin/`，并把 `templates/` 改回"只剩批量索引页"；`docs/DEVELOPMENT.md`、`docs/VIEWER_CONTRACT.md`、`docs/REFACTOR_ROADMAP.md` 记录本次收口与 Phase 6 封板。
+  * **current-state 行**：K16 由"v1 生产路径"改为"production 走 v2 + v1 显式回退"；K17 的 `viewer 22` → `viewer 30`；验收覆盖表四处：Mermaid/PlantUML 不再声称 xfail、三个 builtin themes 补 6C 持有者、`HTML theme switching` 与 `external theme` 拆开（前者 6C 已交付、后者 Phase 7）、Viewer state 22 → 30 条、无网络 fallback 改为 Phase 5C 已交付。带日期与 Phase 的历史证据行一律未动。
+  * **静态守卫**：`tests/test_viewer_assets_contract.py` 的旧路径黑名单补上 `templates/base|modern|office|vscode`，并新增白名单断言 `templates/` 下只有 `index` —— Phase 6 的最终 ownership（`viewer/`、`themes/builtin/`、`templates/index/`）由此可执行。
+  证据：`uv run pytest -q` = **531 passed / 0 failed / 0 xfailed**（与 6C follow-up 相同：本次只扩既有守卫，未加测试函数）；浏览器验收 **8 passed, 1 skipped, 0 failed**；`uv run python tools/generate_demo.py` 之后 `samples/demo.html` 的 `git status` 为空（即逐字节不变）；standalone verdict 仍为 `standalone`；onefile + onedir 重建后 `validate_release --mode both` **PASS**；ruff 全绿。
 
 ## texmath 审计记录（Phase 4B，为什么不复用 `markdown-it-texmath`）
 

@@ -3,10 +3,10 @@
 Provides the three functions previously expected from main.py:
 collect_markdown_files, process_single, process_batch.
 
-Two renderer paths share everything up to the render context: v1 (default, the
-production path, assembled inline below) and v2 (explicitly selected, assembled
-by `core/html_assembly.py`). Cutover C3 wires the v2 path without changing the
-default; see K26.
+Two renderer paths share everything up to the render context: v2 is the production
+default (assembled by `core/html_assembly.py`) and v1 is the explicit rollback
+(assembled inline below). Cutover C3 wired the v2 path, Cutover C4 made it the
+default; see K16/K26.
 """
 
 import logging

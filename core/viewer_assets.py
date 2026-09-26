@@ -181,7 +181,7 @@ def validate_theme(theme_id: str) -> str:
 def resolve_theme_chain(theme_id: str) -> list[str]:
     """Build the inheritance chain, base first.
 
-    For a theme extending ``default`` that is ``["default", "<theme>"]``. Raises
+    For a theme extending ``base`` that is ``["base", "<theme>"]``. Raises
     ``ValueError`` when the theme is missing, circular, or extends a missing one.
     """
     theme_id = normalize_theme_id(theme_id)
@@ -323,10 +323,10 @@ def shared_viewer_js_text() -> str:
     """Return the viewer script every document inlines, assembled from the manifest.
 
     The modules are fragments of **one** IIFE in file order, so they are joined with
-    no separator: the result equals the pre-6B ``templates/viewer.js`` byte for byte
-    (locked by ``tests/test_viewer_assets_contract.py``). A module that does not end
-    with a newline would glue onto the next one, so that is refused rather than
-    patched.
+    no separator: the result equals the single-file viewer payload of Phase 6B's
+    predecessor byte for byte (locked by ``tests/test_viewer_assets_contract.py``). A
+    module that does not end with a newline would glue onto the next one, so that is
+    refused rather than patched.
     """
     chunks: list[str] = []
     for name in viewer_js_modules():

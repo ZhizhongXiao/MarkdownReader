@@ -188,6 +188,10 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
   **新增或修改主题时必须把 token、组件规则与打印规则
   scoped 到 `html[data-theme-id="<id>"]`**，否则会污染其他主题；完整契约见 [Viewer 契约](VIEWER_CONTRACT.md)。
 
+- 收口（Phase 6D）：把 Phase 6 之前的过期路径与术语收到当前事实（`core/` 三处 docstring、README、路线图、
+  架构、本文件、[Viewer 契约](VIEWER_CONTRACT.md)、兼容记录），并把「`templates/` 只剩索引页」锁进静态守卫。
+  这次收口不改任何产物：`samples/demo.html` 在收口前后逐字节相同。
+
 ## 命名与路径约定
 
 - 项目名、窗口标题与产物统一 `MarkdownReader`；npm 包标识为小写 `markdownreader-node-renderer`。

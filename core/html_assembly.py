@@ -51,7 +51,7 @@ from core.viewer_assets import (
 
 _logger = logging.getLogger(__name__)
 
-# Same wiring as the production path: the viewer owns the button and its state.
+# Same wiring as the v1 rollback path: the viewer owns the button and its state.
 _NUMBERING_AUTOSTART = (
     "<script>"
     "document.addEventListener('DOMContentLoaded',function(){"

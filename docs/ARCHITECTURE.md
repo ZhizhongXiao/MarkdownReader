@@ -5,8 +5,11 @@
 ```text
 core/           Python 调度：配置、转换计划、front matter、目录、渲染调度、索引生成、阅读器资产定位
 gui/            pywebview 桌面界面与静态资源
-node_renderer/  Node 渲染服务：markdown-it 与插件、KaTeX
-templates/      阅读器外壳与主题、索引模板、共享交互与打印样式
+renderer/       Node 渲染服务（v2 production adapter；产物 renderer/dist 随包发布）
+node_renderer/  Node 渲染服务（v1 回退：markdown-it 与插件、KaTeX）
+viewer/         阅读器外壳、布局与打印样式、交互模块（装配期合并成一个 classic script）
+themes/builtin/ 内置主题：base（token 回落）+ modern / office / vscode（可选）
+templates/      批量索引页（独立表面，不属于阅读器资产层）
 packaging/      打包配置、图标与发布脚本
 ```
 

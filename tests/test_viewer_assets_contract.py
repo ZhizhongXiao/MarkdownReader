@@ -40,6 +40,11 @@ OLD_ASSET_PATHS = (
     "templates/Modern",
     "templates/Office",
     "templates/Vscode",
+    # 预防性：新的 canonical id 也不得回到 templates/（Phase 6D 收口）。
+    "templates/base",
+    "templates/modern",
+    "templates/office",
+    "templates/vscode",
 )
 
 CONSUMERS = ("core/converter.py", "core/html_assembly.py", "gui/api.py")
@@ -101,6 +106,8 @@ def test_the_old_asset_paths_are_gone():
 
     assert left == [], left
     assert (ROOT / "templates" / "index" / "index.js").is_file(), "索引页保持在原处"
+    # Phase 6D：把最终 ownership 锁成白名单 —— templates/ 只属于批量索引页这一个独立表面。
+    assert sorted(entry.name for entry in (ROOT / "templates").iterdir()) == ["index"]
 
 
 # The theme payload contracts live in `tests/test_theme_bundle_contract.py` now.
