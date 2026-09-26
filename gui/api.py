@@ -14,9 +14,15 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from core.config import CONFIG_FILENAME, PROJECT_ROOT, load_config
+from core.config import load_config, save_config
 from core.conversion_plan import build_conversion_plan, document_output_map
-from core.viewer_assets import builtin_theme_ids, normalize_theme_id
+from core.external_themes import ExternalThemeError, resolve_theme_selection
+from core.viewer_assets import (
+    builtin_theme_ids,
+    external_theme_ids,
+    normalize_theme_id,
+    theme_source,
+)
 
 _logger = logging.getLogger("gui")
 
@@ -193,39 +199,56 @@ class BridgeApi:
         return load_config()
 
     def set_configs(self, overrides: dict) -> None:
-        """Update multiple config keys and persist to config.json."""
+        """Update multiple config keys and persist them through the core writer.
+
+        Only the GUI's own job is done here -- input and output are paths the user picked
+        in this window, so they are normalized first. Everything else (the sectioned
+        shape, the theme fields, the atomic write) belongs to `core.config`, so the GUI,
+        the tests and any future CLI cannot drift apart.
+        """
         cfg = load_config()
         cfg.update(overrides)
         if "input" in cfg:
             cfg["input"] = _normalize_input_root(cfg["input"])
         if "output" in cfg:
             cfg["output"] = _normalize_config_path(str(cfg["output"]))
-        if "template" in cfg:
-            cfg["template"] = normalize_theme_id(cfg["template"])
-        self._write_json(cfg)
+        save_config(cfg)
 
-    def _write_json(self, cfg: dict) -> None:
-        """Write a flat config dict back to config.json."""
-        path = os.path.join(PROJECT_ROOT, CONFIG_FILENAME)
-        data = {
-            "build": {
-                "input": cfg.get("input", ""),
-                "template": cfg.get("template", "modern"),
-                "output": cfg.get("output", "output"),
-            },
-            "document": {
-                "numbering": bool(cfg.get("numbering", False)),
-            },
-            "features": {
-                "build_index": bool(cfg.get("build_index", True)),
-                "auto_open": bool(cfg.get("auto_open", True)),
-                "preserve_structure": bool(cfg.get("preserve_structure", False)),
-            },
+    def get_theme_state(self) -> dict:
+        """Return the remembered, selectable and missing user themes for this session.
+
+        `configured` is what config.json remembers -- a persistent fact -- while
+        `selected` is the subset that is installed and valid right now and `missing` is
+        the difference. Phase 9 needs that split: saving an unrelated setting with only
+        `selected` in hand would erase the choice of a theme the user merely uninstalled
+        for a moment. An installed theme that no longer validates is reported as a warning
+        and leaves `selected` empty, because a conversion would refuse it.
+        """
+        cfg = load_config()
+        configured = list(cfg.get("external_themes") or [])
+        installed = external_theme_ids()
+        warnings: list[str] = []
+        selected: list[str] = []
+        try:
+            selection = resolve_theme_selection(configured)
+        except ExternalThemeError as error:
+            warnings.append(str(error))
+        else:
+            selected = list(selection["external_ids"])
+            warnings.extend(selection["warnings"])
+        default = str(cfg.get("template") or "")
+        if default and not theme_source(default):
+            warnings.append("文档默认主题当前不可用：" + default)
+        return {
+            "default": default,
+            "installed": installed,
+            "configured": configured,
+            "selected": selected,
+            "missing": [
+                theme_id for theme_id in configured if theme_id not in installed
+            ],
+            "warnings": warnings,
         }
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-            f.write("\n")
-        _logger.info("配置已保存到 %s。", CONFIG_FILENAME)
 
     # ── Conversion ──────────────────────────────────────────
 
