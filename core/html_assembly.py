@@ -35,7 +35,7 @@ from core.config import (
     PLACEHOLDER_TOC,
     normalize_template_name,
 )
-from core.external_themes import theme_bundle
+from core.external_themes import resolve_theme_selection, theme_bundle
 from core.toc import generate_toc_html
 from core.viewer_assets import (
     builtin_theme_ids,
@@ -127,7 +127,9 @@ def assemble_document(
         # ── Theme bundle (Phase 6C, extended by 7E) ──
         # base + 全部 builtin + 本文档选中的外置主题，各恰好一次；
         # 每套主题单独一条 label：漏掉一套或重复内嵌都能被指出是哪一套。
-        for entry in theme_bundle(external_themes, default=resolved_template):
+        selection = resolve_theme_selection(external_themes, default=resolved_template)
+        assembly_warnings.extend(selection["warnings"])
+        for entry in theme_bundle(selection):
             head_fragments.append(
                 (f"<style>\n{entry['css']}\n</style>", f"theme:{entry['id']}", None)
             )
@@ -205,7 +207,7 @@ def assemble_document(
     # menu is part of the shell, so neither depends on a script having run.
     template_html = template_html.replace(PLACEHOLDER_THEME_ID, resolved_template)
     template_html = template_html.replace(
-        PLACEHOLDER_THEME_MENU, theme_menu_markup(external_themes)
+        PLACEHOLDER_THEME_MENU, theme_menu_markup(selection["external_ids"])
     )
 
     return {"html": template_html, "injections": injections, "assembly_warnings": assembly_warnings}

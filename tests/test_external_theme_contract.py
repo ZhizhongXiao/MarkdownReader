@@ -198,7 +198,7 @@ def test_a_theme_tampered_after_installation_is_refused(tmp_path, install_root):
     with pytest.raises(external_themes.ExternalThemeError):
         external_themes.inline_theme_css("my-theme")
     with pytest.raises(external_themes.ExternalThemeError):
-        external_themes.theme_bundle(["my-theme"])
+        external_themes.resolve_theme_selection(["my-theme"])
 
 
 def test_a_theme_hand_copied_into_the_root_is_refused(install_root):

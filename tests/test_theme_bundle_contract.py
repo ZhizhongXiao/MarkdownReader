@@ -15,6 +15,7 @@ covers the delivered artifact.
 """
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -29,7 +30,7 @@ if str(TESTS_DIR) not in sys.path:
 
 from theme_tree import broken_theme_tree  # noqa: E402
 
-from core import viewer_assets  # noqa: E402
+from core import external_themes, viewer_assets  # noqa: E402
 from core.html_assembly import assemble_document  # noqa: E402
 
 SELECTABLE = ("modern", "office", "vscode")
@@ -109,6 +110,73 @@ def test_the_document_stays_standalone_and_runs_one_classic_script():
     assert "<script src=" not in html
     assert "<link" not in html
     assert "http://" not in html and "https://" not in html
+
+
+def test_a_document_default_user_theme_reaches_the_menu_too(tmp_path, monkeypatch):
+    """7G：default 自动补入必须同时进 bundle 与菜单，否则切走就切不回来。"""
+    external = tmp_path / "external"
+    make_user_theme(external, "paper", {"theme.css": 'html[data-theme-id="paper"]{--paper:1}'})
+    monkeypatch.setattr(viewer_assets, "external_themes_root", lambda: str(external))
+
+    built = assemble_document(
+        envelope(), title="标题", template_name="paper", external_themes=[]
+    )
+
+    assert 'data-theme-id="paper">Paper</button>' in built["html"], "菜单里必须有它"
+    labels = [entry["label"] for entry in built["injections"]]
+    assert labels.count("theme:paper") == 1
+
+
+def test_a_configured_theme_that_is_not_installed_is_reported(tmp_path, monkeypatch):
+    """AGENTS section 17：忽略要留下 warning，而且必须进正式通道而不是只写日志。"""
+    external = tmp_path / "external"
+    external.mkdir()
+    monkeypatch.setattr(viewer_assets, "external_themes_root", lambda: str(external))
+
+    built = assemble_document(
+        envelope(), title="标题", template_name="modern", external_themes=["ghost"]
+    )
+
+    assert built["assembly_warnings"], "装配期必须报告被忽略的主题"
+    assert "ghost" in built["assembly_warnings"][0]
+
+
+def test_the_menu_and_the_bundle_come_from_one_resolution(tmp_path, monkeypatch):
+    """7G：bundle、菜单、账本都出自 resolve_theme_selection() 的同一次解析。"""
+    external = tmp_path / "external"
+    make_user_theme(external, "paper", {"theme.css": 'html[data-theme-id="paper"]{--paper:1}'})
+    monkeypatch.setattr(viewer_assets, "external_themes_root", lambda: str(external))
+
+    selection = external_themes.resolve_theme_selection(["paper"], default="modern")
+    built = assemble_document(
+        envelope(), title="标题", template_name="modern", external_themes=["paper"]
+    )
+
+    assert selection["external_ids"] == ["paper"]
+    assert selection["menu_ids"] == ["modern", "office", "paper", "vscode"]
+    offered = sorted(
+        re.findall(r'class="theme-option" data-theme-id="([a-z0-9-]+)"', built["html"])
+    )
+    assert offered == selection["menu_ids"]
+    labelled = sorted(
+        entry["label"] for entry in built["injections"] if entry["label"].startswith("theme:")
+    )
+    assert labelled == ["theme:" + theme_id for theme_id in ["base", *selection["menu_ids"]]]
+
+
+def test_a_tampered_requested_theme_fails_the_conversion(tmp_path, monkeypatch):
+    """7G：请求了已损坏的已安装主题是硬失败，不是 warning。"""
+    external = tmp_path / "external"
+    theme = make_user_theme(
+        external, "paper", {"theme.css": 'html[data-theme-id="paper"]{--paper:1}'}
+    )
+    monkeypatch.setattr(viewer_assets, "external_themes_root", lambda: str(external))
+    (theme / "theme.css").write_text("</style><script>alert(1)</script>\n", encoding="utf-8")
+
+    with pytest.raises(ValueError):
+        assemble_document(
+            envelope(), title="标题", template_name="modern", external_themes=["paper"]
+        )
 
 
 def make_user_theme(root, theme_id, css, **metadata):

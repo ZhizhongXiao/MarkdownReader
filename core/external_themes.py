@@ -343,7 +343,58 @@ def inline_theme_css(theme_id: str) -> str:
     return "\n".join(parts)
 
 
-def theme_bundle(selected: list[str] | None = None, *, default: str | None = None) -> list[dict]:
+def resolve_theme_selection(
+    requested: list[str] | None = None, *, default: str | None = None
+) -> dict:
+    """Resolve which user themes one document carries, and say why.
+
+    Returns ``{"external_ids": [...], "menu_ids": [...], "warnings": [...]}``. This is
+    the single place that answers the question, so the bundle, the reader's menu and
+    the conversion report cannot disagree -- they did once: a document whose default
+    theme was a user theme carried it while its menu did not offer it, which made
+    switching away a one-way trip.
+
+    Three outcomes, deliberately different:
+
+    * a requested id that is not installed is ignored with a warning: a config that
+      outlived a theme must not stop a conversion (AGENTS section 17);
+    * a requested id that is installed but no longer valid fails here -- it would
+      otherwise be embedded into the document as it is;
+    * a document default that is an installed user theme is added even when the
+      selection forgot it, with a warning.
+    """
+    installed = set(viewer_assets.external_theme_ids())
+    chosen: list[str] = []
+    warnings: list[str] = []
+
+    for item in requested or []:
+        theme_id = str(item)
+        if theme_id in chosen:
+            continue
+        if theme_id not in installed:
+            warnings.append("已忽略未安装的外置主题：" + theme_id)
+            continue
+        validate_installed_theme(theme_id)
+        chosen.append(theme_id)
+
+    default_id = str(default) if default else ""
+    if default_id and viewer_assets.theme_source(default_id) == viewer_assets.SOURCE_EXTERNAL:
+        if default_id not in chosen:
+            validate_installed_theme(default_id)
+            warnings.append(
+                "文档默认主题 " + default_id + " 未在选中列表里，已自动补入本文档。"
+            )
+            chosen.append(default_id)
+
+    external_ids = sorted(chosen)
+    return {
+        "external_ids": external_ids,
+        "menu_ids": sorted(set(viewer_assets.builtin_theme_ids()) | set(external_ids)),
+        "warnings": warnings,
+    }
+
+
+def theme_bundle(selection: dict | None = None) -> list[dict]:
     """Return every theme a document carries: id, source and inline-ready CSS.
 
     Order is base, then the builtin themes, then the selected user themes. base holds
@@ -356,15 +407,9 @@ def theme_bundle(selected: list[str] | None = None, *, default: str | None = Non
     directory is a user asset and the CSS has to be safe *now*, not only when it was
     installed.
     """
-    chosen = {str(item) for item in (selected or [])}
-    default_id = str(default) if default else ""
-    if default_id and viewer_assets.theme_source(default_id) == viewer_assets.SOURCE_EXTERNAL:
-        if default_id not in chosen:
-            _logger.warning("文档默认主题 %s 未在选中列表里，已自动补入本文档。", default_id)
-            chosen.add(default_id)
-
+    resolved = selection or {}
     order = [viewer_assets.BASE_THEME_ID, *viewer_assets.builtin_theme_ids()]
-    order.extend(viewer_assets.selectable_theme_ids(sorted(chosen)))
+    order.extend(str(item) for item in (resolved.get("external_ids") or []))
 
     payload = []
     for theme_id in dict.fromkeys(order):
