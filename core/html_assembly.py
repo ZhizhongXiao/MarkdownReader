@@ -4,18 +4,24 @@ Phase 5D. The v2 adapter returns a body fragment plus resource channels
 (`resources.styles` / `resources.scripts`); the page shell, the TOC and the
 viewer wiring belong to core. This module performs that assembly for the v2
 renderer path, while `core/converter.py` assembles the v1 rollback path inline.
-Reader assets -- page shell, viewer script, theme chain, print sheet -- come from
+Reader assets -- page shell, viewer script, theme bundle, print sheet -- come from
 `core/viewer_assets.py`, which is the only layer that knows where they live.
 
 Deterministic injection order (mirrors the v1 order in `core/converter.py`, so a
 later cutover swaps the resource source instead of changing page structure):
 
-    <head>    viewer.css -> theme chain -> resources.styles (manifest order) -> print.css
+    <head>    viewer.css -> theme bundle (base + every builtin) -> resources.styles
+              (manifest order) -> print.css
     </body>   viewer.js -> numbering autostart -> per script entry: script -> boot
 
 Every injected fragment is recorded in `injections` with its byte size, so the
 standalone closure checker can report payload sizes without guessing which part
-of the final document came from which resource.
+of the final document came from which resource. Each theme gets its own label
+(`theme:<id>`), which is what makes "every builtin theme exactly once" checkable.
+
+`assembly_warnings` is part of the return shape; since Phase 6C the theme payload
+either assembles or raises (`validate_theme` plus a required `theme.css`), so it
+stays empty and is reserved for a future degrade path.
 """
 
 import logging
@@ -23,16 +29,21 @@ from html import escape
 
 from core.config import (
     PLACEHOLDER_CONTENT,
+    PLACEHOLDER_THEME_ID,
+    PLACEHOLDER_THEME_MENU,
     PLACEHOLDER_TITLE,
     PLACEHOLDER_TOC,
     normalize_template_name,
 )
 from core.toc import generate_toc_html
 from core.viewer_assets import (
+    BASE_THEME_ID,
+    builtin_theme_ids,
     shared_print_css_text,
     shared_viewer_js_text,
     theme_body_class,
-    theme_css_chain,
+    theme_css_text,
+    theme_menu_markup,
     validate_theme,
     viewer_layout_css_text,
     viewer_shell_text,
@@ -81,10 +92,8 @@ def assemble_document(
     scripts = resources.get("scripts") or []
     headings = envelope.get("headings") or []
     resolved_template = normalize_template_name(template_name)
-    # An unusable theme must fail here: the theme-CSS step below only degrades, so
-    # without this check an unknown theme would assemble a document with no theme
-    # variables instead of raising (the pre-6B behaviour, locked by
-    # tests/test_standalone_matrix.py).
+    # 不可用（不存在 / 循环继承 / 非可选）的主题必须在这里失败：装配期不再有"主题降级"
+    # 这一说，否则会产出一份没有任何主题变量的文档（6B 起锁在 test_standalone_matrix）。
     validate_theme(resolved_template)
 
     template_html = viewer_shell_text()
@@ -107,14 +116,15 @@ def assemble_document(
         head_fragments.append((f"<style>\n{viewer_css}\n</style>", "viewer-css", None))
 
     try:
-        theme_css = theme_css_chain(resolved_template)
-    except Exception as error:  # 模板样式问题只降级，不阻断装配
-        theme_css = ""
-        message = f"加载模板样式链失败：{error}"
-        assembly_warnings.append(message)
-        _logger.warning(message)
-    if theme_css:
-        head_fragments.append((f"<style>\n{theme_css}\n</style>", "theme", None))
+        # ── Theme bundle (Phase 6C): base plus every builtin theme, each once ──
+        # 每套主题单独一条 label：漏掉一套或重复内嵌都能被指出是哪一套。
+        for theme_id in (BASE_THEME_ID, *builtin_theme_ids()):
+            head_fragments.append(
+                (f"<style>\n{theme_css_text(theme_id)}\n</style>", f"theme:{theme_id}", None)
+            )
+    except ValueError as error:
+        raise ValueError(f"主题资源不可用：{error}") from error
+    _logger.debug("已内嵌主题 bundle：base + %s", ", ".join(builtin_theme_ids()))
 
     for index, style in enumerate(styles):
         entry = style or {}
@@ -182,5 +192,9 @@ def assemble_document(
     template_html = template_html.replace(
         PLACEHOLDER_TOC, generate_toc_html(headings) if headings else ""
     )
+    # Phase 6C: the document's default theme is active in the markup, and the theme
+    # menu is part of the shell, so neither depends on a script having run.
+    template_html = template_html.replace(PLACEHOLDER_THEME_ID, resolved_template)
+    template_html = template_html.replace(PLACEHOLDER_THEME_MENU, theme_menu_markup())
 
     return {"html": template_html, "injections": injections, "assembly_warnings": assembly_warnings}

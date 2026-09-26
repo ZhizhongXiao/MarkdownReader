@@ -57,13 +57,19 @@ def _image_context(tmp_path: Path) -> dict:
 # --- 载荷纪律 ---------------------------------------------------------------
 
 
+# Phase 6C: every document carries the whole builtin theme bundle — base first, then
+# each selectable theme — and the ledger names them separately so a duplicated or
+# missing theme is visible in the report.
+THEME_LABELS = ["theme:base", "theme:modern", "theme:office", "theme:vscode"]
+
+
 def test_plain_markdown_is_standalone_and_carries_no_payload():
     result = assemble_and_scan("# 标题\n\n普通文本。\n")
 
     report = result["report"]
     html = result["assembled"]["html"]
     assert report["verdict"] == "standalone"
-    assert labels(report) == ["viewer-css", "theme", "print", "viewer-js"]
+    assert labels(report) == ["viewer-css", *THEME_LABELS, "print", "viewer-js"]
     assert report["payload"]["resource_payload_bytes"] == 0
     assert "mermaid" not in html
     assert "KaTeX_" not in html
@@ -102,7 +108,7 @@ def test_injection_order_is_deterministic_across_the_channels():
     html = result["assembled"]["html"]
     assert labels(report) == [
         "viewer-css",
-        "theme",
+        *THEME_LABELS,
         "style:katex",
         "print",
         "viewer-js",
@@ -119,7 +125,13 @@ def test_numbering_adds_exactly_one_injection_when_enabled():
     enabled = assemble_and_scan("# 一\n\n## 二\n", numbering=True)
     disabled = assemble_and_scan("# 一\n\n## 二\n")
 
-    assert labels(enabled["report"]) == ["viewer-css", "theme", "print", "viewer-js", "numbering"]
+    assert labels(enabled["report"]) == [
+        "viewer-css",
+        *THEME_LABELS,
+        "print",
+        "viewer-js",
+        "numbering",
+    ]
     assert "numbering" not in labels(disabled["report"])
 
 

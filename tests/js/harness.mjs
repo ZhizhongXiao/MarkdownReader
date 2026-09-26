@@ -36,6 +36,10 @@ const VIEWER_SOURCE = readFileSync(env("MR_VIEWER_JS"), "utf8").replace(/^\uFEFF
 const FIXTURES = {
   A: () => ({ html: readFileSync(env("MR_FIXTURE_A"), "utf8"), url: env("MR_FIXTURE_A_URL") }),
   B: () => ({ html: readFileSync(env("MR_FIXTURE_B"), "utf8"), url: env("MR_FIXTURE_B_URL") }),
+  // Variant C is the same document converted with a different default theme, so a
+  // contract can tell "falls back to the document default" apart from "hardcodes
+  // modern" (Phase 6C, THEME1/THEME4).
+  C: () => ({ html: readFileSync(env("MR_FIXTURE_C"), "utf8"), url: env("MR_FIXTURE_C_URL") }),
 };
 
 class FakeIntersectionObserver {

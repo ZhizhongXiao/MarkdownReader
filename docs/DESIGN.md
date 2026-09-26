@@ -39,11 +39,11 @@ Markdown → Python 调度 → Node 渲染 → 模板组装 → 浏览器阅读
 viewer/viewer.html    阅读器外壳：工具栏、目录、正文容器
 viewer/css/layout.css 共享布局与组件样式（只消费主题变量）
 viewer/css/print.css  共享打印样式
-viewer/js/*.js        阅读器交互模块（manifest.json 声明加载顺序，装配时拼成一个脚本）
-themes/builtin/base/  基础主题 token（调色板、字体、布局尺寸），hidden，不可选
-themes/builtin/modern/     通用阅读主题
-themes/builtin/office/     类 Word 正式文档与打印主题
-themes/builtin/vscode/     编辑器预览风格的技术主题
+viewer/js/*.js        阅读器交互模块（manifest.json 声明加载顺序，装配时拼成一个脚本；含 theme-switcher.js）
+themes/builtin/base/  基础主题 token（调色板、字体、布局尺寸），全局回落，hidden 不可选
+themes/builtin/modern/     通用阅读主题（scoped 到 html[data-theme-id="modern"]）
+themes/builtin/office/     类 Word 正式文档与打印主题（scoped 到 html[data-theme-id="office"]）
+themes/builtin/vscode/     编辑器预览风格的技术主题（scoped 到 html[data-theme-id="vscode"]）
 templates/index/      批量索引页（index.html + theme.css + index.js，生成时内嵌；独立表面）
 ```
 

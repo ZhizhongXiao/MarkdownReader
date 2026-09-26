@@ -13,6 +13,7 @@
     "content-level.js",
     "toc-panel.js",
     "dark-mode.js",
+    "theme-switcher.js",
     "numbering.js",
     "toc-resize.js",
     "back-to-top.js",

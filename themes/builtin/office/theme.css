@@ -1,6 +1,6 @@
 /* MarkdownReader Office Template */
 
-:root {
+html[data-theme-id="office"] {
     --office-page-bg: #ffffff;
     --office-app-bg: #f3f3f3;
     --office-border: #d9d9d9;
@@ -52,7 +52,7 @@
     --toggle-size: 16px;
 }
 
-[data-theme="dark"] {
+html[data-theme-id="office"][data-theme="dark"] {
     --office-page-bg: #1f1f1f;
     --office-app-bg: #121212;
     --office-border: #3a3a3a;
@@ -88,12 +88,12 @@
     --color-copy-btn-hover: #343f4f;
 }
 
-body .content-area {
+html[data-theme-id="office"] body.theme-office .content-area {
     background: var(--office-app-bg);
     padding: 32px 40px 64px;
 }
 
-body .markdown-body {
+html[data-theme-id="office"] body.theme-office .markdown-body {
     width: 100%;
     max-width: var(--content-max-width);
     min-height: calc(100vh - var(--toolbar-height) - 96px);
@@ -108,19 +108,19 @@ body .markdown-body {
     text-align: left;
 }
 
-body .markdown-body p {
+html[data-theme-id="office"] body.theme-office .markdown-body p {
     margin-top: 0;
     margin-bottom: 0;
     text-indent: 2em;
     letter-spacing: 0;
 }
 
-body .markdown-body h1,
-body .markdown-body h2,
-body .markdown-body h3,
-body .markdown-body h4,
-body .markdown-body h5,
-body .markdown-body h6 {
+html[data-theme-id="office"] body.theme-office .markdown-body h1,
+html[data-theme-id="office"] body.theme-office .markdown-body h2,
+html[data-theme-id="office"] body.theme-office .markdown-body h3,
+html[data-theme-id="office"] body.theme-office .markdown-body h4,
+html[data-theme-id="office"] body.theme-office .markdown-body h5,
+html[data-theme-id="office"] body.theme-office .markdown-body h6 {
     text-indent: 0;
     font-family: "Times New Roman", "Songti SC", "Source Han Sans SC", monospace;
     font-weight: 700;
@@ -132,96 +132,96 @@ body .markdown-body h6 {
     page-break-inside: avoid;
 }
 
-body .markdown-body h1 {
+html[data-theme-id="office"] body.theme-office .markdown-body h1 {
     font-size: 16pt;
     margin-top: 12pt;
     margin-bottom: 6pt;
 }
 
-body .markdown-body h1:first-child {
+html[data-theme-id="office"] body.theme-office .markdown-body h1:first-child {
     margin-top: 0;
 }
 
-body .markdown-body h2 {
+html[data-theme-id="office"] body.theme-office .markdown-body h2 {
     font-size: 14pt;
     margin-top: 9pt;
     margin-bottom: 4pt;
 }
 
-body .markdown-body h3 {
+html[data-theme-id="office"] body.theme-office .markdown-body h3 {
     font-size: 12pt;
     margin-top: 6pt;
     margin-bottom: 3pt;
 }
 
-body .markdown-body h4 {
+html[data-theme-id="office"] body.theme-office .markdown-body h4 {
     font-size: 10.5pt;
     margin-top: 3pt;
     margin-bottom: 2pt;
 }
 
-body .markdown-body h5 {
+html[data-theme-id="office"] body.theme-office .markdown-body h5 {
     font-size: 10.5pt;
     margin-top: 2pt;
     margin-bottom: 0;
 }
 
-body .markdown-body h6 {
+html[data-theme-id="office"] body.theme-office .markdown-body h6 {
     font-size: 10.5pt;
     margin-top: 0;
     margin-bottom: 0;
 }
 
-body .heading-toggle {
+html[data-theme-id="office"] body.theme-office .heading-toggle {
     text-indent: 0;
     line-height: 1;
 }
 
-body .markdown-body ul,
-body .markdown-body ol {
+html[data-theme-id="office"] body.theme-office .markdown-body ul,
+html[data-theme-id="office"] body.theme-office .markdown-body ol {
     margin: 0 0 6pt 0;
     padding-left: 2em;
     line-height: 22pt;
     text-indent: 0;
 }
 
-body .markdown-body li,
-body .markdown-body li p {
+html[data-theme-id="office"] body.theme-office .markdown-body li,
+html[data-theme-id="office"] body.theme-office .markdown-body li p {
     margin-top: 0;
     margin-bottom: 0;
     text-indent: 0;
 }
 
-body .markdown-body table,
-body .markdown-body blockquote,
-body .markdown-body pre,
-body .table-wrapper,
-body .code-block-wrapper,
-body .markdown-body .katex-display,
-body .markdown-body .math-block,
-body .markdown-body .math-display,
-body .markdown-body .texmath {
+html[data-theme-id="office"] body.theme-office .markdown-body table,
+html[data-theme-id="office"] body.theme-office .markdown-body blockquote,
+html[data-theme-id="office"] body.theme-office .markdown-body pre,
+html[data-theme-id="office"] body.theme-office .table-wrapper,
+html[data-theme-id="office"] body.theme-office .code-block-wrapper,
+html[data-theme-id="office"] body.theme-office .markdown-body .katex-display,
+html[data-theme-id="office"] body.theme-office .markdown-body .math-block,
+html[data-theme-id="office"] body.theme-office .markdown-body .math-display,
+html[data-theme-id="office"] body.theme-office .markdown-body .texmath {
     text-indent: 0;
 }
 
-body .markdown-body p:has(img) {
+html[data-theme-id="office"] body.theme-office .markdown-body p:has(img) {
     margin: 6pt 0;
     text-align: center;
     text-indent: 0;
     line-height: 1.5;
 }
 
-body .markdown-body img {
+html[data-theme-id="office"] body.theme-office .markdown-body img {
     max-width: 100%;
     height: auto;
     margin: 0 auto;
     border-radius: 0;
 }
 
-body .markdown-body .katex-display,
-body .markdown-body .math-block,
-body .markdown-body .math-display,
-body .markdown-body .texmath {
+html[data-theme-id="office"] body.theme-office .markdown-body .katex-display,
+html[data-theme-id="office"] body.theme-office .markdown-body .math-block,
+html[data-theme-id="office"] body.theme-office .markdown-body .math-display,
+html[data-theme-id="office"] body.theme-office .markdown-body .texmath {
     margin: 6pt 0;
     overflow-x: auto;
     overflow-y: hidden;
@@ -229,7 +229,7 @@ body .markdown-body .texmath {
     line-height: 1.5;
 }
 
-body .markdown-body :not(pre) > code {
+html[data-theme-id="office"] body.theme-office .markdown-body :not(pre) > code {
     font-family: monospace;
     font-size: 9.5pt;
     background: var(--color-code-bg);
@@ -238,13 +238,13 @@ body .markdown-body :not(pre) > code {
     padding: 0 2pt;
 }
 
-body .code-block-wrapper {
+html[data-theme-id="office"] body.theme-office .code-block-wrapper {
     margin: 6pt 0;
     text-indent: 0;
 }
 
-body .code-block-wrapper pre,
-body .markdown-body pre {
+html[data-theme-id="office"] body.theme-office .code-block-wrapper pre,
+html[data-theme-id="office"] body.theme-office .markdown-body pre {
     margin: 0;
     padding: 8pt 10pt;
     overflow-x: auto;
@@ -259,29 +259,29 @@ body .markdown-body pre {
     text-indent: 0;
 }
 
-body .markdown-body pre code {
+html[data-theme-id="office"] body.theme-office .markdown-body pre code {
     font-family: monospace;
     font-size: inherit;
     line-height: inherit;
 }
 
-body .copy-btn {
+html[data-theme-id="office"] body.theme-office .copy-btn {
     font-family: "Times New Roman", "Songti SC", "Source Han Sans SC", monospace;
     font-size: 12px;
     line-height: 1.2;
     border-radius: 2px;
 }
 
-body .table-wrapper {
+html[data-theme-id="office"] body.theme-office .table-wrapper {
     margin: 6pt 0;
     text-indent: 0;
 }
 
-body .table-wrapper table {
+html[data-theme-id="office"] body.theme-office .table-wrapper table {
     margin: 0;
 }
 
-body .markdown-body table {
+html[data-theme-id="office"] body.theme-office .markdown-body table {
     width: 100%;
     margin: 6pt 0;
     border-collapse: collapse;
@@ -291,8 +291,8 @@ body .markdown-body table {
     text-indent: 0;
 }
 
-body .markdown-body th,
-body .markdown-body td {
+html[data-theme-id="office"] body.theme-office .markdown-body th,
+html[data-theme-id="office"] body.theme-office .markdown-body td {
     border: 1px solid var(--color-table-border);
     padding: 4pt 6pt;
     vertical-align: top;
@@ -300,21 +300,21 @@ body .markdown-body td {
     text-indent: 0;
 }
 
-body .markdown-body th {
+html[data-theme-id="office"] body.theme-office .markdown-body th {
     background: var(--color-table-stripe);
     font-weight: 700;
 }
 
-body .markdown-body tr:nth-child(even) {
+html[data-theme-id="office"] body.theme-office .markdown-body tr:nth-child(even) {
     background: transparent;
 }
 
-body .markdown-body thead th:first-child,
-body .markdown-body thead th:last-child {
+html[data-theme-id="office"] body.theme-office .markdown-body thead th:first-child,
+html[data-theme-id="office"] body.theme-office .markdown-body thead th:last-child {
     border-radius: 0;
 }
 
-body .markdown-body blockquote {
+html[data-theme-id="office"] body.theme-office .markdown-body blockquote {
     margin: 6pt 0;
     padding: 4pt 8pt;
     border-left: 3px solid var(--color-blockquote-border);
@@ -326,49 +326,49 @@ body .markdown-body blockquote {
     text-indent: 0;
 }
 
-body .markdown-body blockquote p {
+html[data-theme-id="office"] body.theme-office .markdown-body blockquote p {
     text-indent: 0;
 }
 
-body .markdown-body hr {
+html[data-theme-id="office"] body.theme-office .markdown-body hr {
     border: none;
     border-top: 1px solid var(--office-hr-border);
     margin: 6pt 0;
 }
 
-body .markdown-body hr + h1,
-body .markdown-body hr + h2,
-body .markdown-body hr + h3,
-body .markdown-body hr + h4,
-body .markdown-body hr + h5,
-body .markdown-body hr + h6 {
+html[data-theme-id="office"] body.theme-office .markdown-body hr + h1,
+html[data-theme-id="office"] body.theme-office .markdown-body hr + h2,
+html[data-theme-id="office"] body.theme-office .markdown-body hr + h3,
+html[data-theme-id="office"] body.theme-office .markdown-body hr + h4,
+html[data-theme-id="office"] body.theme-office .markdown-body hr + h5,
+html[data-theme-id="office"] body.theme-office .markdown-body hr + h6 {
     margin-top: 6pt;
 }
 
-body .toc-sidebar {
+html[data-theme-id="office"] body.theme-office .toc-sidebar {
     background: var(--color-sidebar-bg);
 }
 
-body .toc-header {
+html[data-theme-id="office"] body.theme-office .toc-header {
     background: var(--color-toolbar-bg);
 }
 
-body .toc-row.active {
+html[data-theme-id="office"] body.theme-office .toc-row.active {
     background: var(--color-toc-active-bg);
     border-left-color: var(--office-accent);
 }
 
-body .toc-row:hover {
+html[data-theme-id="office"] body.theme-office .toc-row:hover {
     background: var(--color-toc-hover-bg);
 }
 
-body .back-to-top-btn {
+html[data-theme-id="office"] body.theme-office .back-to-top-btn {
     font-family: "Times New Roman", "Songti SC", "Source Han Sans SC", monospace;
 }
 
 @media print {
-    :root,
-    [data-theme="dark"] {
+    html[data-theme-id="office"],
+    html[data-theme-id="office"][data-theme="dark"] {
         --office-page-bg: #ffffff !important;
         --office-app-bg: #ffffff !important;
         --office-border: transparent !important;
@@ -386,12 +386,12 @@ body .back-to-top-btn {
         --office-hr-border: #bfbfbf !important;
     }
 
-    body .content-area {
+    html[data-theme-id="office"] body.theme-office .content-area {
         background: var(--office-app-bg) !important;
         padding: 0 !important;
     }
 
-    body .markdown-body {
+    html[data-theme-id="office"] body.theme-office .markdown-body {
         max-width: none !important;
         min-height: 0 !important;
         padding: 0 !important;
@@ -403,12 +403,12 @@ body .back-to-top-btn {
         line-height: 22pt;
     }
 
-    body .markdown-body h1,
-    body .markdown-body h2,
-    body .markdown-body h3,
-    body .markdown-body h4,
-    body .markdown-body h5,
-    body .markdown-body h6 {
+    html[data-theme-id="office"] body.theme-office .markdown-body h1,
+    html[data-theme-id="office"] body.theme-office .markdown-body h2,
+    html[data-theme-id="office"] body.theme-office .markdown-body h3,
+    html[data-theme-id="office"] body.theme-office .markdown-body h4,
+    html[data-theme-id="office"] body.theme-office .markdown-body h5,
+    html[data-theme-id="office"] body.theme-office .markdown-body h6 {
         color: var(--color-heading) !important;
         break-after: avoid-page;
         page-break-after: avoid;
@@ -416,22 +416,22 @@ body .back-to-top-btn {
         page-break-inside: avoid;
     }
 
-    body .markdown-body table,
-    body .markdown-body pre,
-    body .code-block-wrapper,
-    body .markdown-body blockquote,
-    body .markdown-body img,
-    body .markdown-body p:has(img),
-    body .markdown-body .katex-display,
-    body .markdown-body .math-block,
-    body .markdown-body .math-display,
-    body .markdown-body .texmath {
+    html[data-theme-id="office"] body.theme-office .markdown-body table,
+    html[data-theme-id="office"] body.theme-office .markdown-body pre,
+    html[data-theme-id="office"] body.theme-office .code-block-wrapper,
+    html[data-theme-id="office"] body.theme-office .markdown-body blockquote,
+    html[data-theme-id="office"] body.theme-office .markdown-body img,
+    html[data-theme-id="office"] body.theme-office .markdown-body p:has(img),
+    html[data-theme-id="office"] body.theme-office .markdown-body .katex-display,
+    html[data-theme-id="office"] body.theme-office .markdown-body .math-block,
+    html[data-theme-id="office"] body.theme-office .markdown-body .math-display,
+    html[data-theme-id="office"] body.theme-office .markdown-body .texmath {
         break-inside: avoid-page;
         page-break-inside: avoid;
     }
 
-    body .markdown-body pre,
-    body .code-block-wrapper pre {
+    html[data-theme-id="office"] body.theme-office .markdown-body pre,
+    html[data-theme-id="office"] body.theme-office .code-block-wrapper pre {
         background: var(--color-code-bg) !important;
         color: var(--color-text) !important;
         border-color: var(--office-code-block-border) !important;

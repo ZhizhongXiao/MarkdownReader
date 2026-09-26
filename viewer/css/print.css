@@ -5,7 +5,7 @@
     .viewer-container{display:block!important;height:auto!important}
     .content-area{overflow:visible!important;padding:0!important;height:auto!important}
     .markdown-body{max-width:100%!important}
-    [data-theme="dark"]{--color-bg:#ffffff!important;--color-text:#000!important;--color-heading:#000!important;--color-code-bg:#f4f4f4!important}
+    html[data-theme-id][data-theme="dark"]{--color-bg:#ffffff!important;--color-text:#000!important;--color-heading:#000!important;--color-code-bg:#f4f4f4!important}
     body{color:#000!important;background:#fff!important}
     /* The canvas colour comes from html, not from body: without this the area
        below the last line prints in the theme background (the pale blue a

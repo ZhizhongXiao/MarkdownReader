@@ -21,8 +21,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from renderer_adapter import require_node  # noqa: E402
 from standalone_closure import author_refs_from_envelope  # noqa: E402
+from theme_tree import broken_theme_tree  # noqa: E402
 
-from core import converter, renderer_v2  # noqa: E402
+from core import converter, renderer_v2, viewer_assets  # noqa: E402
 from core.html_assembly import assemble_document  # noqa: E402
 from core.renderer_node import render_markdown_node  # noqa: E402
 from tools.standalone_closure import scan  # noqa: E402
@@ -302,3 +303,24 @@ def test_the_runtime_converter_does_not_reference_the_closure_checker():
 
     assert "standalone_closure" not in source
     assert "tools." not in source
+
+
+def test_a_missing_required_builtin_theme_fails_the_conversion(tmp_path, monkeypatch):
+    """builtin 主题是随包必需资产：缺一套时转换必须失败，且不留下半成品 HTML。
+
+    6B 及以前主题样式只降级，产物会静默少一套主题变量；6C 起这一层不再有降级出口。
+    装配层的同一契约由 `tests/test_theme_bundle_contract.py` 锁住，这里锁转换边界：
+    生产 v2 路径返回 None（因此不写文件），v1 回退路径上抛 —— 两条路径都不产出成品。
+    """
+    monkeypatch.setattr(
+        viewer_assets, "_THEMES_ROOT", str(broken_theme_tree(tmp_path / "tree"))
+    )
+
+    result = convert(tmp_path, "# 标题\n\n正文。\n")
+
+    assert result["saved"] is None
+    assert result["html"] is None, "不得写出缺主题变量的成品"
+
+    with pytest.raises(ValueError):
+        convert(tmp_path, "# 标题\n\n正文。\n", name="v1.md", version="v1")
+    assert not (tmp_path / "v1.html").exists(), "v1 也不得留下半成品"

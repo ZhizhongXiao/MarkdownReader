@@ -13,8 +13,6 @@ import ast
 import sys
 from pathlib import Path
 
-import pytest
-
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -26,11 +24,6 @@ from core.html_assembly import assemble_document  # noqa: E402
 # name are the same lowercase id under `themes/builtin/`.
 SELECTABLE = ["modern", "office", "vscode"]
 BASE = "base"
-THEME_MARKERS = {
-    "modern": "--modern-guide-border",
-    "office": "--office-page-bg",
-    "vscode": "--vscode-preview-font",
-}
 OLD_ASSET_PATHS = (
     "templates/viewer.js",
     "templates/print.css",
@@ -101,27 +94,11 @@ def test_the_old_asset_paths_are_gone():
     assert (ROOT / "templates" / "index" / "index.js").is_file(), "索引页保持在原处"
 
 
-@pytest.mark.parametrize("theme", SELECTABLE)
-def test_a_current_document_injects_the_selected_theme_exactly_once(theme):
-    """今天每份文档只内嵌所选主题，各通道恰好一次（6C 才内嵌全部 builtin）。"""
-    assembled = assemble_document(envelope(), title="标题", template_name=theme)
-    labels = [entry["label"] for entry in assembled["injections"]]
-
-    assert labels.count("viewer-css") == 1
-    assert labels.count("theme") == 1
-    assert labels.count("print") == 1
-    assert labels.count("viewer-js") == 1
-    assert f'<body class="theme-{theme}">' in assembled["html"]
-
-
-def test_an_unselected_theme_does_not_reach_the_document():
-    """选 office 时不得混入别的主题：证明内嵌的确实只有一套样式链。"""
-    html = assemble_document(envelope(), title="标题", template_name="office")["html"]
-
-    assert THEME_MARKERS["office"] in viewer_assets.theme_css_chain("office")
-    assert THEME_MARKERS["office"] in html
-    for other in ("modern", "vscode"):
-        assert THEME_MARKERS[other] not in html, other
+# The theme payload contracts live in `tests/test_theme_bundle_contract.py` now.
+# Before Phase 6C this module asserted "exactly one theme is injected"; 6C replaces
+# that target with "every builtin theme is injected exactly once, and the document's
+# own default is active in the markup", which is a deliberate transition and not a
+# retired assertion.
 
 
 def test_the_delivered_document_uses_classic_scripts_only():

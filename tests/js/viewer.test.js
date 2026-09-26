@@ -24,6 +24,38 @@ import {
   DOC_STATE_PREFIX,
 } from "./harness.mjs";
 
+// ── Theme layer (Phase 6C) ───────────────────────────────────────────────────
+// The reader carries every builtin theme and switches at runtime. These
+// contracts are the executable form of the contract in docs/VIEWER_CONTRACT.md:
+// the theme is a second, independent axis next to light/dark, and switching one
+// never touches the other or rebuilds the document.
+const THEME_ID_ATTR = "data-theme-id";
+const THEME_STORAGE = "markdownreader-theme-id";
+const BUILTIN_THEMES = ["modern", "office", "vscode"];
+
+function themeMenu(session, themeId) {
+  const option = session.doc.querySelector('#theme-menu [data-theme-id="' + themeId + '"]');
+  assert.ok(option, "the theme menu must offer " + themeId);
+  return option;
+}
+
+function isMenuOpen(session) {
+  const menu = session.doc.getElementById("theme-menu");
+  assert.ok(menu, "the page must carry a #theme-menu element");
+  return !menu.hasAttribute("hidden");
+}
+
+function activeThemeId(session) {
+  return session.doc.documentElement.getAttribute(THEME_ID_ATTR);
+}
+
+function switchTheme(session, themeId) {
+  session.clickToolbar("btn-theme");
+  assert.ok(isMenuOpen(session), "clicking the theme button must open the menu");
+  session.click(themeMenu(session, themeId));
+  assert.ok(!isMenuOpen(session), "picking a theme must close the menu");
+}
+
 // Reporting contract: one synchronous line per contract, emitted while that
 // test is still running.
 //
@@ -621,6 +653,155 @@ contract("L1 lightbox: the wheel zooms the opened image and the overlay still cl
     overlay.dispatchEvent(new session.window.MouseEvent("click", { bubbles: true }));
     assert.equal(session.doc.querySelector(".lightbox-overlay"), null,
       "the overlay must still close while zoomed");
+  } finally {
+    session.close();
+  }
+});
+
+// ── THEME1: the initial theme is the document's own default. ────────────────
+// The office fixture (variant C) is used on purpose: "falls back to the document
+// default" is only distinguishable from "hardcodes modern" on a document that is
+// not modern.
+contract("THEME1 the initial theme is the document default", "pass", async () => {
+  for (const [variant, themeId] of [["A", "modern"], ["C", "office"]]) {
+    const session = await boot({ variant });
+    try {
+      assert.equal(session.doc.documentElement.getAttribute(THEME_ID_ATTR), themeId,
+        "document " + variant + " must start on " + themeId);
+      assert.ok(session.doc.body.classList.contains("theme-" + themeId),
+        "the body class must agree with data-theme-id");
+    } finally {
+      session.close();
+    }
+  }
+});
+
+// ── THEME2: switching moves both markers together. ──────────────────────────
+contract("THEME2 switching updates data-theme-id and the body class together", "pass", async () => {
+  const session = await boot();
+  try {
+    switchTheme(session, "office");
+    assert.equal(activeThemeId(session), "office");
+    assert.ok(session.doc.body.classList.contains("theme-office"));
+    assert.ok(!session.doc.body.classList.contains("theme-modern"),
+      "the previous theme class must be removed, not kept alongside");
+
+    switchTheme(session, "vscode");
+    assert.equal(activeThemeId(session), "vscode");
+    assert.ok(session.doc.body.classList.contains("theme-vscode"));
+    assert.ok(!session.doc.body.classList.contains("theme-office"));
+  } finally {
+    session.close();
+  }
+});
+
+// ── THEME3: the choice survives a reload. ───────────────────────────────────
+contract("THEME3 the selected theme persists across a reload", "pass", async () => {
+  const first = await boot();
+  let storage;
+  try {
+    switchTheme(first, "vscode");
+    storage = first.storage();
+    assert.equal(storage[THEME_STORAGE], "vscode",
+      "the choice must be persisted under " + THEME_STORAGE);
+  } finally {
+    first.close();
+  }
+
+  const reloaded = await boot({ seed: storage });
+  try {
+    assert.equal(activeThemeId(reloaded), "vscode", "a reload must keep the choice");
+    assert.ok(reloaded.doc.body.classList.contains("theme-vscode"));
+  } finally {
+    reloaded.close();
+  }
+});
+
+// ── THEME4: a stale choice falls back to the document default. ──────────────
+contract("THEME4 a stale stored theme falls back to the document default", "pass", async () => {
+  const session = await boot({ variant: "C", seed: { [THEME_STORAGE]: "paper-from-2019" } });
+  try {
+    assert.equal(activeThemeId(session), "office",
+      "an unknown id must fall back to the document's own default, not to modern");
+    assert.ok(session.doc.body.classList.contains("theme-office"));
+  } finally {
+    session.close();
+  }
+});
+
+// ── THEME5: switching is a CSS state change, not a re-render. ───────────────
+contract("THEME5 switching a theme keeps the markdown DOM identity", "pass", async () => {
+  const session = await boot();
+  try {
+    const body = session.body;
+    const child = body.firstElementChild;
+    assert.ok(child, "precondition: the fixture has content");
+
+    switchTheme(session, "office");
+
+    assert.strictEqual(session.doc.getElementById("markdown-body"), body,
+      "the content container must be the same node");
+    assert.strictEqual(body.firstElementChild, child,
+      "the content nodes must be the same objects, not an equal copy");
+    assert.equal(session.doc.querySelectorAll("#markdown-body").length, 1,
+      "there must still be exactly one content container");
+  } finally {
+    session.close();
+  }
+});
+
+// ── THEME6: switching a theme leaves light/dark alone. ──────────────────────
+contract("THEME6 switching a theme does not change light/dark", "pass", async () => {
+  const session = await boot();
+  try {
+    session.clickToolbar("btn-dark-mode");
+    assert.equal(session.doc.documentElement.getAttribute("data-theme"), "dark",
+      "precondition: dark mode is on");
+
+    switchTheme(session, "office");
+
+    assert.equal(session.doc.documentElement.getAttribute("data-theme"), "dark",
+      "the colour scheme must be untouched by a theme switch");
+    assert.equal(session.storage()["markdownreader-theme"], "dark",
+      "and its stored value must be untouched too");
+  } finally {
+    session.close();
+  }
+});
+
+// ── THEME7: light/dark leaves the theme alone. ──────────────────────────────
+contract("THEME7 switching light/dark does not change the theme", "pass", async () => {
+  const session = await boot();
+  try {
+    switchTheme(session, "vscode");
+    session.clickToolbar("btn-dark-mode");
+    session.clickToolbar("btn-dark-mode");
+
+    assert.equal(activeThemeId(session), "vscode", "the theme must survive dark/light toggles");
+    assert.ok(session.doc.body.classList.contains("theme-vscode"));
+    assert.equal(session.doc.documentElement.getAttribute("data-theme"), null,
+      "back to light means the attribute is absent, and that is not a theme");
+  } finally {
+    session.close();
+  }
+});
+
+// ── THEME8: every builtin theme is offered, with a readable name. ───────────
+contract("THEME8 all three builtin themes are selectable", "pass", async () => {
+  const session = await boot();
+  try {
+    session.clickToolbar("btn-theme");
+    const offered = Array.from(
+      session.doc.querySelectorAll("#theme-menu [data-theme-id]"),
+    ).map((option) => option.getAttribute("data-theme-id")).sort();
+
+    assert.deepEqual(offered, BUILTIN_THEMES.slice().sort(),
+      "the menu must offer exactly the selectable builtin themes");
+    for (const themeId of BUILTIN_THEMES) {
+      const label = themeMenu(session, themeId).textContent.trim();
+      assert.ok(label.length > 0, "option " + themeId + " needs a readable label");
+      assert.notEqual(label, themeId, "the label must be a human name, not the id");
+    }
   } finally {
     session.close();
   }

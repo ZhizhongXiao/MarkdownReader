@@ -1,6 +1,6 @@
 /* MarkdownReader VS Code Template */
 
-:root {
+html[data-theme-id="vscode"] {
     --toolbar-height: 40px;
     --sidebar-width: 280px;
     --content-max-width: 980px;
@@ -43,7 +43,7 @@
     --toggle-size: 16px;
 }
 
-[data-theme="dark"] {
+html[data-theme-id="vscode"][data-theme="dark"] {
     --color-bg: #1e1e1e;
     --color-sidebar-bg: #252526;
     --color-sidebar-border: #3c3c3c;
@@ -74,23 +74,23 @@
     --color-shadow: rgba(0, 0, 0, 0.3);
 }
 
-body.theme-vscode,
-body.theme-vscode .viewer-container {
+html[data-theme-id="vscode"] body.theme-vscode,
+html[data-theme-id="vscode"] body.theme-vscode .viewer-container {
     background: var(--color-bg);
 }
 
-body.theme-vscode .toolbar {
+html[data-theme-id="vscode"] body.theme-vscode .toolbar {
     background: var(--color-toolbar-bg);
     border-bottom-color: var(--color-toolbar-border);
     box-shadow: none;
 }
 
-body.theme-vscode .content-area {
+html[data-theme-id="vscode"] body.theme-vscode .content-area {
     padding: 28px 10% 64px;
     background: var(--color-bg);
 }
 
-body.theme-vscode .markdown-body {
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body {
     width: 100%;
     max-width: none;
     background: transparent;
@@ -100,34 +100,34 @@ body.theme-vscode .markdown-body {
     text-align: left;
 }
 
-body.theme-vscode .markdown-body p {
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body p {
     margin-bottom: 1em;
     letter-spacing: 0;
 }
 
-body.theme-vscode .markdown-body h1,
-body.theme-vscode .markdown-body h2,
-body.theme-vscode .markdown-body h3,
-body.theme-vscode .markdown-body h4,
-body.theme-vscode .markdown-body h5,
-body.theme-vscode .markdown-body h6 {
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body h1,
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body h2,
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body h3,
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body h4,
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body h5,
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body h6 {
     margin-top: 1.55em;
     margin-bottom: 0.65em;
     line-height: 1.4;
 }
 
-body.theme-vscode .markdown-body h1,
-body.theme-vscode .markdown-body h2 {
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body h1,
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body h2 {
     border-bottom: 1px solid var(--color-table-border);
     padding-bottom: 0.3em;
 }
 
-body.theme-vscode .markdown-body code {
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body code {
     font-family: var(--font-mono);
     border: 1px solid var(--color-table-border);
 }
 
-body.theme-vscode .markdown-body pre {
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body pre {
     padding: 14px 16px;
     border: 1px solid var(--color-table-border);
     border-radius: 4px;
@@ -136,17 +136,17 @@ body.theme-vscode .markdown-body pre {
     overflow-x: auto;
 }
 
-body.theme-vscode .markdown-body pre code {
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body pre code {
     border: none;
     background: transparent;
     line-height: inherit;
 }
 
-body.theme-vscode .code-block-wrapper {
+html[data-theme-id="vscode"] body.theme-vscode .code-block-wrapper {
     margin-bottom: 1.15em;
 }
 
-body.theme-vscode .copy-btn {
+html[data-theme-id="vscode"] body.theme-vscode .copy-btn {
     top: 6px;
     right: 6px;
     padding: 3px 8px;
@@ -154,66 +154,66 @@ body.theme-vscode .copy-btn {
     opacity: 0.75;
 }
 
-body.theme-vscode .copy-btn:hover {
+html[data-theme-id="vscode"] body.theme-vscode .copy-btn:hover {
     opacity: 1;
 }
 
-body.theme-vscode .toc-sidebar {
+html[data-theme-id="vscode"] body.theme-vscode .toc-sidebar {
     background: var(--color-sidebar-bg);
     border-right-color: var(--color-sidebar-border);
 }
 
-body.theme-vscode .toc-header {
+html[data-theme-id="vscode"] body.theme-vscode .toc-header {
     background: var(--color-toolbar-bg);
     border-bottom-color: var(--color-sidebar-border);
 }
 
-body.theme-vscode .toc-row.active {
+html[data-theme-id="vscode"] body.theme-vscode .toc-row.active {
     background: var(--color-toc-active-bg);
     border-left-color: var(--color-resizer-active);
 }
 
-body.theme-vscode .toc-row:hover {
+html[data-theme-id="vscode"] body.theme-vscode .toc-row:hover {
     background: var(--color-toc-hover-bg);
 }
 
-body.theme-vscode .markdown-body table {
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body table {
     font-size: 0.95em;
 }
 
-body.theme-vscode .markdown-body th,
-body.theme-vscode .markdown-body td {
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body th,
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body td {
     padding: 7px 10px;
 }
 
-body.theme-vscode .markdown-body blockquote {
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body blockquote {
     background: var(--color-blockquote-bg);
     color: var(--color-text-light);
     border-left-width: 4px;
 }
 
-body.theme-vscode .markdown-body img {
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body img {
     border-radius: 3px;
 }
 
-body.theme-vscode .markdown-body .katex-display,
-body.theme-vscode .markdown-body .math-block,
-body.theme-vscode .markdown-body .math-display,
-body.theme-vscode .markdown-body .texmath {
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body .katex-display,
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body .math-block,
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body .math-display,
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body .texmath {
     overflow-x: auto;
     overflow-y: hidden;
     text-align: center;
 }
 
 @media print {
-    body.theme-vscode .markdown-body,
-    body.theme-vscode .content-area {
+    html[data-theme-id="vscode"] body.theme-vscode .markdown-body,
+    html[data-theme-id="vscode"] body.theme-vscode .content-area {
         background: #ffffff !important;
     }
 
-    body.theme-vscode .markdown-body pre,
-    body.theme-vscode .code-block-wrapper pre,
-    body.theme-vscode .markdown-body code {
+    html[data-theme-id="vscode"] body.theme-vscode .markdown-body pre,
+    html[data-theme-id="vscode"] body.theme-vscode .code-block-wrapper pre,
+    html[data-theme-id="vscode"] body.theme-vscode .markdown-body code {
         background: #f6f8fa !important;
         color: #000000 !important;
         border-color: #d0d7de !important;

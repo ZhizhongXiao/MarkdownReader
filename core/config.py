@@ -49,6 +49,10 @@ PRODUCTION_RENDERER_VERSION = "v2"
 PLACEHOLDER_TITLE = "{{TITLE}}"
 PLACEHOLDER_TOC = "{{TOC}}"
 PLACEHOLDER_CONTENT = "{{CONTENT}}"
+# Phase 6C: the document's own default theme is part of the markup, and the theme
+# menu ships with the page so it needs no script to be correct.
+PLACEHOLDER_THEME_ID = "{{THEME_ID}}"
+PLACEHOLDER_THEME_MENU = "{{THEME_MENU}}"
 
 # Default output extension
 DEFAULT_OUTPUT_EXTENSION = ".html"

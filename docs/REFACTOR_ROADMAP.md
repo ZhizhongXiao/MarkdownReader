@@ -457,7 +457,12 @@ VS Code
              core/viewer_assets.py 仍是唯一来源（两个根 + manifest 拼接 + BOM 归位）；config.py 的 TEMPLATES_DIR 删除
              viewer 载荷与拆分前逐字节相同（迁移脚本断言 + 回读校验）；samples/demo.html SHA-256 不变
              旧路径不再被 runtime / tests / packaging 引用；templates/index/ 原位
-6C          三套 builtin 主题内嵌进同一 HTML + 主题切换器（含 print 特异性修复，未开始）
+6C  PASS    每份 HTML 携带 base + modern + office + vscode；阅读器内即时切换
+             CSS 定域：token + 组件规则 + print 规则（Office 85 处裸 body 收紧）
+             html[data-theme-id] + body.theme-* 双条件；markdownreader-theme-id（全局，回落文档默认）
+             初始状态与菜单进 shell（无 unthemed 首屏；已保存偏好 boot 后恢复）
+             viewer/js/theme-switcher.js；contracts 22 → 30（THEME1–8）；浏览器 6 组合矩阵
+             demo 1,547,612 → 1,574,151 B（+25.9 KiB）；真实打包 + validate_release PASS
 6D          清理旧目录与文档收口（未开始）
 ```
 

@@ -1,5 +1,5 @@
 ﻿<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme-id="modern">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>MarkdownReader 阅读示例</title><style>
 ﻿/* MarkdownReader — Default Viewer Layout */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -125,6 +125,14 @@ body.resizing .toc-sidebar,body.resizing .content-area{pointer-events:none}
 .toc-body::-webkit-scrollbar-track,.content-area::-webkit-scrollbar-track{background-color:transparent}
 [data-theme="dark"] .toc-body::-webkit-scrollbar-thumb,[data-theme="dark"] .content-area::-webkit-scrollbar-thumb{background-color:#555555}
 
+/* ── Theme menu (Phase 6C) ──────────────────────────────────────── */
+.theme-picker{position:relative;display:inline-flex;align-items:center}
+.theme-menu{position:absolute;top:calc(100% + 6px);right:0;z-index:400;display:flex;flex-direction:column;gap:2px;min-width:136px;padding:4px;border:1px solid var(--color-toolbar-border);border-radius:6px;background-color:var(--color-toolbar-bg);box-shadow:0 6px 18px var(--color-shadow)}
+.theme-menu[hidden]{display:none}
+.theme-menu .theme-option{display:block;width:100%;height:28px;padding:0 10px;border:none;border-radius:4px;background:transparent;color:var(--color-text-light);font-family:inherit;font-size:14px;line-height:28px;text-align:left;cursor:pointer;transition:background-color .15s ease,color .15s ease}
+.theme-menu .theme-option:hover{background-color:var(--color-toolbar-btn-hover);color:var(--color-text)}
+.theme-menu .theme-option.active{background-color:var(--color-toolbar-btn-active);color:var(--color-link)}
+
 
 
 
@@ -212,9 +220,11 @@ body.resizing .toc-sidebar,body.resizing .content-area{pointer-events:none}
     --color-shadow: rgba(0,0,0,0.3);
 }
 
+</style>
+<style>
 /* MarkdownReader Modern Theme */
 
-:root {
+html[data-theme-id="modern"] {
     --toolbar-height: 40px;
     --sidebar-width: 280px;
     --content-max-width: 860px;
@@ -261,7 +271,7 @@ body.resizing .toc-sidebar,body.resizing .content-area{pointer-events:none}
     --reader-ui-line-height: 1.8;
 }
 
-[data-theme="dark"] {
+html[data-theme-id="modern"][data-theme="dark"] {
     --color-bg: #020617;
     --color-sidebar-bg: #0f172a;
     --color-sidebar-border: #334155;
@@ -293,16 +303,16 @@ body.resizing .toc-sidebar,body.resizing .content-area{pointer-events:none}
     --modern-guide-border: rgba(96, 165, 250, 0.42);
 }
 
-:root {
+html[data-theme-id="modern"] {
     --font-sans: "Source Han Sans SC";
     --font-mono: "Source Han Sans SC";
 }
 
-body.theme-modern .content-area {
+html[data-theme-id="modern"] body.theme-modern .content-area {
     padding: 34px clamp(34px, 7vw, 80px) 72px;
 }
 
-body.theme-modern .markdown-body {
+html[data-theme-id="modern"] body.theme-modern .markdown-body {
     max-width: 900px;
     padding: 18px 0 18px 28px;
     background: transparent;
@@ -311,11 +321,11 @@ body.theme-modern .markdown-body {
 }
 
 @media (max-width: 720px) {
-    body.theme-modern .content-area {
+    html[data-theme-id="modern"] body.theme-modern .content-area {
         padding: 24px 18px 56px;
     }
 
-    body.theme-modern .markdown-body {
+    html[data-theme-id="modern"] body.theme-modern .markdown-body {
         padding: 14px 0 14px 18px;
     }
 }
@@ -327,11 +337,677 @@ body.theme-modern .markdown-body {
        margins it had while the canvas still carried the colour. The frame is drawn
        with borders on purpose - a border prints even when background graphics are
        switched off, so only the tint depends on that switch. */
-    body.theme-modern .markdown-body {
+    html[data-theme-id="modern"] body.theme-modern .markdown-body {
         padding: 0 !important;
         background: var(--color-bg) !important;
         border-left: 2px solid var(--modern-guide-border) !important;
         border-right: 2px solid var(--modern-guide-border) !important;
+    }
+}
+
+</style>
+<style>
+/* MarkdownReader Office Template */
+
+html[data-theme-id="office"] {
+    --office-page-bg: #ffffff;
+    --office-app-bg: #f3f3f3;
+    --office-border: #d9d9d9;
+    --office-shadow: 0 1px 6px rgba(0, 0, 0, 0.12);
+    --office-accent: #2b579a;
+    --office-accent-soft: #eaf2fb;
+    --office-hover: #f2f7fd;
+    --office-inline-code-border: #e0e0e0;
+    --office-code-block-border: #bfbfbf;
+    --office-hr-border: #bfbfbf;
+
+    --toolbar-height: 40px;
+    --sidebar-width: 280px;
+    --content-max-width: 794px;
+    --font-size-base: 10.5pt;
+    --font-size-code: 9.5pt;
+    --line-height-base: 22pt;
+
+    --font-sans: "Times New Roman", "Songti SC", "Source Han Sans SC", monospace;
+    --font-mono: monospace;
+
+    --color-bg: var(--office-app-bg);
+    --color-sidebar-bg: #f8f8f8;
+    --color-sidebar-border: var(--office-border);
+    --color-toolbar-bg: #ffffff;
+    --color-toolbar-border: #d0d0d0;
+    --color-toolbar-btn-hover: var(--office-accent-soft);
+    --color-toolbar-btn-active: #d9eaf7;
+    --color-text: #000000;
+    --color-text-light: #333333;
+    --color-heading: #000000;
+    --color-link: #0563c1;
+    --color-link-hover: #004578;
+    --color-code-bg: #f5f5f5;
+    --color-blockquote-border: #a6a6a6;
+    --color-blockquote-bg: #f7f7f7;
+    --color-table-border: #000000;
+    --color-table-stripe: #f2f2f2;
+    --color-toc-active-bg: #dbeafe;
+    --color-toc-active-text: var(--office-accent);
+    --color-toc-hover-bg: var(--office-hover);
+    --color-copy-btn-bg: #ffffff;
+    --color-copy-btn-hover: #f0f6ff;
+    --color-resizer-active: var(--office-accent);
+    --color-shadow: rgba(0, 0, 0, 0.12);
+
+    --toc-indent: 1em;
+    --toc-toggle-width: 20px;
+    --toggle-size: 16px;
+}
+
+html[data-theme-id="office"][data-theme="dark"] {
+    --office-page-bg: #1f1f1f;
+    --office-app-bg: #121212;
+    --office-border: #3a3a3a;
+    --office-shadow: 0 1px 8px rgba(0, 0, 0, 0.45);
+    --office-accent: #7eb7f0;
+    --office-accent-soft: #26384f;
+    --office-hover: #242f3f;
+    --office-inline-code-border: #555555;
+    --office-code-block-border: #555555;
+    --office-hr-border: #555555;
+
+    --color-bg: var(--office-app-bg);
+    --color-sidebar-bg: #1b1b1b;
+    --color-sidebar-border: var(--office-border);
+    --color-toolbar-bg: #1f1f1f;
+    --color-toolbar-border: #3a3a3a;
+    --color-toolbar-btn-hover: #26384f;
+    --color-toolbar-btn-active: #2d4b70;
+    --color-text: #f2f2f2;
+    --color-text-light: #d6d6d6;
+    --color-heading: #ffffff;
+    --color-link: #8cc8ff;
+    --color-link-hover: #b7dcff;
+    --color-code-bg: #262626;
+    --color-blockquote-border: #777777;
+    --color-blockquote-bg: #242424;
+    --color-table-border: #9a9a9a;
+    --color-table-stripe: #2a2a2a;
+    --color-toc-active-bg: #26384f;
+    --color-toc-active-text: #9cc9f5;
+    --color-toc-hover-bg: #242f3f;
+    --color-copy-btn-bg: #2a2a2a;
+    --color-copy-btn-hover: #343f4f;
+}
+
+html[data-theme-id="office"] body.theme-office .content-area {
+    background: var(--office-app-bg);
+    padding: 32px 40px 64px;
+}
+
+html[data-theme-id="office"] body.theme-office .markdown-body {
+    width: 100%;
+    max-width: var(--content-max-width);
+    min-height: calc(100vh - var(--toolbar-height) - 96px);
+    padding: 48px 64px;
+    background: var(--office-page-bg);
+    border: 1px solid var(--office-border);
+    box-shadow: var(--office-shadow);
+    color: var(--color-text);
+    font-family: "Times New Roman", "Songti SC", "Source Han Sans SC", monospace;
+    font-size: 10.5pt;
+    line-height: 22pt;
+    text-align: left;
+}
+
+html[data-theme-id="office"] body.theme-office .markdown-body p {
+    margin-top: 0;
+    margin-bottom: 0;
+    text-indent: 2em;
+    letter-spacing: 0;
+}
+
+html[data-theme-id="office"] body.theme-office .markdown-body h1,
+html[data-theme-id="office"] body.theme-office .markdown-body h2,
+html[data-theme-id="office"] body.theme-office .markdown-body h3,
+html[data-theme-id="office"] body.theme-office .markdown-body h4,
+html[data-theme-id="office"] body.theme-office .markdown-body h5,
+html[data-theme-id="office"] body.theme-office .markdown-body h6 {
+    text-indent: 0;
+    font-family: "Times New Roman", "Songti SC", "Source Han Sans SC", monospace;
+    font-weight: 700;
+    line-height: 1.4;
+    color: var(--color-heading);
+    break-after: avoid;
+    page-break-after: avoid;
+    break-inside: avoid;
+    page-break-inside: avoid;
+}
+
+html[data-theme-id="office"] body.theme-office .markdown-body h1 {
+    font-size: 16pt;
+    margin-top: 12pt;
+    margin-bottom: 6pt;
+}
+
+html[data-theme-id="office"] body.theme-office .markdown-body h1:first-child {
+    margin-top: 0;
+}
+
+html[data-theme-id="office"] body.theme-office .markdown-body h2 {
+    font-size: 14pt;
+    margin-top: 9pt;
+    margin-bottom: 4pt;
+}
+
+html[data-theme-id="office"] body.theme-office .markdown-body h3 {
+    font-size: 12pt;
+    margin-top: 6pt;
+    margin-bottom: 3pt;
+}
+
+html[data-theme-id="office"] body.theme-office .markdown-body h4 {
+    font-size: 10.5pt;
+    margin-top: 3pt;
+    margin-bottom: 2pt;
+}
+
+html[data-theme-id="office"] body.theme-office .markdown-body h5 {
+    font-size: 10.5pt;
+    margin-top: 2pt;
+    margin-bottom: 0;
+}
+
+html[data-theme-id="office"] body.theme-office .markdown-body h6 {
+    font-size: 10.5pt;
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+html[data-theme-id="office"] body.theme-office .heading-toggle {
+    text-indent: 0;
+    line-height: 1;
+}
+
+html[data-theme-id="office"] body.theme-office .markdown-body ul,
+html[data-theme-id="office"] body.theme-office .markdown-body ol {
+    margin: 0 0 6pt 0;
+    padding-left: 2em;
+    line-height: 22pt;
+    text-indent: 0;
+}
+
+html[data-theme-id="office"] body.theme-office .markdown-body li,
+html[data-theme-id="office"] body.theme-office .markdown-body li p {
+    margin-top: 0;
+    margin-bottom: 0;
+    text-indent: 0;
+}
+
+html[data-theme-id="office"] body.theme-office .markdown-body table,
+html[data-theme-id="office"] body.theme-office .markdown-body blockquote,
+html[data-theme-id="office"] body.theme-office .markdown-body pre,
+html[data-theme-id="office"] body.theme-office .table-wrapper,
+html[data-theme-id="office"] body.theme-office .code-block-wrapper,
+html[data-theme-id="office"] body.theme-office .markdown-body .katex-display,
+html[data-theme-id="office"] body.theme-office .markdown-body .math-block,
+html[data-theme-id="office"] body.theme-office .markdown-body .math-display,
+html[data-theme-id="office"] body.theme-office .markdown-body .texmath {
+    text-indent: 0;
+}
+
+html[data-theme-id="office"] body.theme-office .markdown-body p:has(img) {
+    margin: 6pt 0;
+    text-align: center;
+    text-indent: 0;
+    line-height: 1.5;
+}
+
+html[data-theme-id="office"] body.theme-office .markdown-body img {
+    max-width: 100%;
+    height: auto;
+    margin: 0 auto;
+    border-radius: 0;
+}
+
+html[data-theme-id="office"] body.theme-office .markdown-body .katex-display,
+html[data-theme-id="office"] body.theme-office .markdown-body .math-block,
+html[data-theme-id="office"] body.theme-office .markdown-body .math-display,
+html[data-theme-id="office"] body.theme-office .markdown-body .texmath {
+    margin: 6pt 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    text-align: center;
+    line-height: 1.5;
+}
+
+html[data-theme-id="office"] body.theme-office .markdown-body :not(pre) > code {
+    font-family: monospace;
+    font-size: 9.5pt;
+    background: var(--color-code-bg);
+    border: 1px solid var(--office-inline-code-border);
+    border-radius: 2px;
+    padding: 0 2pt;
+}
+
+html[data-theme-id="office"] body.theme-office .code-block-wrapper {
+    margin: 6pt 0;
+    text-indent: 0;
+}
+
+html[data-theme-id="office"] body.theme-office .code-block-wrapper pre,
+html[data-theme-id="office"] body.theme-office .markdown-body pre {
+    margin: 0;
+    padding: 8pt 10pt;
+    overflow-x: auto;
+    border: 1px solid var(--office-code-block-border);
+    border-radius: 0;
+    background: var(--color-code-bg);
+    color: var(--color-text);
+    font-family: monospace;
+    font-size: 9.5pt;
+    line-height: 1.5;
+    text-align: left;
+    text-indent: 0;
+}
+
+html[data-theme-id="office"] body.theme-office .markdown-body pre code {
+    font-family: monospace;
+    font-size: inherit;
+    line-height: inherit;
+}
+
+html[data-theme-id="office"] body.theme-office .copy-btn {
+    font-family: "Times New Roman", "Songti SC", "Source Han Sans SC", monospace;
+    font-size: 12px;
+    line-height: 1.2;
+    border-radius: 2px;
+}
+
+html[data-theme-id="office"] body.theme-office .table-wrapper {
+    margin: 6pt 0;
+    text-indent: 0;
+}
+
+html[data-theme-id="office"] body.theme-office .table-wrapper table {
+    margin: 0;
+}
+
+html[data-theme-id="office"] body.theme-office .markdown-body table {
+    width: 100%;
+    margin: 6pt 0;
+    border-collapse: collapse;
+    font-size: 10.5pt;
+    line-height: 1.5;
+    text-align: left;
+    text-indent: 0;
+}
+
+html[data-theme-id="office"] body.theme-office .markdown-body th,
+html[data-theme-id="office"] body.theme-office .markdown-body td {
+    border: 1px solid var(--color-table-border);
+    padding: 4pt 6pt;
+    vertical-align: top;
+    text-align: left;
+    text-indent: 0;
+}
+
+html[data-theme-id="office"] body.theme-office .markdown-body th {
+    background: var(--color-table-stripe);
+    font-weight: 700;
+}
+
+html[data-theme-id="office"] body.theme-office .markdown-body tr:nth-child(even) {
+    background: transparent;
+}
+
+html[data-theme-id="office"] body.theme-office .markdown-body thead th:first-child,
+html[data-theme-id="office"] body.theme-office .markdown-body thead th:last-child {
+    border-radius: 0;
+}
+
+html[data-theme-id="office"] body.theme-office .markdown-body blockquote {
+    margin: 6pt 0;
+    padding: 4pt 8pt;
+    border-left: 3px solid var(--color-blockquote-border);
+    border-radius: 0;
+    background: var(--color-blockquote-bg);
+    color: var(--color-text);
+    font-size: 10.5pt;
+    line-height: 22pt;
+    text-indent: 0;
+}
+
+html[data-theme-id="office"] body.theme-office .markdown-body blockquote p {
+    text-indent: 0;
+}
+
+html[data-theme-id="office"] body.theme-office .markdown-body hr {
+    border: none;
+    border-top: 1px solid var(--office-hr-border);
+    margin: 6pt 0;
+}
+
+html[data-theme-id="office"] body.theme-office .markdown-body hr + h1,
+html[data-theme-id="office"] body.theme-office .markdown-body hr + h2,
+html[data-theme-id="office"] body.theme-office .markdown-body hr + h3,
+html[data-theme-id="office"] body.theme-office .markdown-body hr + h4,
+html[data-theme-id="office"] body.theme-office .markdown-body hr + h5,
+html[data-theme-id="office"] body.theme-office .markdown-body hr + h6 {
+    margin-top: 6pt;
+}
+
+html[data-theme-id="office"] body.theme-office .toc-sidebar {
+    background: var(--color-sidebar-bg);
+}
+
+html[data-theme-id="office"] body.theme-office .toc-header {
+    background: var(--color-toolbar-bg);
+}
+
+html[data-theme-id="office"] body.theme-office .toc-row.active {
+    background: var(--color-toc-active-bg);
+    border-left-color: var(--office-accent);
+}
+
+html[data-theme-id="office"] body.theme-office .toc-row:hover {
+    background: var(--color-toc-hover-bg);
+}
+
+html[data-theme-id="office"] body.theme-office .back-to-top-btn {
+    font-family: "Times New Roman", "Songti SC", "Source Han Sans SC", monospace;
+}
+
+@media print {
+    html[data-theme-id="office"],
+    html[data-theme-id="office"][data-theme="dark"] {
+        --office-page-bg: #ffffff !important;
+        --office-app-bg: #ffffff !important;
+        --office-border: transparent !important;
+        --office-shadow: none !important;
+        --color-bg: #ffffff !important;
+        --color-text: #000000 !important;
+        --color-heading: #000000 !important;
+        --color-code-bg: #f5f5f5 !important;
+        --color-blockquote-border: #a6a6a6 !important;
+        --color-blockquote-bg: #f7f7f7 !important;
+        --color-table-border: #000000 !important;
+        --color-table-stripe: #f2f2f2 !important;
+        --office-inline-code-border: #e0e0e0 !important;
+        --office-code-block-border: #bfbfbf !important;
+        --office-hr-border: #bfbfbf !important;
+    }
+
+    html[data-theme-id="office"] body.theme-office .content-area {
+        background: var(--office-app-bg) !important;
+        padding: 0 !important;
+    }
+
+    html[data-theme-id="office"] body.theme-office .markdown-body {
+        max-width: none !important;
+        min-height: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+        box-shadow: none !important;
+        background: var(--office-page-bg) !important;
+        color: var(--color-text) !important;
+        font-size: 10.5pt;
+        line-height: 22pt;
+    }
+
+    html[data-theme-id="office"] body.theme-office .markdown-body h1,
+    html[data-theme-id="office"] body.theme-office .markdown-body h2,
+    html[data-theme-id="office"] body.theme-office .markdown-body h3,
+    html[data-theme-id="office"] body.theme-office .markdown-body h4,
+    html[data-theme-id="office"] body.theme-office .markdown-body h5,
+    html[data-theme-id="office"] body.theme-office .markdown-body h6 {
+        color: var(--color-heading) !important;
+        break-after: avoid-page;
+        page-break-after: avoid;
+        break-inside: avoid-page;
+        page-break-inside: avoid;
+    }
+
+    html[data-theme-id="office"] body.theme-office .markdown-body table,
+    html[data-theme-id="office"] body.theme-office .markdown-body pre,
+    html[data-theme-id="office"] body.theme-office .code-block-wrapper,
+    html[data-theme-id="office"] body.theme-office .markdown-body blockquote,
+    html[data-theme-id="office"] body.theme-office .markdown-body img,
+    html[data-theme-id="office"] body.theme-office .markdown-body p:has(img),
+    html[data-theme-id="office"] body.theme-office .markdown-body .katex-display,
+    html[data-theme-id="office"] body.theme-office .markdown-body .math-block,
+    html[data-theme-id="office"] body.theme-office .markdown-body .math-display,
+    html[data-theme-id="office"] body.theme-office .markdown-body .texmath {
+        break-inside: avoid-page;
+        page-break-inside: avoid;
+    }
+
+    html[data-theme-id="office"] body.theme-office .markdown-body pre,
+    html[data-theme-id="office"] body.theme-office .code-block-wrapper pre {
+        background: var(--color-code-bg) !important;
+        color: var(--color-text) !important;
+        border-color: var(--office-code-block-border) !important;
+    }
+}
+
+</style>
+<style>
+/* MarkdownReader VS Code Template */
+
+html[data-theme-id="vscode"] {
+    --toolbar-height: 40px;
+    --sidebar-width: 280px;
+    --content-max-width: 980px;
+    --font-size-base: 16px;
+    --font-size-code: 0.92em;
+    --line-height-base: 1.65;
+
+    --font-sans: "Source Han Sans SC";
+    --vscode-preview-font: "Source Han Sans SC";
+    --font-mono: "Source Han Sans SC";
+
+    --color-bg: #f3f3f3;
+    --color-sidebar-bg: #f8f8f8;
+    --color-sidebar-border: #d0d7de;
+    --color-toolbar-bg: #f3f3f3;
+    --color-toolbar-border: #d0d7de;
+    --color-toolbar-btn-hover: #e8e8e8;
+    --color-toolbar-btn-active: #dbeafe;
+    --color-text: #24292f;
+    --color-text-light: #57606a;
+    --color-heading: #24292f;
+    --color-link: #0969da;
+    --color-link-hover: #0550ae;
+    --color-code-bg: #f6f8fa;
+    --color-blockquote-border: #d0d7de;
+    --color-blockquote-bg: transparent;
+    --color-table-border: #d0d7de;
+    --color-table-stripe: #f6f8fa;
+    --color-toc-active-bg: #e7f1ff;
+    --color-toc-active-text: #0969da;
+    --color-toc-hover-bg: #eef4ff;
+    --color-copy-btn-bg: #f6f8fa;
+    --color-copy-btn-hover: #eaeef2;
+    --color-resizer: #d0d7de;
+    --color-resizer-active: #0969da;
+    --color-shadow: rgba(31, 35, 40, 0.08);
+
+    --toc-indent: 1em;
+    --toc-toggle-width: 20px;
+    --toggle-size: 16px;
+}
+
+html[data-theme-id="vscode"][data-theme="dark"] {
+    --color-bg: #1e1e1e;
+    --color-sidebar-bg: #252526;
+    --color-sidebar-border: #3c3c3c;
+    --color-toolbar-bg: #2d2d2d;
+    --color-toolbar-border: #3c3c3c;
+    --color-toolbar-btn-hover: #3a3d41;
+    --color-toolbar-btn-active: #04395e;
+    --color-text: #d4d4d4;
+    --color-text-light: #9da5b4;
+    --color-heading: #e7e7e7;
+    --color-link: #3794ff;
+    --color-link-hover: #75beff;
+    --color-code-bg: #1e1e1e;
+    --color-blockquote-border: #3c3c3c;
+    --color-blockquote-bg: transparent;
+    --color-table-border: #3c3c3c;
+    --color-table-stripe: #252526;
+    --color-toc-active-bg: #04395e;
+    --color-toc-active-text: #ffffff;
+    --color-toc-hover-bg: #2a2d2e;
+    --color-copy-btn-bg: #2d2d2d;
+    --color-copy-btn-hover: #3a3d41;
+    --color-resizer: #3c3c3c;
+    --color-resizer-active: #3794ff;
+    --color-back-to-top-bg: rgba(212, 212, 212, 0.18);
+    --color-back-to-top-hover: rgba(212, 212, 212, 0.28);
+    --color-back-to-top-text: #ffffff;
+    --color-shadow: rgba(0, 0, 0, 0.3);
+}
+
+html[data-theme-id="vscode"] body.theme-vscode,
+html[data-theme-id="vscode"] body.theme-vscode .viewer-container {
+    background: var(--color-bg);
+}
+
+html[data-theme-id="vscode"] body.theme-vscode .toolbar {
+    background: var(--color-toolbar-bg);
+    border-bottom-color: var(--color-toolbar-border);
+    box-shadow: none;
+}
+
+html[data-theme-id="vscode"] body.theme-vscode .content-area {
+    padding: 28px 10% 64px;
+    background: var(--color-bg);
+}
+
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body {
+    width: 100%;
+    max-width: none;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    font-family: var(--vscode-preview-font);
+    text-align: left;
+}
+
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body p {
+    margin-bottom: 1em;
+    letter-spacing: 0;
+}
+
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body h1,
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body h2,
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body h3,
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body h4,
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body h5,
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body h6 {
+    margin-top: 1.55em;
+    margin-bottom: 0.65em;
+    line-height: 1.4;
+}
+
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body h1,
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body h2 {
+    border-bottom: 1px solid var(--color-table-border);
+    padding-bottom: 0.3em;
+}
+
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body code {
+    font-family: var(--font-mono);
+    border: 1px solid var(--color-table-border);
+}
+
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body pre {
+    padding: 14px 16px;
+    border: 1px solid var(--color-table-border);
+    border-radius: 4px;
+    background: var(--color-code-bg);
+    line-height: 1.55;
+    overflow-x: auto;
+}
+
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body pre code {
+    border: none;
+    background: transparent;
+    line-height: inherit;
+}
+
+html[data-theme-id="vscode"] body.theme-vscode .code-block-wrapper {
+    margin-bottom: 1.15em;
+}
+
+html[data-theme-id="vscode"] body.theme-vscode .copy-btn {
+    top: 6px;
+    right: 6px;
+    padding: 3px 8px;
+    border-radius: 3px;
+    opacity: 0.75;
+}
+
+html[data-theme-id="vscode"] body.theme-vscode .copy-btn:hover {
+    opacity: 1;
+}
+
+html[data-theme-id="vscode"] body.theme-vscode .toc-sidebar {
+    background: var(--color-sidebar-bg);
+    border-right-color: var(--color-sidebar-border);
+}
+
+html[data-theme-id="vscode"] body.theme-vscode .toc-header {
+    background: var(--color-toolbar-bg);
+    border-bottom-color: var(--color-sidebar-border);
+}
+
+html[data-theme-id="vscode"] body.theme-vscode .toc-row.active {
+    background: var(--color-toc-active-bg);
+    border-left-color: var(--color-resizer-active);
+}
+
+html[data-theme-id="vscode"] body.theme-vscode .toc-row:hover {
+    background: var(--color-toc-hover-bg);
+}
+
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body table {
+    font-size: 0.95em;
+}
+
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body th,
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body td {
+    padding: 7px 10px;
+}
+
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body blockquote {
+    background: var(--color-blockquote-bg);
+    color: var(--color-text-light);
+    border-left-width: 4px;
+}
+
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body img {
+    border-radius: 3px;
+}
+
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body .katex-display,
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body .math-block,
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body .math-display,
+html[data-theme-id="vscode"] body.theme-vscode .markdown-body .texmath {
+    overflow-x: auto;
+    overflow-y: hidden;
+    text-align: center;
+}
+
+@media print {
+    html[data-theme-id="vscode"] body.theme-vscode .markdown-body,
+    html[data-theme-id="vscode"] body.theme-vscode .content-area {
+        background: #ffffff !important;
+    }
+
+    html[data-theme-id="vscode"] body.theme-vscode .markdown-body pre,
+    html[data-theme-id="vscode"] body.theme-vscode .code-block-wrapper pre,
+    html[data-theme-id="vscode"] body.theme-vscode .markdown-body code {
+        background: #f6f8fa !important;
+        color: #000000 !important;
+        border-color: #d0d7de !important;
     }
 }
 
@@ -348,7 +1024,7 @@ body.theme-modern .markdown-body {
     .viewer-container{display:block!important;height:auto!important}
     .content-area{overflow:visible!important;padding:0!important;height:auto!important}
     .markdown-body{max-width:100%!important}
-    [data-theme="dark"]{--color-bg:#ffffff!important;--color-text:#000!important;--color-heading:#000!important;--color-code-bg:#f4f4f4!important}
+    html[data-theme-id][data-theme="dark"]{--color-bg:#ffffff!important;--color-text:#000!important;--color-heading:#000!important;--color-code-bg:#f4f4f4!important}
     body{color:#000!important;background:#fff!important}
     /* The canvas colour comes from html, not from body: without this the area
        below the last line prints in the theme background (the pale blue a
@@ -372,7 +1048,7 @@ body.theme-modern .markdown-body {
 </style>
 </head>
 <body class="theme-modern">
-<div class="toolbar" id="toolbar"><div class="toolbar-left"><span class="toolbar-title">MarkdownReader 阅读示例</span></div><div class="toolbar-right"><button id="btn-expand-all-content" title="展开下一级">▼</button><button id="btn-collapse-all-content" title="折叠上一级">▲</button><span class="toolbar-separator"></span><button id="btn-auto-numbering" title="自动编号">🔢</button><button id="btn-dark-mode" title="暗色模式">🌙</button><span class="toolbar-separator"></span><button id="btn-print" title="打印">🖨️</button></div></div>
+<div class="toolbar" id="toolbar"><div class="toolbar-left"><span class="toolbar-title">MarkdownReader 阅读示例</span></div><div class="toolbar-right"><button id="btn-expand-all-content" title="展开下一级">▼</button><button id="btn-collapse-all-content" title="折叠上一级">▲</button><span class="toolbar-separator"></span><button id="btn-auto-numbering" title="自动编号">🔢</button><span class="theme-picker"><button id="btn-theme" title="主题">🎨</button><div class="theme-menu" id="theme-menu" hidden><button type="button" class="theme-option" data-theme-id="modern">Modern</button><button type="button" class="theme-option" data-theme-id="office">Office</button><button type="button" class="theme-option" data-theme-id="vscode">VS Code</button></div></span><button id="btn-dark-mode" title="暗色模式">🌙</button><span class="toolbar-separator"></span><button id="btn-print" title="打印">🖨️</button></div></div>
 <div class="viewer-container"><nav class="toc-sidebar" id="toc-sidebar"><div class="toc-header"><h2>目录</h2><button id="btn-toggle-toc-panel" title="折叠侧边栏" aria-label="折叠侧边栏" aria-expanded="true"></button></div><div class="toc-body" id="toc-body"><div class="toc-row" data-id="markdownreader-%E9%98%85%E8%AF%BB%E7%A4%BA%E4%BE%8B" data-level="1" data-has-children="true" data-explicit-number="false" style="--toc-level: 1"><button class="toc-toggle" type="button" aria-label="折叠目录"><span class="toc-toggle-icon"></span></button><a class="toc-link" href="#markdownreader-%E9%98%85%E8%AF%BB%E7%A4%BA%E4%BE%8B"><span class="toc-number"></span><span class="toc-title">MarkdownReader 阅读示例</span></a></div>
 <div class="toc-row" data-id="%E6%96%87%E5%AD%97%E4%B8%8E%E8%A1%8C%E5%86%85%E5%85%83%E7%B4%A0" data-level="2" data-has-children="true" data-explicit-number="false" style="--toc-level: 2"><button class="toc-toggle" type="button" aria-label="折叠目录"><span class="toc-toggle-icon"></span></button><a class="toc-link" href="#%E6%96%87%E5%AD%97%E4%B8%8E%E8%A1%8C%E5%86%85%E5%85%83%E7%B4%A0"><span class="toc-number"></span><span class="toc-title">文字与行内元素</span></a></div>
 <div class="toc-row" data-id="%E9%95%BF%E9%93%BE%E6%8E%A5%E4%B8%8E%E9%95%BF-token-%E7%9A%84%E6%8A%98%E8%A1%8C" data-level="3" data-has-children="false" data-explicit-number="false" style="--toc-level: 3"><span class="toc-toggle-placeholder"></span><a class="toc-link" href="#%E9%95%BF%E9%93%BE%E6%8E%A5%E4%B8%8E%E9%95%BF-token-%E7%9A%84%E6%8A%98%E8%A1%8C"><span class="toc-number"></span><span class="toc-title">长链接与长 token 的折行</span></a></div>
@@ -1180,6 +1856,118 @@ print(&quot;Budget: $100; remaining: $200&quot;)
     }
 
     // ═══════════════════════════════════════════════════════════════
+    // Module 14: Theme switch — the visual theme, not light/dark
+    // ═══════════════════════════════════════════════════════════════
+    // Every builtin theme ships in the document (Phase 6C), so switching is a CSS
+    // state change and never a re-render: html[data-theme-id] selects the theme's
+    // tokens, body.theme-<id> selects its component rules. Light/dark is the other
+    // axis (html[data-theme], owned by Module 10) and the two never touch each other.
+    //
+    // The menu markup and the document's default theme come from the assembler, so
+    // the page is already correct before this script runs; the module wires behaviour.
+    var THEME_ID_ATTRIBUTE = "data-theme-id";
+    var THEME_STORAGE_KEY = "markdownreader-theme-id";
+    var THEME_CLASS_PREFIX = "theme-";
+
+    function themeOptions() {
+        var menu = document.getElementById("theme-menu");
+        if (!menu) return [];
+        return Array.prototype.slice.call(menu.querySelectorAll("[data-theme-id]"));
+    }
+
+    function knownThemeIds() {
+        return themeOptions().map(function (option) {
+            return option.getAttribute("data-theme-id");
+        });
+    }
+
+    function documentThemeId() {
+        return document.documentElement.getAttribute(THEME_ID_ATTRIBUTE) || "";
+    }
+
+    function applyThemeId(themeId) {
+        document.documentElement.setAttribute(THEME_ID_ATTRIBUTE, themeId);
+        // Only our own classes are removed: any other product class on <body> has to
+        // survive a theme switch, which is why className is never reassigned.
+        var body = document.body;
+        Array.prototype.slice.call(body.classList).forEach(function (name) {
+            if (name.indexOf(THEME_CLASS_PREFIX) === 0) body.classList.remove(name);
+        });
+        body.classList.add(THEME_CLASS_PREFIX + themeId);
+    }
+
+    function saveThemeId(themeId) {
+        try { localStorage.setItem(THEME_STORAGE_KEY, themeId); } catch (e) {}
+    }
+
+    function restoredThemeId() {
+        var saved = null;
+        try { saved = localStorage.getItem(THEME_STORAGE_KEY); } catch (e) {}
+        // A stored id is honoured only when this document actually carries that
+        // theme; anything stale falls back to the document's own default (the theme
+        // its author converted with) rather than to a hardcoded one.
+        if (saved && knownThemeIds().indexOf(saved) !== -1) return saved;
+        return documentThemeId();
+    }
+
+    function setThemeMenuOpen(open) {
+        var menu = document.getElementById("theme-menu");
+        var button = document.getElementById("btn-theme");
+        if (!menu || !button) return;
+        if (open) menu.removeAttribute("hidden");
+        else menu.setAttribute("hidden", "");
+        button.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+
+    function isThemeMenuOpen() {
+        var menu = document.getElementById("theme-menu");
+        return !!menu && !menu.hasAttribute("hidden");
+    }
+
+    function syncThemeMenu() {
+        var active = documentThemeId();
+        themeOptions().forEach(function (option) {
+            option.classList.toggle("active", option.getAttribute("data-theme-id") === active);
+        });
+    }
+
+    function initThemeSwitcher() {
+        var button = document.getElementById("btn-theme");
+        var menu = document.getElementById("theme-menu");
+        if (!button || !menu) return;
+
+        var restored = restoredThemeId();
+        if (restored) applyThemeId(restored);
+        setThemeMenuOpen(false);
+        syncThemeMenu();
+
+        button.addEventListener("click", function (event) {
+            event.stopPropagation();
+            setThemeMenuOpen(!isThemeMenuOpen());
+        });
+
+        menu.addEventListener("click", function (event) {
+            var option = event.target.closest("[data-theme-id]");
+            if (!option) return;
+            var themeId = option.getAttribute("data-theme-id");
+            applyThemeId(themeId);
+            saveThemeId(themeId);
+            syncThemeMenu();
+            setThemeMenuOpen(false);
+        });
+
+        document.addEventListener("click", function (event) {
+            if (!isThemeMenuOpen()) return;
+            if (menu.contains(event.target) || button.contains(event.target)) return;
+            setThemeMenuOpen(false);
+        });
+
+        document.addEventListener("keydown", function (event) {
+            if (event.key === "Escape") setThemeMenuOpen(false);
+        });
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     // Module 11: Auto Numbering
     // ═══════════════════════════════════════════════════════════════
     var numberingStorageKey = "markdownreader-autonumbering";
@@ -1260,6 +2048,7 @@ print(&quot;Budget: $100; remaining: $200&quot;)
         initPositionRestore();
         initToolbar();
         initDarkMode();
+        initThemeSwitcher();
         initAutoNumbering();
         initTocResize();
         initBackToTop();

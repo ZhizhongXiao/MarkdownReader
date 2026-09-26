@@ -180,6 +180,14 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
   viewer 脚本拆成按 `viewer/js/manifest.json` 拼接的模块时，改的正是这一个模块。
   契约清单与"哪些可以改"见 [Viewer 契约](VIEWER_CONTRACT.md)。
 
+- 主题 bundle 与切换（Phase 6C）：生产文档固定内嵌 `builtin_theme_css_text()`（base + modern + office + vscode，
+  各一次），`config.json` 的 `template` 只决定**文档默认主题**（写进 `<html data-theme-id>` 与 `body class`，
+  它也是 localStorage 里偏好失效时的回落）。阅读器用 `viewer/js/theme-switcher.js` 切换，状态在
+  `html[data-theme-id]` + `body.theme-*` + `localStorage["markdownreader-theme-id"]`；boot 时恢复已保存偏好，
+  因此"持久化主题 ≠ 文档默认主题"时会有一次可见切换（不存在的是"无主题"首屏）。
+  **新增或修改主题时必须把 token、组件规则与打印规则
+  scoped 到 `html[data-theme-id="<id>"]`**，否则会污染其他主题；完整契约见 [Viewer 契约](VIEWER_CONTRACT.md)。
+
 ## 命名与路径约定
 
 - 项目名、窗口标题与产物统一 `MarkdownReader`；npm 包标识为小写 `markdownreader-node-renderer`。

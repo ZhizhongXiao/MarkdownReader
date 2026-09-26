@@ -20,14 +20,41 @@ tests/browser/*.test.mjs               真实浏览器：离线资源、Mermaid�
 
 ```text
 明暗（color scheme）  html[data-theme="dark"]（缺省即 light）    键：markdownreader-theme
-主题（theme）          body.theme-<id>                           键：markdownreader-theme-id（Phase 6C 引入）
+主题（theme）          html[data-theme-id="<id>"] + body.theme-<id>   键：markdownreader-theme-id
 ```
 
-- 二者正交：`Office + dark`、`Modern + light` 都必须成立。
-- 不要复用 `data-theme` 表示主题名：它已经被 `viewer.js`、`print.css`、`viewer.css`、三个主题 CSS 与 GUI 共同当作明暗使用。
-- 主题状态属于**阅读器偏好**（全局），与文档无关；文档相关状态一律带文档身份（见第 4 节）。
+- 二者正交：`Office + dark`、`Modern + light` 都必须成立（6 个组合都在浏览器矩阵里实测）。
+- **主题由两个标记共同表达**：`html[data-theme-id]` 选中该主题的 token，`body.theme-<id>` 选中它的组件规则。CSS 两处都要求，因此即使将来一边没更新，也不会两套主题同时命中。
+- 不要复用 `data-theme` 表示主题名：它已经被 viewer、print.css、layout.css、三个主题 CSS 与 GUI 共同当作明暗使用。
+- 主题状态属于**阅读器偏好**（全局）；文档相关状态一律带文档身份（见第 5 节）。文档自己的**默认主题**是作者在转换时选的那个（`config.json` 的 `template`），它以标记形式写进 HTML：
 
-## 3. DOM id（13 个）
+```text
+生成 HTML 在 JS 执行前就带有有效的文档默认主题（html[data-theme-id] + body class）
+  → 不存在"无主题"首屏（unthemed flash 不可能发生）
+
+若 localStorage 里存有另一个有效主题
+  → viewer boot 时恢复该阅读器偏好（此时会有一次"文档默认 → 已保存主题"的可见切换）
+```
+
+- 因此契约是"**永不出现无主题首屏**"，**不是**"持久化主题也永不闪烁"。后一种保证需要在 `<head>` 里放超早期 localStorage bootstrap，会与第 1 节"viewer 只有一个 classic script、模块只在装配期合并"的形态冲突；当前阶段明确不做（若将来要做，需重开 contract）。
+
+## 3. 主题 bundle（每份文档都携带全部 builtin 主题）
+
+```text
+每份生成 HTML 里：base 一份 + modern 一份 + office 一份 + vscode 一份
+注入顺序固定   ：base → modern → office → vscode（账本 label 为 theme:<id>）
+初始状态       ：html[data-theme-id]=<文档默认主题>，body class=theme-<默认主题>
+切换           ：只改这两个标记（+ 写 markdownreader-theme-id），不重新渲染正文
+```
+
+- base 主题保留**全局** `:root` 与 `[data-theme="dark"]`：它是任何主题没有定义的 token 的回落。
+- 三个可选主题的 token、组件规则与打印规则**必须全部 scoped** 到 `html[data-theme-id="<id>"]`（含 `body.theme-<id>` 条件）。Office 曾是唯一没有 scoped 组件规则的主题（85 处 `body …`），6C 已全部收紧。
+- 打印：`print.css` 用 `html[data-theme-id][data-theme="dark"]` 把暗色 token 压回白色，与主题的暗色块**同特异性**；print.css 在 bundle 之后注入，因此同分时后者胜出。这条只能靠真实浏览器逐组合验证（`tests/browser/theme_matrix.test.mjs`）。
+- 切换时只移除**已知的** `theme-*` class 再添加新的，绝不整体覆盖 `body.className`：将来 body 上若有别的产品 class，必须能熬过一次主题切换。
+- 恢复顺序：HTML 先带**文档默认主题**，boot 后若 `markdownreader-theme-id` 是本页有效的主题 id 才切过去。所以"持久化主题 ≠ 文档默认主题"时会有一次可见切换（见第 2 节的两行契约）。
+- builtin 主题是随包必需资产：任一可选主题的 `theme.css` 缺失时装配**硬失败**，不产出缺主题变量的 HTML（6B 及以前只降级）。
+
+## 4. DOM id（16 个）
 
 `viewer.html` 提供的钩子，viewer JS 与索引页/测试都按名字取用：
 
@@ -36,6 +63,8 @@ tests/browser/*.test.mjs               真实浏览器：离线资源、Mermaid�
 | `toolbar` | 工具条容器 |
 | `btn-expand-all-content` / `btn-collapse-all-content` | 正文层级展开 / 折叠 |
 | `btn-auto-numbering` | 自动编号开关（转换期也会点它） |
+| `btn-theme` | 主题选择器按钮（`aria-expanded` 反映菜单状态） |
+| `theme-menu` | 主题菜单容器（`hidden` 属性即收起） |
 | `btn-dark-mode` | 明暗切换 |
 | `btn-print` | 打印 |
 | `toc-sidebar` | 目录侧栏 |
@@ -46,7 +75,9 @@ tests/browser/*.test.mjs               真实浏览器：离线资源、Mermaid�
 | `markdown-body` | 正文容器（折叠、灯箱、代码复制、表格滚动） |
 | `back-to-top-btn` | 返回顶部 |
 
-## 4. localStorage 键（8 个）
+菜单项不打 id，用属性选择器契约：`#theme-menu [data-theme-id]`，文本是**可读名称**（`metadata.json` 的 `name`，如 `Modern` / `Office` / `VS Code`），不是 canonical id。菜单标记由装配期生成（不是 JS 拼的），因此页面在没有脚本时也是正确的。
+
+## 5. localStorage 键（9 个）
 
 | 键 | 作用域 | 说明 |
 | --- | --- | --- |
@@ -55,6 +86,7 @@ tests/browser/*.test.mjs               真实浏览器：离线资源、Mermaid�
 | `markdownreader-toc-collapsed-v2` | 阅读器 | 目录折叠集合 |
 | `markdownreader-toc-panel-collapsed` | 阅读器 | 侧栏是否收起 |
 | `markdownreader-theme` | 阅读器 | 明暗（`light` / `dark`） |
+| `markdownreader-theme-id` | 阅读器 | 主题 id；值不在本页携带的主题里时回落到**文档默认主题** |
 | `markdownreader-autonumbering` | 阅读器 | 自动编号开关 |
 | `markdownreader-toc-width` | 阅读器 | 目录宽度（180–500px） |
 | `markdownreader-expandlevel` | 阅读器 | **只读遗留**：仅在文档没有 v2 状态时作种子，永不写入 |
@@ -66,8 +98,9 @@ GUI 自己的 `gui-theme` 属于应用外壳，不属于生成文档。
 - TOC：`.toc-row[data-id][data-level]`、`.toc-toggle`、`.toc-link`、`.active`
 - 折叠：`.is-collapsed`（TOC 分支）、`.is-hidden-by-collapse`、`.is-hidden-by-content-fold`、`.heading-toggle`
 - 组件：`.code-block-wrapper`、`.copy-btn`、`.table-wrapper`、`.viewer-container`
+- 主题：`.theme-picker`、`.theme-menu`（`[hidden]` 即收起）、`.theme-menu .theme-option`、`.theme-option.active`
 - 拖拽：`.resizing`（body 上临时加）
-- 明暗与编号：`html[data-theme]`、`html[data-auto-numbering]`
+- 明暗 / 编号 / 主题：`html[data-theme]`、`html[data-auto-numbering]`、`html[data-theme-id]`
 - 布局变量：`--sidebar-width`（拖拽写入 `<html>` 的内联样式）
 
 ## 6. 明确**不是**契约（可以自由改）
@@ -77,20 +110,27 @@ GUI 自己的 `gui-theme` 属于应用外壳，不属于生成文档。
 - 主题变量的具体取值、字体名、装饰细节；
 - **仓库内**资产目录的位置（`viewer/`、`themes/builtin/` 的布局、文件切分、主题 CSS 的文件名）；
 - 生成 HTML 里样式块的**排列方式**（但注入顺序 viewer → theme → 资源 → print 必须保持，见 `core/html_assembly.py` 的确定性顺序）；
-- `body.theme-<id>` 的**id 取值**可以扩展（新主题），但既有三个 id 不可改名 —— 改名等于让老 HTML 的 localStorage 选择失效。
+- `body.theme-<id>` 的**id 取值**可以扩展（新主题），但既有三个 id 不可改名 —— 改名等于让老 HTML 的 localStorage 选择失效；
+- 主题菜单的视觉（位置、size、hover 样式）与工具条按钮的图标；
+- 主题菜单里名称的**文案**（`metadata.json` 的 `name` 可改），但"菜单项必须带 `data-theme-id`"是契约。
 
 ## 7. 资产知识只有一处来源
 
 Phase 6A 起，viewer/theme 资产的定位与读取集中在 `core/viewer_assets.py`：
 
 ```text
-theme_ids()               注册表（有 metadata.json 且非 hidden）
+theme_ids()               可选的 builtin 主题（有 metadata.json 且非 hidden）
+builtin_themes()          [(id, 可读名称)]，名称来自 metadata.json，供菜单使用
 theme_metadata(id)        metadata.json
 theme_body_class(id)      body class（theme-<id>）
-theme_css_chain(id)       样式链（base → child）
-viewer_shell_text(id)     页面外壳
+theme_css_text(id)        单个主题的 theme.css（bundle 用；缺失即失败）
+builtin_theme_css_text()  base + 每个可选主题，各一次，顺序固定（交付文档的主题载荷）
+theme_css_chain(id)       单主题样式链（诊断/外置主题用，不再是 production 载荷来源）
+theme_menu_markup()       主题菜单标记（shell 的 {{THEME_MENU}}）
+validate_theme(id)        主题可用性校验（存在 / 继承可解 / 可选），装配路径第一步
+viewer_shell_text()       页面外壳
 viewer_layout_css_text()  布局/组件样式（只消费变量）
-shared_viewer_js_text()   viewer 脚本（Phase 6B 在此按 manifest 拼接）
+shared_viewer_js_text()   viewer 脚本（按 manifest 拼接）
 shared_print_css_text()   打印样式
 ```
 

@@ -22,6 +22,7 @@
         initPositionRestore();
         initToolbar();
         initDarkMode();
+        initThemeSwitcher();
         initAutoNumbering();
         initTocResize();
         initBackToTop();

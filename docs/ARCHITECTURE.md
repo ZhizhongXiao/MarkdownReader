@@ -40,7 +40,12 @@ Markdown 文件
 
 - `core/viewer_assets.py`（Phase 6A）是"阅读器由哪些文件组成、它们在哪"的唯一来源：外壳、viewer 脚本、
   打印样式、主题样式链、主题注册表。两条装配路径与 GUI 都只经它取资产，因此 Phase 6B 搬迁目录时只改这一处。
-- `default` 提供阅读器外壳与可继承的排版结构；Modern、Office、VS Code 只覆盖视觉。
+- **主题 bundle（Phase 6C）**：每份文档固定携带 base + modern + office + vscode（`builtin_theme_css_text()`）。
+  主题是独立于明暗的第二维：`html[data-theme-id]` 选 token、`body.theme-<id>` 选组件规则，`viewer/js/theme-switcher.js`
+  在阅读器里即时切换（只改标记与一个 localStorage 键，不重新渲染正文）。初始主题写在标记里、菜单由装配期生成，
+  因此不存在"无主题"首屏；已保存的阅读器偏好由 boot 恢复（可能与文档默认主题不同，此时有一次可见切换）。
+- `default`→`base` 只提供 token；三个可选主题**必须**把自己的 token、组件规则与打印规则 scoped 到
+  `html[data-theme-id="<id>"]`，否则会污染其他主题（Office 曾经如此）。
 - `viewer.js` 承载全部阅读交互：目录跳转与定位、折叠、状态持久化、代码复制、图片灯箱、明暗、编号与打印。
   拆分（Phase 6B）只能在**装配期**合并成一个 classic script：交付物以 `file://` 打开，ES module 会被 CORS 拦下。
 - `print.css` 负责共用打印机械项（隐藏交互控件、分页与缩放规则），纸面观感由各主题自己的打印规则决定。

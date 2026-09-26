@@ -29,6 +29,7 @@ is also its directory name under ``themes/builtin/``. The user-facing selector i
 import json
 import logging
 import os
+from html import escape
 
 from core.config import BUNDLE_ROOT, normalize_template_name
 
@@ -105,22 +106,70 @@ def theme_body_class(theme_id: str) -> str:
     return f"theme-{safe_name or 'default'}"
 
 
+def builtin_theme_ids() -> list[str]:
+    """Return the selectable builtin theme ids, in bundle order.
+
+    Phase 6C ships every builtin theme inside each document, so this list is both
+    the order the bundle follows and the set the switcher offers. External themes
+    (Phase 7) get their own channel and never join it.
+    """
+    return theme_ids()
+
+
+def builtin_themes() -> list[tuple[str, str]]:
+    """Return ``(theme_id, display name)`` for every selectable builtin theme.
+
+    The display name comes from ``metadata.json`` ("Modern", "Office", "VS Code"),
+    which is what the switcher shows; the delivered document never needs the
+    directory layout to know it.
+    """
+    pairs: list[tuple[str, str]] = []
+    for theme_id in builtin_theme_ids():
+        name = str(theme_metadata(theme_id).get("name") or theme_id)
+        pairs.append((theme_id, name))
+    return pairs
+
+
 def normalize_theme_id(theme_id: str | None) -> str:
     """Normalize a theme selector (aliases included) to its canonical id."""
     return normalize_template_name(theme_id)
 
 
+def theme_menu_markup() -> str:
+    """Return the theme menu markup for the shell's ``{{THEME_MENU}}`` placeholder.
+
+    The menu ships inside the document instead of being built by the viewer script:
+    the options and their names are registry facts, and the page must be correct
+    before any script runs (Phase 6C).
+    """
+    options = "".join(
+        '<button type="button" class="theme-option" data-theme-id="'
+        + escape(theme_id, quote=True)
+        + '">'
+        + escape(name)
+        + "</button>"
+        for theme_id, name in builtin_themes()
+    )
+    return '<div class="theme-menu" id="theme-menu" hidden>' + options + "</div>"
+
+
 def validate_theme(theme_id: str) -> str:
     """Return the normalized theme id, raising ``ValueError`` when it is unusable.
 
-    The assembly paths call this before they read anything else. An unknown theme, a
-    circular inheritance or a missing parent must fail -- exactly as it did while the
-    page shell was still resolved through the theme chain. Without this check the
-    theme-CSS step would only *degrade* (that is how an unreadable ``theme.css`` is
-    treated), and the document would ship with no theme variables at all.
+    "Usable" means it exists, its inheritance resolves, and it is **selectable**:
+    the base theme only carries fallback tokens, so a document whose default were
+    ``base`` would render with no component rules at all. The assembly paths call
+    this before they read anything else -- an unknown theme, a circular inheritance
+    or a missing parent must fail exactly as it did while the page shell was still
+    resolved through the theme chain.
     """
     normalized = normalize_theme_id(theme_id)
     resolve_theme_chain(normalized)
+    selectable = builtin_theme_ids()
+    if normalized not in selectable:
+        raise ValueError(
+            f"“{normalized}”不是可选主题；可选：" + ", ".join(selectable)
+        )
     return normalized
 
 
@@ -192,6 +241,38 @@ def theme_css_chain(theme_id: str) -> str:
             f"模板“{theme_id}”的继承链中没有 theme.css。继承链：{' -> '.join(chain)}"
         )
     return "\n".join(parts)
+
+
+def theme_css_text(theme_id: str) -> str:
+    """Return one theme's own ``theme.css`` (no chain), raising when it is missing.
+
+    Phase 6C inlines every builtin theme separately, so the bundle goes through
+    here rather than through ``theme_css_chain()``: a missing file is a broken
+    package (the spec names these files as required) and must not be downgraded to
+    "no styles for that theme".
+    """
+    path = os.path.join(_THEMES_ROOT, str(theme_id), "theme.css")
+    text = _read_text(path)
+    if not text:
+        raise ValueError(f"主题缺少 theme.css：{path}")
+    return text
+
+
+# The base theme carries the global fallback tokens and is never selectable; every
+# selectable theme inherits from it.
+BASE_THEME_ID = "base"
+
+
+def builtin_theme_css_text() -> str:
+    """Return base plus every builtin theme, each exactly once, in a fixed order.
+
+    Order is base, modern, office, vscode. ``theme_css_chain()`` stays available for
+    a single-theme view (diagnostics, external themes), but the delivered document
+    comes from here since Phase 6C: the reader carries all of them and switches at
+    runtime, so "which theme is in the page" is no longer a per-document decision.
+    """
+    order = (BASE_THEME_ID, *builtin_theme_ids())
+    return "\n".join(theme_css_text(theme_id) for theme_id in order)
 
 
 # ================================================================

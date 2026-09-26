@@ -41,10 +41,12 @@ JS_DIR = ROOT / "tests" / "js"
 CONFIG = {"template": "modern", "numbering": True, "overwrite": True}
 
 # Locked counts. They make a vanished or renamed contract a failure instead of
-# a silent reduction of coverage.
-EXPECTED_PASS = 22
+# a silent reduction of coverage. 22 state contracts + 8 theme contracts (Phase
+# 6C): the theme is a second axis, so it gets its own contracts instead of being
+# folded into the existing ones.
+EXPECTED_PASS = 30
 EXPECTED_XFAIL = 0
-EXPECTED_CONTRACTS = 22
+EXPECTED_CONTRACTS = 30
 
 # One document that deliberately exercises, per contract family:
 #   * five heading levels, for the fold baseline and level contracts (F/M/N/P)
@@ -109,12 +111,13 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def _convert(directory: Path, markdown: str) -> Path:
+def _convert(directory: Path, markdown: str, template: str = "modern") -> Path:
     """Convert one fixture document and return the generated HTML path."""
     source = directory / "README.md"
     source.write_text(markdown, encoding="utf-8")
     output = directory / "README.html"
-    result = converter.process_single(str(source), str(output), CONFIG)
+    config = dict(CONFIG, template=template)
+    result = converter.process_single(str(source), str(output), config)
     if result is None:
         raise RuntimeError("conversion produced no output for " + str(source))
     return output
@@ -122,13 +125,23 @@ def _convert(directory: Path, markdown: str) -> Path:
 
 @pytest.fixture(scope="module")
 def viewer_fixtures(tmp_path_factory) -> dict:
-    """Build the two fixture documents once for the whole module."""
+    """Build the fixture documents once for the whole module.
+
+    A and B are the two state fixtures (same title, different pathname). C is the
+    same document as A converted with the Office default theme: the theme
+    contracts need a document whose default is *not* modern, otherwise "falls back
+    to the document default" cannot be told apart from "hardcodes modern".
+    """
     root = tmp_path_factory.mktemp("viewer")
     documents = {}
-    for variant, markdown in (("A", DOCUMENT_A), ("B", DOCUMENT_B)):
+    for variant, markdown, template in (
+        ("A", DOCUMENT_A, "modern"),
+        ("B", DOCUMENT_B, "modern"),
+        ("C", DOCUMENT_A, "office"),
+    ):
         directory = root / variant
         directory.mkdir(parents=True, exist_ok=True)
-        documents[variant] = _convert(directory, markdown)
+        documents[variant] = _convert(directory, markdown, template)
 
     # jsdom refuses localStorage for file:// URLs (opaque origin), so the
     # fixtures are opened through a loopback URL while keeping the real
@@ -150,6 +163,8 @@ def test_viewer_state_contracts(viewer_fixtures: dict, tmp_path: Path):
             "MR_FIXTURE_A_URL": viewer_fixtures["urls"]["A"],
             "MR_FIXTURE_B": str(viewer_fixtures["paths"]["B"]),
             "MR_FIXTURE_B_URL": viewer_fixtures["urls"]["B"],
+            "MR_FIXTURE_C": str(viewer_fixtures["paths"]["C"]),
+            "MR_FIXTURE_C_URL": viewer_fixtures["urls"]["C"],
         }
     )
     completed = subprocess.run(

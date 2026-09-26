@@ -15,6 +15,8 @@ from html import escape
 
 from core.config import (
     PLACEHOLDER_CONTENT,
+    PLACEHOLDER_THEME_ID,
+    PLACEHOLDER_THEME_MENU,
     PLACEHOLDER_TITLE,
     PLACEHOLDER_TOC,
     PRODUCTION_RENDERER_VERSION,
@@ -31,10 +33,11 @@ from core.index_builder import DEFAULT_INDEX_FILENAME, build_index
 from core.renderer_node import render_markdown_node
 from core.toc import generate_toc_html
 from core.viewer_assets import (
+    builtin_theme_css_text,
     shared_print_css_text,
     shared_viewer_js_text,
     theme_body_class,
-    theme_css_chain,
+    theme_menu_markup,
     validate_theme,
     viewer_layout_css_text,
     viewer_shell_text,
@@ -185,27 +188,27 @@ def process_single(
     toc_html = generate_toc_html(headings) if headings else ""
 
     # 6. Load the reader assets through the asset layer (Phase 6A/6B)
-    # 未知/循环继承的主题必须在这里失败（与拆分前一致）：主题样式那一步只会降级，
-    # 否则会产出一份没有任何主题变量的文档。
+    # 不可用（不存在 / 循环继承 / 非可选）的主题必须在这里失败，与拆分前一致。
     validate_theme(template_name)
     template_html = viewer_shell_text()
     if not template_html:
-        _logger.error("模板“%s”缺少 viewer.html。", template_name)
+        _logger.error("阅读器外壳缺失：viewer/viewer.html。")
         return None
 
     template_html = template_html.replace(
         "<body>", f'<body class="{theme_body_class(template_name)}">', 1
     )
+    # Phase 6C：默认主题在标记里就已生效，主题菜单也是 shell 的一部分，都不依赖脚本。
+    template_html = template_html.replace(PLACEHOLDER_THEME_ID, template_name)
+    template_html = template_html.replace(PLACEHOLDER_THEME_MENU, theme_menu_markup())
 
-    # 7. Collect CSS (viewer.css + theme chain) → inject into <head>
+    # 7. Collect CSS (viewer.css + 主题 bundle) → inject into <head>
     css_parts = []
     layout_css = viewer_layout_css_text()
     if layout_css:
         css_parts.append(layout_css)
-    try:
-        css_parts.append(theme_css_chain(template_name))
-    except Exception as e:
-        _logger.warning("加载模板样式链失败：%s", e)
+    # Phase 6C：每份文档携带全部 builtin 主题，阅读时即时切换（不重新渲染正文）。
+    css_parts.append(builtin_theme_css_text())
     combined_css = "\n".join(css_parts)
 
     # 8. Collect JS → inject before </body>
@@ -292,7 +295,8 @@ def _convert_v2(
         return None
 
     if report is not None:
-        # renderer warnings 在前（网络降级、资源缺失），assembly warnings 在后（模板降级）。
+        # renderer warnings 在前（网络降级、资源缺失），assembly warnings 在后。
+        # 6C 起装配期不再有主题降级（不可用即失败），因此后者今天恒为空，保留通道。
         report["warnings"] = list(envelope.get("warnings") or []) + list(
             assembled.get("assembly_warnings") or []
         )
