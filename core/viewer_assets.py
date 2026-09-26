@@ -31,6 +31,7 @@ import logging
 import os
 from html import escape
 
+from core import paths
 from core.config import BUNDLE_ROOT, normalize_template_name
 
 _logger = logging.getLogger(__name__)
@@ -62,10 +63,28 @@ def _read_text(path: str | None) -> str:
 # Theme registry
 # ================================================================
 
+SOURCE_BUILTIN = "builtin"
+SOURCE_EXTERNAL = "external"
 
-def theme_metadata(theme_id: str) -> dict:
-    """Return a theme's ``metadata.json``, or ``{}`` when it is unreadable."""
-    path = os.path.join(_THEMES_ROOT, str(theme_id), "metadata.json")
+# A user theme may not take one of these ids: builtin themes are read-only package
+# payload, and "default" is the pre-6B name of base, kept out so that old documents
+# and old habits cannot resolve to a user theme.
+RESERVED_THEME_IDS = ("base", "modern", "office", "vscode", "default")
+
+
+def external_themes_root() -> str:
+    """Return the directory installed user themes live in (Phase 7).
+
+    Resolved through ``core.paths`` on every call: tests can point it elsewhere, and a
+    frozen build answers with its own writable location instead of an import-time
+    snapshot.
+    """
+    return paths.external_themes_root()
+
+
+def _metadata_at(directory: str) -> dict:
+    """Return the ``metadata.json`` inside ``directory``, or ``{}``."""
+    path = os.path.join(directory, "metadata.json")
     if os.path.isfile(path):
         try:
             with open(path, "r", encoding="utf-8") as handle:
@@ -75,24 +94,66 @@ def theme_metadata(theme_id: str) -> dict:
     return {}
 
 
-def theme_ids(*, include_hidden: bool = False) -> list[str]:
-    """Return the selectable theme names, sorted.
+def _scan_theme_ids(root: str, *, include_hidden: bool) -> list[str]:
+    """Return the ids of the theme directories under ``root``, sorted.
 
-    A directory counts as a theme when it carries a ``metadata.json``; the index
-    page therefore never appears here (it has no metadata), and the base theme
-    stays out unless ``include_hidden`` is asked for. The GUI used to open the
-    template directory itself to answer this question.
+    A directory counts as a theme when it carries a ``metadata.json`` -- the index
+    page therefore never appears here.
     """
     names = []
-    if os.path.isdir(_THEMES_ROOT):
-        for entry in os.listdir(_THEMES_ROOT):
-            if not os.path.isdir(os.path.join(_THEMES_ROOT, entry)):
+    if os.path.isdir(root):
+        for entry in os.listdir(root):
+            if not os.path.isdir(os.path.join(root, entry)):
                 continue
-            metadata = theme_metadata(entry)
+            metadata = _metadata_at(os.path.join(root, entry))
             if not metadata:
                 continue
             if include_hidden or not metadata.get("hidden", False):
                 names.append(entry)
+    return sorted(names)
+
+
+def theme_dir(theme_id: str) -> str:
+    """Return the directory of a theme, builtin first, or ``""`` when it is absent.
+
+    Builtin wins on purpose: a user directory that reuses a builtin id must never
+    replace the packaged theme. Import refuses reserved ids up front; this is the
+    second line of defence for a directory copied in by hand.
+    """
+    name = str(theme_id)
+    for root in (_THEMES_ROOT, external_themes_root()):
+        candidate = os.path.join(root, name)
+        if os.path.isdir(candidate):
+            return candidate
+    return ""
+
+
+def theme_source(theme_id: str) -> str:
+    """Return ``SOURCE_BUILTIN``, ``SOURCE_EXTERNAL``, or ``""`` for an unknown id."""
+    name = str(theme_id)
+    if os.path.isdir(os.path.join(_THEMES_ROOT, name)):
+        return SOURCE_BUILTIN
+    if os.path.isdir(os.path.join(external_themes_root(), name)):
+        return SOURCE_EXTERNAL
+    return ""
+
+
+def theme_metadata(theme_id: str) -> dict:
+    """Return a theme's ``metadata.json``, or ``{}`` when it is unreadable."""
+    directory = theme_dir(theme_id)
+    return _metadata_at(directory) if directory else {}
+
+
+def theme_ids(*, include_hidden: bool = False) -> list[str]:
+    """Return every installed theme id, sorted -- builtin and user themes together.
+
+    Both sources go through the same loader and differ only in where they live and in
+    whether every document carries them (Phase 6C bundles the builtin set). Builtin
+    ids win when a user directory reuses one, so the packaged set can never be
+    shadowed. The base theme stays out unless ``include_hidden`` is asked for.
+    """
+    names = set(_scan_theme_ids(_THEMES_ROOT, include_hidden=include_hidden))
+    names.update(external_theme_ids(include_hidden=include_hidden))
     return sorted(names)
 
 
@@ -109,11 +170,12 @@ def theme_body_class(theme_id: str) -> str:
 def builtin_theme_ids() -> list[str]:
     """Return the selectable builtin theme ids, in bundle order.
 
-    Phase 6C ships every builtin theme inside each document, so this list is both
-    the order the bundle follows and the set the switcher offers. External themes
-    (Phase 7) get their own channel and never join it.
+    Phase 6C ships every builtin theme inside each document, so this list is both the
+    order the bundle follows and the set the switcher offers. Phase 7B makes it a
+    builtin-only scan: `theme_ids()` now also reports installed user themes, so the
+    bundle has to ask for the packaged set explicitly.
     """
-    return theme_ids()
+    return _scan_theme_ids(_THEMES_ROOT, include_hidden=False)
 
 
 def builtin_themes() -> list[tuple[str, str]]:
@@ -128,6 +190,46 @@ def builtin_themes() -> list[tuple[str, str]]:
         name = str(theme_metadata(theme_id).get("name") or theme_id)
         pairs.append((theme_id, name))
     return pairs
+
+
+def external_theme_ids(*, include_hidden: bool = False) -> list[str]:
+    """Return the installed user themes, sorted.
+
+    Reserved ids are skipped rather than reported: a user directory may not take a
+    builtin id, and `base` (plus the pre-6B name `default`) is never a user choice.
+    """
+    reserved = set(RESERVED_THEME_IDS)
+    return [
+        theme_id
+        for theme_id in _scan_theme_ids(
+            external_themes_root(), include_hidden=include_hidden
+        )
+        if theme_id not in reserved
+    ]
+
+
+def theme_files(theme_id: str) -> list[str]:
+    """Return the CSS files a theme contributes, in declaration order.
+
+    ``metadata.json`` declares them (AGENTS section 14); ``theme.css`` is the default,
+    so a hand-written theme with a single file still loads.
+    """
+    declared = theme_metadata(theme_id).get("files")
+    if isinstance(declared, list) and declared:
+        return [str(name) for name in declared]
+    return ["theme.css"]
+
+
+def selectable_theme_ids(selected_external: list[str] | None = None) -> list[str]:
+    """Return the themes a document carries: every builtin plus the selected installed ones.
+
+    Builtin themes are always embedded, so only user themes are a per-document choice.
+    Unknown or reserved ids in the selection are ignored on purpose: a document must
+    still assemble when a configured theme has been removed (AGENTS section 17).
+    """
+    selected = {str(item) for item in (selected_external or [])}
+    installed = set(external_theme_ids())
+    return sorted(set(builtin_theme_ids()) | (selected & installed))
 
 
 def normalize_theme_id(theme_id: str | None) -> str:
@@ -165,7 +267,7 @@ def validate_theme(theme_id: str) -> str:
     """
     normalized = normalize_theme_id(theme_id)
     resolve_theme_chain(normalized)
-    selectable = builtin_theme_ids()
+    selectable = theme_ids()
     if normalized not in selectable:
         raise ValueError(
             f"“{normalized}”不是可选主题；可选：" + ", ".join(selectable)
@@ -186,7 +288,7 @@ def resolve_theme_chain(theme_id: str) -> list[str]:
     """
     theme_id = normalize_theme_id(theme_id)
 
-    if not os.path.isdir(os.path.join(_THEMES_ROOT, theme_id)):
+    if not theme_dir(theme_id):
         raise ValueError(f"未找到模板：“{theme_id}”")
 
     chain = [theme_id]
@@ -199,7 +301,7 @@ def resolve_theme_chain(theme_id: str) -> list[str]:
             break
         if parent in seen:
             raise ValueError(f"检测到模板循环继承：{' -> '.join(chain + [parent])}")
-        if not os.path.isdir(os.path.join(_THEMES_ROOT, parent)):
+        if not theme_dir(parent):
             raise ValueError(f"模板“{current}”继承“{parent}”，但未找到父模板“{parent}”。")
         chain.insert(0, parent)
         seen.add(parent)
@@ -215,8 +317,9 @@ def resolve_theme_file(theme_id: str, filename: str) -> str | None:
     viewer script and the print sheet are shared assets (see the getters below).
     """
     for name in reversed(resolve_theme_chain(theme_id)):
-        path = os.path.join(_THEMES_ROOT, name, filename)
-        if os.path.isfile(path):
+        directory = theme_dir(name)
+        path = os.path.join(directory, filename) if directory else ""
+        if path and os.path.isfile(path):
             return path
     return None
 
@@ -230,32 +333,40 @@ def theme_css_chain(theme_id: str) -> str:
     chain = resolve_theme_chain(theme_id)
     parts: list[str] = []
     for name in chain:
-        text = _read_text(os.path.join(_THEMES_ROOT, name, "theme.css"))
-        if text:
-            parts.append(text)
-            _logger.debug("已加载主题样式：%s/theme.css", name)
-        else:
-            _logger.debug("主题 %s 没有 theme.css，已跳过。", name)
+        directory = theme_dir(name)
+        for filename in theme_files(name):
+            text = _read_text(os.path.join(directory, filename)) if directory else ""
+            if text:
+                parts.append(text)
+                _logger.debug("已加载主题样式：%s/%s", name, filename)
+            else:
+                _logger.debug("主题 %s 缺少 %s，已跳过。", name, filename)
     if not parts:
         raise ValueError(
-            f"模板“{theme_id}”的继承链中没有 theme.css。继承链：{' -> '.join(chain)}"
+            f"模板“{theme_id}”的继承链中没有可用的主题样式。继承链：{' -> '.join(chain)}"
         )
     return "\n".join(parts)
 
 
 def theme_css_text(theme_id: str) -> str:
-    """Return one theme's own ``theme.css`` (no chain), raising when it is missing.
+    """Return the CSS one theme contributes on its own (no chain), in declaration order.
 
-    Phase 6C inlines every builtin theme separately, so the bundle goes through
-    here rather than through ``theme_css_chain()``: a missing file is a broken
-    package (the spec names these files as required) and must not be downgraded to
-    "no styles for that theme".
+    The files come from ``metadata.json`` (Phase 7B unified builtin and user themes on
+    that field). Phase 6C inlines every builtin theme separately, so the bundle goes
+    through here rather than through ``theme_css_chain()``, and a missing declared file
+    is a broken theme rather than a downgrade to "no styles".
     """
-    path = os.path.join(_THEMES_ROOT, str(theme_id), "theme.css")
-    text = _read_text(path)
-    if not text:
-        raise ValueError(f"主题缺少 theme.css：{path}")
-    return text
+    directory = theme_dir(theme_id)
+    if not directory:
+        raise ValueError(f"未找到主题：“{theme_id}”")
+    parts: list[str] = []
+    for filename in theme_files(theme_id):
+        path = os.path.join(directory, filename)
+        text = _read_text(path)
+        if not text:
+            raise ValueError(f"主题缺少声明的 CSS 文件：{path}")
+        parts.append(text)
+    return "\n".join(parts)
 
 
 # The base theme carries the global fallback tokens and is never selectable; every

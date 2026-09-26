@@ -16,7 +16,7 @@ from pathlib import Path
 
 from core.config import CONFIG_FILENAME, PROJECT_ROOT, load_config
 from core.conversion_plan import build_conversion_plan, document_output_map
-from core.viewer_assets import normalize_theme_id, theme_ids
+from core.viewer_assets import builtin_theme_ids, normalize_theme_id
 
 _logger = logging.getLogger("gui")
 
@@ -179,8 +179,12 @@ class BridgeApi:
     # ── Template ────────────────────────────────────────────
 
     def get_templates(self) -> list[str]:
-        """Return list of available template names."""
-        return theme_ids() or ["modern"]
+        """Return the builtin themes a document's default theme may be chosen from.
+
+        Builtin only on purpose: user themes are installed and selected on their own
+        surface (Phase 9), while this list feeds the existing dropdown.
+        """
+        return builtin_theme_ids() or ["modern"]
 
     # ── Config ──────────────────────────────────────────────
 

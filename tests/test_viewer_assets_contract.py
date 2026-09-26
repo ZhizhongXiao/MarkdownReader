@@ -11,6 +11,7 @@ exactly once"; that payload contract now lives in
 """
 
 import ast
+import json
 import sys
 from pathlib import Path
 
@@ -83,8 +84,94 @@ def imported_from(path: str, module: str) -> set:
     return names
 
 
-def test_the_selectable_registry_is_exactly_the_three_builtins():
+def write_theme(root, theme_id, files=None, **metadata):
+    """Create a theme directory with a metadata.json and its declared CSS files."""
+    directory = root / theme_id
+    directory.mkdir(parents=True, exist_ok=True)
+    payload = {"id": theme_id, "name": theme_id.title()}
+    payload.update(metadata)
+    if files:
+        payload["files"] = [name for name, _ in files]
+    (directory / "metadata.json").write_text(
+        json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+    )
+    for name, css in files or []:
+        (directory / name).write_text(css, encoding="utf-8")
+    return directory
+
+
+def test_the_selectable_builtin_registry_is_exactly_the_three_builtins():
+    """Phase 7B：`theme_ids()` 变成「已安装的可选主题」；没装外置主题时等价于 builtin。"""
+    assert viewer_assets.builtin_theme_ids() == SELECTABLE
+    assert viewer_assets.external_theme_ids() == []
     assert viewer_assets.theme_ids() == SELECTABLE
+
+
+def test_a_theme_can_come_from_the_user_assets_directory(tmp_path, monkeypatch):
+    """Phase 7B：同一个 loader 读两个来源；外置主题自带它声明的视觉 CSS。"""
+    external = tmp_path / "external"
+    write_theme(
+        external,
+        "paper",
+        files=[
+            ("variables.css", ":root{--paper:1}\n"),
+            ("content.css", "html[data-theme-id=paper]{--paper:2}\n"),
+        ],
+    )
+    monkeypatch.setattr(viewer_assets, "external_themes_root", lambda: str(external))
+
+    assert viewer_assets.external_theme_ids() == ["paper"]
+    assert viewer_assets.theme_source("paper") == viewer_assets.SOURCE_EXTERNAL
+    assert viewer_assets.theme_source("modern") == viewer_assets.SOURCE_BUILTIN
+    assert viewer_assets.theme_ids() == ["modern", "office", "paper", "vscode"]
+    assert viewer_assets.builtin_theme_ids() == SELECTABLE
+    assert viewer_assets.theme_metadata("paper")["name"] == "Paper"
+    assert viewer_assets.theme_files("paper") == ["variables.css", "content.css"]
+    assert viewer_assets.theme_css_text("paper").count("--paper") == 2
+
+
+def test_a_user_theme_may_not_shadow_a_builtin_id(tmp_path, monkeypatch):
+    """builtin 优先：同 id 的用户目录必须被忽略，而不是悄悄替换随包主题。"""
+    external = tmp_path / "external"
+    write_theme(external, "modern", files=[("theme.css", ":root{--fake:1}\n")])
+    write_theme(external, "base", files=[("theme.css", ":root{--fake:2}\n")])
+    monkeypatch.setattr(viewer_assets, "external_themes_root", lambda: str(external))
+
+    assert viewer_assets.external_theme_ids() == []
+    assert viewer_assets.theme_source("modern") == viewer_assets.SOURCE_BUILTIN
+    assert "--fake" not in viewer_assets.theme_css_text("modern")
+
+
+def test_selectable_themes_are_builtins_plus_the_selected_external_ones(tmp_path, monkeypatch):
+    """文档携带哪些主题：builtin 永远全带 + 本次选中的已安装外置主题。"""
+    external = tmp_path / "external"
+    write_theme(external, "paper", files=[("theme.css", ":root{--paper:1}\n")])
+    write_theme(external, "academic", files=[("theme.css", ":root{--academic:1}\n")])
+    monkeypatch.setattr(viewer_assets, "external_themes_root", lambda: str(external))
+
+    assert viewer_assets.selectable_theme_ids(["paper"]) == [
+        "modern",
+        "office",
+        "paper",
+        "vscode",
+    ]
+    assert viewer_assets.selectable_theme_ids(["paper", "academic"]) == [
+        "academic",
+        "modern",
+        "office",
+        "paper",
+        "vscode",
+    ]
+    assert viewer_assets.selectable_theme_ids(["ghost"]) == SELECTABLE
+    assert viewer_assets.selectable_theme_ids([]) == SELECTABLE
+
+
+def test_every_builtin_declares_the_css_files_it_contributes():
+    """AGENTS section 14：metadata 声明实际 CSS 文件列表；builtin 用同一字段。"""
+    for theme_id in viewer_assets.theme_ids(include_hidden=True):
+        declared = viewer_assets.theme_metadata(theme_id)["files"]
+        assert viewer_assets.theme_files(theme_id), theme_id
+        assert viewer_assets.theme_files(theme_id) == declared
 
 
 def test_the_base_theme_is_hidden_and_never_selectable():
@@ -187,5 +274,10 @@ def test_the_config_module_no_longer_owns_asset_paths():
 
 
 def test_the_gui_registry_comes_from_the_asset_layer():
-    assert imported_from("gui/api.py", "core.viewer_assets") == {"normalize_theme_id", "theme_ids"}
+    # Phase 7B: theme_ids() also reports installed user themes, so the existing
+    # dropdown asks for the builtin set explicitly until Phase 9 adds their surface.
+    assert imported_from("gui/api.py", "core.viewer_assets") == {
+        "builtin_theme_ids",
+        "normalize_theme_id",
+    }
     assert "TEMPLATES_DIR" not in (ROOT / "gui" / "api.py").read_text(encoding="utf-8")

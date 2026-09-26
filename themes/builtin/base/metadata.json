@@ -5,5 +5,6 @@
     "version": "1.0.0",
     "description": "Base theme tokens (palette, fonts, layout sizes) inherited by every builtin theme.",
     "extends": null,
-    "hidden": true
+    "hidden": true,
+  "files": ["theme.css"]
 }
