@@ -2,7 +2,10 @@
   "build": {
     "input": "C:/path/to/your/markdown",
     "template": "modern",
-    "output": "C:/path/to/output"
+    "output": "C:/path/to/output",
+    "external_themes": [
+      "paper"
+    ]
   },
   "document": {
     "numbering": false

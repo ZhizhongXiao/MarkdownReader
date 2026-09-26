@@ -10,6 +10,7 @@ place that knows where those files are.
 import json
 import logging
 import os
+import tempfile
 
 from core import paths
 
@@ -83,13 +84,139 @@ def normalize_template_name(template_name: str | None) -> str:
     return _TEMPLATE_ALIASES.get(name, name)
 
 
+# Only these keys have persistence semantics today. `title` and `overwrite` are runtime
+# overrides, so `_DEFAULTS` is deliberately not dumped wholesale: that would turn
+# internal policy into user configuration by accident.
+_PERSISTED_SECTIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("build", ("input", "template", "output", "external_themes")),
+    ("document", ("numbering",)),
+    ("features", ("build_index", "auto_open", "preserve_structure")),
+)
+
+_SECTION_DEFAULTS: dict = {
+    "input": "",
+    "template": "modern",
+    "output": "output",
+    "external_themes": [],
+    "numbering": False,
+    "build_index": True,
+    "auto_open": True,
+    "preserve_structure": False,
+}
+
+# Characters that make an entry look like a path rather than an id. config.json stores
+# theme ids; a path would freeze one machine's layout into a portable file.
+_PATH_LOOKALIKES = ("/", "\\", ":")
+
+
+def _clean_external_themes(value, *, strict: bool) -> list[str]:
+    """Return the configured user-theme ids, cleaned at the configuration layer only.
+
+    It never asks whether a theme is installed: a theme that is temporarily missing must
+    not erase the user's choice (AGENTS section 17). ``strict`` is for values the program
+    passes to `save_config` -- a path-like id there is a caller bug, not a typo in
+    somebody's JSON, so it raises instead of being dropped.
+    """
+    if value is None:
+        return []
+    if not isinstance(value, (list, tuple)):
+        if strict:
+            raise ValueError(f"external_themes 必须是列表：{value!r}")
+        _logger.warning("忽略无效的 external_themes（不是列表）：%r", value)
+        return []
+
+    cleaned: list[str] = []
+    for item in value:
+        if not isinstance(item, str):
+            if strict:
+                raise ValueError(f"external_themes 只接受字符串：{item!r}")
+            _logger.warning("忽略无效的外置主题条目（不是字符串）：%r", item)
+            continue
+        theme_id = item.strip()
+        if not theme_id:
+            continue
+        if any(marker in theme_id for marker in _PATH_LOOKALIKES):
+            if strict:
+                raise ValueError(f"external_themes 只接受主题 ID，不接受路径：{theme_id}")
+            _logger.warning("忽略疑似路径的外置主题条目：%s", theme_id)
+            continue
+        if theme_id in cleaned:
+            continue
+        cleaned.append(theme_id)
+    return cleaned
+
+
+def normalize_config(cfg: dict, *, strict: bool = False) -> dict:
+    """Return a configuration dict with the theme fields normalized.
+
+    `template` keeps using this module's own `normalize_template_name()`: config owns the
+    selector syntax, and importing the asset layer here would reverse the dependency
+    direction (viewer_assets already depends on config).
+    """
+    normalized = dict(cfg)
+    normalized["template"] = normalize_template_name(normalized.get("template"))
+    normalized["external_themes"] = _clean_external_themes(
+        normalized.get("external_themes"), strict=strict
+    )
+    return normalized
+
+
+def _to_sections(cfg: dict) -> dict:
+    """Return the canonical sectioned JSON shape written to a config file."""
+    sections: dict = {}
+    for section, keys in _PERSISTED_SECTIONS:
+        sections[section] = {key: cfg.get(key, _SECTION_DEFAULTS[key]) for key in keys}
+    return sections
+
+
+def save_config(cfg: dict, config_path: str | None = None) -> str:
+    """Persist the configuration atomically and return the path written.
+
+    Writes to `profile/config.json` (Phase 8B): the EXE directory may be read-only, and
+    the profile location is where the rest of the user data will live. The temporary file
+    is created beside the target so `os.replace` stays on one volume, and a failure
+    leaves the previous file byte for byte as it was.
+    """
+    data = _to_sections(normalize_config(cfg, strict=True))
+    path = str(config_path) if config_path else paths.config_path()
+    directory = os.path.dirname(os.path.abspath(path))
+    os.makedirs(directory, exist_ok=True)
+
+    handle, temp_path = tempfile.mkstemp(prefix=CONFIG_FILENAME + ".tmp-", dir=directory)
+    os.close(handle)
+    try:
+        with open(temp_path, "w", encoding="utf-8") as file:
+            json.dump(data, file, ensure_ascii=False, indent=2)
+            file.write("\n")
+            file.flush()
+            os.fsync(file.fileno())
+        os.replace(temp_path, path)
+    except Exception:
+        try:
+            os.unlink(temp_path)
+        except OSError:
+            pass
+        raise
+    _logger.info("配置已保存：%s", path)
+    return path
+
+
 def _find_config(config_path: str | None = None) -> str | None:
-    """Find the config.json file."""
+    """Return the configuration file to read.
+
+    Order: an explicit path, then `profile/config.json`, then the legacy file beside the
+    application, then nothing (defaults). The profile file wins *even when it is
+    unreadable*: from Phase 8B on it is the real file, and falling back to the legacy copy
+    would make an old file reappear whenever the new one is damaged.
+    """
     if config_path and os.path.isfile(config_path):
         return config_path
-    default_path = os.path.join(PROJECT_ROOT, CONFIG_FILENAME)
-    if os.path.isfile(default_path):
-        return default_path
+    profile_path = paths.config_path()
+    if os.path.isfile(profile_path):
+        return profile_path
+    legacy_path = os.path.join(PROJECT_ROOT, CONFIG_FILENAME)
+    if os.path.isfile(legacy_path):
+        return legacy_path
     return None
 
 
@@ -146,4 +273,5 @@ def load_config(
             if value is not None:
                 cfg[key] = value
     cfg["template"] = normalize_template_name(cfg.get("template"))
+    cfg["external_themes"] = _clean_external_themes(cfg.get("external_themes"), strict=False)
     return cfg
