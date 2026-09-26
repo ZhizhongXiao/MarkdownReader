@@ -19,9 +19,10 @@ standalone closure checker can report payload sizes without guessing which part
 of the final document came from which resource. Each theme gets its own label
 (`theme:<id>`), which is what makes "every builtin theme exactly once" checkable.
 
-`assembly_warnings` is part of the return shape; since Phase 6C the theme payload
-either assembles or raises (`validate_theme` plus a required `theme.css`), so it
-stays empty and is reserved for a future degrade path.
+`assembly_warnings` carries the non-fatal theme-selection notices (Phase 7E: an id from
+a config that outlived a theme is ignored with a warning, and a document default that is
+an installed user theme is added) while a broken or unsafe theme payload still raises.
+Choosing which themes to carry is advisory; embedding one is not.
 """
 
 import logging

@@ -164,6 +164,8 @@ CSS 分析在 `core/css_audit.py`：validator / inliner / closure checker 共用
   id 形如 `^[a-z][a-z0-9-]{1,31}$`，安装目录名即 id。
 - 主题必须把所有规则 scoped 到 `html[data-theme-id="<自己的 id>"]`（第 3 节），组件规则再加 `body.theme-<id>`。
 - `config.json` 的 `external_themes` 只写 id（不写路径）；不存在或已删除的 id 忽略并记 warning，不阻断转换（第 5 节）。
+  配置位置与读取顺序（Phase 8B）：显式路径 > `paths.config_path()`（profile）> legacy > defaults，profile 存在即权威；
+  `BridgeApi.get_theme_state()` 用 `configured` / `selected` / `missing` 区分「记住的选择」与「当前可恢复的选择」。
 - **extends 只能是 `base` 或 null**（Phase 7 audit follow-up 收紧）。selectable builtin（modern/office/vscode）在 6C 之后把
   规则 scoped 到各自 id，external 继承它们是语义假的；真要"基于 Office 做 Paper"需要另行设计 selector rebasing / token
   inheritance，而不是 metadata 写个 `extends`。

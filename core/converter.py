@@ -46,8 +46,9 @@ from core.viewer_assets import (
 _logger = logging.getLogger(__name__)
 
 # v2 的 production 内部默认值（Cutover C3）：显式写下来，而不是依赖 renderer 当下的隐式默认，
-# 这样 adapter 默认值将来变化不会悄悄改变 MarkdownReader。**不进 config.json**（Phase 8 才决定
-# 哪些 renderer 选项成为产品配置）；timeout / retries / maxBytes 仍是 5C 的实现策略。
+# 这样 adapter 默认值将来变化不会悄悄改变 MarkdownReader。**不进 config.json**：Phase 8 已决定
+# renderer protocol options 保持内部运行策略，不成为用户偏好；timeout / retries / maxBytes 仍是
+# 5C 的实现策略。
 _V2_DEFAULT_OPTIONS = {"math": True, "fetch_remote_resources": True}
 
 
@@ -318,7 +319,8 @@ def _convert_v2(
 
     if report is not None:
         # renderer warnings 在前（网络降级、资源缺失），assembly warnings 在后。
-        # 6C 起装配期不再有主题降级（不可用即失败），因此后者今天恒为空，保留通道。
+        # 后者携带非致命的主题选择提示（Phase 7E）：配置里已不存在的主题被忽略，文档默认的
+        # 外置主题被补进 selection；不安全或损坏的主题载荷仍是硬失败（装配期抛错）。
         report["warnings"] = list(envelope.get("warnings") or []) + list(
             assembled.get("assembly_warnings") or []
         )

@@ -470,7 +470,7 @@ VS Code
              samples/demo.html 逐字节不变（BFD53709…，1,574,223 B）；531 passed / 0 xfailed
 Phase 6 封板：6A 9bde750 / 6B d5b6b1b / 6C b7c372b + cc1bff9 / 6D 2a9f1c5
 7A  PASS    core/paths.py：source .runtime/、onedir data/、onefile %LOCALAPPDATA%/MarkdownReader
-             sys.frozen / _MEIPASS 只此一处（静态守卫）；config.json 与日志搬迁留给 Phase 10/11
+             sys.frozen / _MEIPASS 只此一处（静态守卫）；config.json 的位置策略在 Phase 8B 落地（写 profile、不搬 legacy），日志搬迁仍留给 Phase 10/11
 7B  PASS    统一 Theme Registry：builtin + assets/themes/external；builtin 优先、保留 ID 不可 shadow
              theme_ids()=已安装；builtin_theme_ids()=打包集；selectable_theme_ids(选中)；metadata files 声明
 7C  PASS    契约先行（红）：校验规则 / 安装 / 删除 / 导出模板 / 资源内嵌 / 与 checker 的策略一致性
@@ -530,33 +530,55 @@ themes/template/
 
 # Phase 8 — Config 持久化
 
-废弃：
+`template` **不废弃**：它一直是「文档默认主题 ID」，与外置主题列表是两个独立概念。
 
 ```json
-"template": "modern"
+{
+  "build": {
+    "template": "modern",
+    "external_themes": ["paper", "academic"]
+  }
+}
 ```
-
-改为：
-
-```json
-"external_themes": [
-  "paper",
-  "academic"
-]
-```
-
-三个 builtin themes 不进入这个配置。
-
-GUI 启动时：
 
 ```text
-读取上次选择
-+
-扫描已安装 External Themes
-→ 恢复主页面选择
+build.template         文档默认主题 ID（builtin，或当前可用的 external）
+build.external_themes  本次生成额外携带的外置主题 ID 列表（builtin 永不进入）
 ```
 
-不存在的 ID 自动忽略。
+配置读写归 core 所有：
+
+```text
+core/config.py  load_config() / normalize_config() / save_config()（原子写）
+gui/api.py      set_configs() 只做 GUI 特有的路径规范化，然后委托 core
+```
+
+位置与读取顺序（Phase 8B）：
+
+```text
+显式 config_path > paths.config_path()（profile/config.json）
+                 > PROJECT_ROOT/config.json（legacy）
+                 > defaults
+```
+
+- 只写 profile；**不搬迁、不删除 legacy**（剩余 user-storage 治理见 Phase 10）。
+- profile 文件一旦存在就是权威：损坏时 warning + defaults，**不**回落 legacy。
+- 落盘字段只限已有持久化语义的那些 + `build.external_themes`（`title` / `overwrite` 仍是运行期覆盖）。
+
+GUI 启动时恢复选择（Phase 8C；控件本身属 Phase 9）：
+
+```text
+get_theme_state() → default / installed / configured / selected / missing / warnings
+```
+
+```text
+configured = config.json 记住的选择（持久事实）
+selected   = 其中当前已安装且有效的子集（运行态）
+missing    = configured 中当前不存在的 ID
+```
+
+主题暂时缺失时保留 `configured`，只在 `selected` 里忽略并给 warning（AGENTS §17）。
+`template` 指向已删除的外置主题时保留配置值，转换仍按 Phase 7 规则 hard failure。
 
 ## 验收
 
@@ -614,9 +636,10 @@ Settings page
 
 ---
 
-# Phase 10 — User storage
+# Phase 10 — 剩余 user-storage 迁移与治理
 
-实现统一 `core/paths.py`。
+`core/paths.py` 已在 Phase 7A 落地，`profile/config.json` 已在 **Phase 8B** 起成为权威配置位置
+（读取顺序：显式路径 > profile > legacy > defaults；不自动搬迁 legacy）。本阶段收尾剩余部分：
 
 ## Source
 

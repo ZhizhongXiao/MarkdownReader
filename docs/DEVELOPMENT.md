@@ -158,7 +158,8 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
   v2 时 renderer 走 C2 的 bridge，装配交给 `core/html_assembly.py`（含注入账本）；
   `report["warnings"]` 固定为 **renderer warnings + assembly warnings**（顺序即此顺序）。
   v2 的 production 内部默认是 `_V2_DEFAULT_OPTIONS = {"math": True, "fetch_remote_resources": True}`，
-  `renderer_options` 在其上覆盖，**不进 config.json**（Phase 8 才决定哪些 renderer 选项成为产品配置）。
+  `renderer_options` 在其上覆盖，**不进 config.json**：Phase 8 已决定 renderer protocol options 保持内部运行策略，
+  不成为用户偏好（见 `_V2_DEFAULT_OPTIONS` 的注释）。
   失败语义与 v1 对齐：模板不可装配 → log + 返回 `None`（不写文件）；renderer / bridge 失败保留
   actionable 异常（缺 artifact 不被吞成静默无输出）；未知 `renderer_version` 明确报错，不静默按 v1 处理。
   `core/converter.py` 运行期**不调用** closure checker（它只是 test / release gate）。
@@ -201,11 +202,22 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
   checker 共用同一扫描器，不再有第二套 URL 解析），`validate_installed_theme()` 在**每次读取**前重跑，
   而 selection 只由 `resolve_theme_selection()` 解析一次（bundle、菜单、账本、warning 同源）。
 
+- Config 持久化（Phase 8A–8D）：`core/config.py` 自己拥有规范化与**原子写**（`normalize_config()` /
+  `save_config()`：目标目录内的临时文件 + `os.replace`，失败清理且旧文件逐字节保留，`_DEFAULTS` 不整体落盘）。
+  `gui/api.py::set_configs()` 只做 GUI 特有的输入/输出路径规范化，然后委托 core。读取顺序为
+  **显式路径 > `paths.config_path()`（profile）> `PROJECT_ROOT/config.json`（legacy）> defaults**；profile 一旦存在
+  即权威（损坏时 warning + defaults，不回落 legacy），写入只走 profile，不搬迁 legacy。
+  `build.template`（文档默认主题）与 `build.external_themes`（额外携带列表）是两个独立概念，只写 id、永不写路径；
+  `BridgeApi.get_theme_state()` 区分 `configured` / `selected` / `missing`，GUI 控件属 Phase 9。
+
 ## 命名与路径约定
 
 - 项目名、窗口标题与产物统一 `MarkdownReader`；npm 包标识为小写 `markdownreader-node-renderer`。
 - 主题目录按实际路径写 `themes/builtin/modern|office|vscode/`，目录名即配置里的主题 ID（`modern|office|vscode`），也是 `metadata.json` 的 `id`；契约见 [Viewer 契约](VIEWER_CONTRACT.md)。
-- 浏览器存储键统一 `markdownreader-*`；配置文件为 `config.json`（仓库只保留 `config.example.json`）。
+- 浏览器存储键统一 `markdownreader-*`；配置文件为 `config.json`（仓库只保留 `config.example.json`）。仓库里的
+  `config.json` 是 legacy 位置，真实位置由 `core/paths.py::config_path()` 给出（source `.runtime/profile/`、onedir
+  `data/profile/`、onefile `%LOCALAPPDATA%/MarkdownReader/profile/`）；Phase 8B 起读写只走它，优先级为
+  显式路径 > profile > legacy > defaults。
 - WebView2 数据目录为 `%LOCALAPPDATA%\MarkdownReader\WebView2`。
 
 ## 构建与发布

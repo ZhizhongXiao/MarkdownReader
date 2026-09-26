@@ -348,7 +348,7 @@ samples/demo.html                         → 未改动，快照契约仍成立
   证据：新增 `tests/test_renderer_v2_bridge.py`（13 项）+ `tests/test_node_runtime.py` 5 → 11 项；全套 `453 → 472 passed, 7 xfailed`；`--runxfail` = `7 failed, 472 passed`（7 项旧 production TARGET 仍严格 xfail，C4 才转绿）；`test_demo_generation.py` + `test_converter_integration.py` 9 passed（demo 与生产 v1 输出逐字节不变）；真实调用实证：`renderer_version="v2"` 返回 `['features','headings','html','ok','protocol_version','resources','warnings']`（protocol 2、styles=katex），默认调用仍返回 v1 的 `['assets','headings','html','warnings']`；renderer `npm test` 仍 91；ruff 全绿。**未做**：converter 仍不调用 v2（C3）、`renderer/dist/` 仍未进发布包（C4）、未引入 `config.json` 配置项（Phase 8）。
 
 - 2026-09-25（Cutover C3：converter 的显式 v2 装配路径）：`process_single` / `process_batch` 增加**内部** keyword `renderer_version`（默认 `"v1"`）与 `renderer_options`；显式 `"v2"` 时 renderer 走 C2 bridge、装配交给 `core/html_assembly.py`。**默认路径未改行为**：v1 仍走原有的 inline 装配（只把写盘抽成两条路径共用的 `_write_output`），`samples/demo.html` 逐字节不变。
-  * **v2 的 production 内部默认**由 converter 显式写下：`_V2_DEFAULT_OPTIONS = {"math": True, "fetch_remote_resources": True}`；`renderer_options=None` 用默认副本，传入则在其上覆盖。于是生产行为不依赖 renderer 当下的隐式默认值（adapter 默认将来变化不会悄悄改变 MarkdownReader），测试仍能显式关网；**不进 `config.json` / GUI / `load_config()`**（Phase 8 才决定哪些 renderer 选项成为产品配置；timeout / retries / maxBytes 仍是 5C 的实现策略）。
+  * **v2 的 production 内部默认**由 converter 显式写下：`_V2_DEFAULT_OPTIONS = {"math": True, "fetch_remote_resources": True}`；`renderer_options=None` 用默认副本，传入则在其上覆盖。于是生产行为不依赖 renderer 当下的隐式默认值（adapter 默认将来变化不会悄悄改变 MarkdownReader），测试仍能显式关网；**不进 `config.json` / GUI / `load_config()`**（Phase 8 已决定：renderer protocol options 保持内部运行策略，不成为产品配置；timeout / retries / maxBytes 仍是 5C 的实现策略）。
   * **warnings 语义**：v1 原样（赋值 `render_result["warnings"]`）；v2 = **renderer warnings + assembly warnings**（网络/资源降级在前，模板装配降级在后），同样是赋值而非累加。`process_batch` 现有的「warnings 非空 → `status = "warning"`」因此原样复用，GUI / batch 层不需要知道用的是哪个 renderer。envelope 的 `features` / `resources` / `injections` **不**塞进 report（没有产品消费者，提前加就是新的隐式 API）。
   * **失败语义与 v1 对齐**：模板不可装配 → log + 返回 `None`（不写文件）；renderer / bridge 失败保留 actionable 异常（缺 artifact 不被吞成静默无输出）。两种行为都有测试。
   * **`theme_body_class` 归位**：新增 `core/config.py::theme_body_class()`，converter 与 assembler 共用同一实现，两处 private 重复删除（5D 登记的 checkpoint：此刻已真正有两个 production-path consumer）。类名本身仍是 IMPLEMENTATION DETAIL。
@@ -421,6 +421,15 @@ samples/demo.html                         → 未改动，快照契约仍成立
   * **预算语义与实现一致**：声明 CSS 的 UTF-8 字节现在计入 `MAX_PAYLOAD_BYTES`（`MAX_CSS_BYTES` 保留为更严格的 CSS 单项上限）。
   * **措辞**：`_convert_v2()` docstring 去掉"只有显式请求 v2 才可达"这个 C3 时代限定。
   证据：`tests/test_external_theme_contract.py`（含 image-set/src/webkit/image/cross-fade/element 拒绝与 gradient 正例对照）、`tests/test_theme_bundle_contract.py`（菜单快照不回扫）、`tests/test_standalone_closure.py`（image-set 反证判 failure）；全套 **619 passed / 0 failed / 1 skipped**；浏览器 10 passed + 1 skipped；onefile/onedir + `validate_release --mode both` PASS；demo 字节不变；ruff 全绿。
+
+- 2026-09-26（Phase 8：Config 持久化 —— 模型、写入口与启动恢复）：`template` **不废弃**（它是「文档默认主题 ID」），与外置主题列表并存。
+  * **读写归 core**：新增 `normalize_config()` / `save_config()`（原子写：目标目录内临时文件 + `os.replace`，失败清理且旧文件逐字节保留）；落盘字段只限已有持久化语义的那些 + `build.external_themes`，`_DEFAULTS` 不整体落盘，`title` / `overwrite` 仍是运行期覆盖。`gui/api.py::set_configs()` 只做 GUI 特有的路径规范化后委托 core（原先 GUI 私有的 `_write_json()` 删除）。
+  * **位置优先级（8B）**：显式路径 > `paths.config_path()`（profile/config.json）> `PROJECT_ROOT/config.json`（legacy）> defaults。profile 一旦存在即权威：损坏时 warning + defaults，**不**回落 legacy。写入只走 profile，**不搬迁、不删除 legacy**（剩余 user-storage 治理留在 Phase 10）。
+  * **配置层规范化**：`external_themes` 非字符串丢弃、trim、空串丢弃、去重保序、路径型拒绝；**不查询是否安装**（主题暂时缺失不得抹掉用户选择）。读用户手改 JSON：丢弃 + warning；`save_config()` 收到程序内部传来的路径型 ID：`ValueError`。
+  * **状态 API（8C）**：`BridgeApi.get_theme_state()` 返回 `default / installed / configured / selected / missing / warnings` —— `configured` 是文件记住的选择，`selected` 是当前可恢复的子集，`missing` 是差额；安装但校验失败的主题给 warning 且 `selected` 为空（转换仍按 Phase 7 规则 hard failure）。`template` 指向已删除的外置主题时保留配置值。
+  * **renderer options 决策**：`math` / `fetch_remote_resources` 保持内部运行策略，**不**成为产品配置（代码注释与 `docs/DEVELOPMENT.md` 同步给出结论）。
+  * **current-state 收口**：`core/html_assembly.py` 的「`assembly_warnings` 恒为空」与 `core/converter.py::_convert_v2` 的「后者今天恒为空」改为当前事实（非致命主题选择提示走 `assembly_warnings` -> report；不安全 / 损坏的主题载荷是硬失败）。
+  证据：新增 `tests/test_config_contract.py`（11 项）与 `tests/test_gui_theme_state_contract.py`（5 项），涵盖 profile>legacy、profile 损坏不复活 legacy、`save_config()` 失败旧文件逐字节保留 + 临时文件清理、`configured/selected/missing` 在「删主题 -> 重启」下的关系；demo 字节不变（config 不进产物）。
 
 ## texmath 审计记录（Phase 4B，为什么不复用 `markdown-it-texmath`）
 
