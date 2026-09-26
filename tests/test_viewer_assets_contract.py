@@ -4,9 +4,10 @@
 those files live". Before 6A that knowledge was spread over `core/config.py`, both
 assembly paths and the GUI dropdown, so moving one file touched five modules.
 
-The contracts below describe **today's** documents. Phase 6C replaces the
-"exactly one theme is injected" half with "every builtin theme is injected exactly
-once"; asserting that here would lock behaviour the code does not have yet.
+The contracts below describe **today's** documents. Phase 6C replaced the
+"exactly one theme is injected" contract with "every builtin theme is injected
+exactly once"; that payload contract now lives in
+`tests/test_theme_bundle_contract.py`.
 """
 
 import ast
@@ -111,7 +112,7 @@ def test_the_old_asset_paths_are_gone():
 
 
 # The theme payload contracts live in `tests/test_theme_bundle_contract.py` now.
-# Before Phase 6C this module asserted "exactly one theme is injected"; 6C replaces
+# Before Phase 6C this module asserted "exactly one theme is injected"; 6C replaced
 # that target with "every builtin theme is injected exactly once, and the document's
 # own default is active in the markup", which is a deliberate transition and not a
 # retired assertion.
