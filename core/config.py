@@ -7,6 +7,7 @@ inheritance chain -- live in `core/viewer_assets.py`; that layer is the only
 place that knows where those files are.
 """
 
+import contextlib
 import json
 import logging
 import os
@@ -192,10 +193,9 @@ def save_config(cfg: dict, config_path: str | None = None) -> str:
             os.fsync(file.fileno())
         os.replace(temp_path, path)
     except Exception:
-        try:
+        # 失败清理不能掩盖原始异常：旧文件不动，临时文件尽力删掉。
+        with contextlib.suppress(OSError):
             os.unlink(temp_path)
-        except OSError:
-            pass
         raise
     _logger.info("配置已保存：%s", path)
     return path
