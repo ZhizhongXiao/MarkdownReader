@@ -1,0 +1,13 @@
+/* Content rules.
+   Prefix them with html[data-theme-id="my-theme"]; when they target descendants of
+   body, also require body.theme-my-theme, the class the reader sets for the active
+   theme. */
+
+html[data-theme-id="my-theme"] body.theme-my-theme .markdown-body h1 {
+    border-bottom: 2px solid var(--color-heading);
+    padding-bottom: 0.2em;
+}
+
+html[data-theme-id="my-theme"] body.theme-my-theme .markdown-body h2 {
+    border-bottom: 1px solid var(--color-heading);
+}

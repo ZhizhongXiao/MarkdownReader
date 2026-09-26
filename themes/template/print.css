@@ -1,0 +1,8 @@
+/* Print rules. Print styles are injected after every theme, so keep them
+   limited to paper behaviour (the shared print.css already forces white paper). */
+
+@media print {
+    html[data-theme-id="my-theme"] body.theme-my-theme .markdown-body h1 {
+        border-bottom: none;
+    }
+}

@@ -1,0 +1,19 @@
+/* Your theme's tokens.
+   Every rule is scoped to your own theme id, so the three builtin themes stay
+   untouched: html[data-theme-id="my-theme"] selects them. */
+
+html[data-theme-id="my-theme"] {
+    --color-bg: #f7f7f4;
+    --color-text: #1c1c1c;
+    --color-heading: #000000;
+    --color-link: #0b5cad;
+    --color-code-bg: #eeeeea;
+}
+
+html[data-theme-id="my-theme"][data-theme="dark"] {
+    --color-bg: #1b1b1b;
+    --color-text: #e8e8e8;
+    --color-heading: #ffffff;
+    --color-link: #7ab7ff;
+    --color-code-bg: #262626;
+}

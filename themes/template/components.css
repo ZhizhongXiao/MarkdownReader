@@ -1,0 +1,11 @@
+/* Component rules for the semantic markup the reader produces.
+   Override only what your theme wants to change; the built-in defaults stay in
+   place for everything you do not mention. */
+
+html[data-theme-id="my-theme"] body.theme-my-theme .code-block-wrapper {
+    border-left: 3px solid var(--color-link);
+}
+
+html[data-theme-id="my-theme"] body.theme-my-theme .table-wrapper table th {
+    background: var(--color-code-bg);
+}

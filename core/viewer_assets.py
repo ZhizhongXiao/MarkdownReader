@@ -41,6 +41,8 @@ _logger = logging.getLogger(__name__)
 # themes under `themes/builtin/<id>/`. This module is the only place that knows it.
 _VIEWER_ROOT = os.path.join(BUNDLE_ROOT, "viewer")
 _THEMES_ROOT = os.path.join(BUNDLE_ROOT, "themes", "builtin")
+# The exportable starting point for user themes; a real theme, not scaffolding.
+_THEME_TEMPLATE_ROOT = os.path.join(BUNDLE_ROOT, "themes", "template")
 _VIEWER_SHELL = os.path.join(_VIEWER_ROOT, "viewer.html")
 _VIEWER_LAYOUT_CSS = os.path.join(_VIEWER_ROOT, "css", "layout.css")
 _VIEWER_PRINT_CSS = os.path.join(_VIEWER_ROOT, "css", "print.css")
@@ -70,6 +72,15 @@ SOURCE_EXTERNAL = "external"
 # payload, and "default" is the pre-6B name of base, kept out so that old documents
 # and old habits cannot resolve to a user theme.
 RESERVED_THEME_IDS = ("base", "modern", "office", "vscode", "default")
+
+
+def theme_template_root() -> str:
+    """Return the packaged theme template directory (``themes/template/``).
+
+    It sits beside ``themes/builtin/`` because it is a real theme: exporting it gives
+    the user something that already imports cleanly (AGENTS section 16).
+    """
+    return _THEME_TEMPLATE_ROOT
 
 
 def external_themes_root() -> str:

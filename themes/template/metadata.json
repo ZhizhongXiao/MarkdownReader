@@ -1,0 +1,14 @@
+{
+  "id": "my-theme",
+  "name": "My Theme",
+  "author": "",
+  "version": "1.0.0",
+  "description": "External theme template. Set your own id, then edit the CSS.",
+  "extends": "base",
+  "files": [
+    "variables.css",
+    "content.css",
+    "components.css",
+    "print.css"
+  ]
+}
