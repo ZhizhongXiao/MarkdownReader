@@ -6,7 +6,10 @@ their reading position, the print stylesheet and the viewer's own wiring all
 depend on these names. The lists are explicit on purpose -- when a name vanishes
 this module fails, instead of the failure appearing later in somebody's browser.
 
-`docs/VIEWER_CONTRACT.md` explains why each group is a contract.
+`docs/VIEWER_CONTRACT.md` explains why each group is a contract. Phase 6C added the
+theme layer (`btn-theme`, the menu, `html[data-theme-id]`, `markdownreader-theme-id`);
+those names are frozen here too -- the document calls them KEEP, so something has to
+check them, otherwise "KEEP" is only a sentence.
 """
 
 import sys
@@ -23,6 +26,8 @@ DOM_IDS = (
     "btn-expand-all-content",
     "btn-collapse-all-content",
     "btn-auto-numbering",
+    "btn-theme",
+    "theme-menu",
     "btn-dark-mode",
     "btn-print",
     "toc-sidebar",
@@ -43,6 +48,7 @@ STORAGE_KEYS = (
     "markdownreader-toc-collapsed-v2",
     "markdownreader-toc-panel-collapsed",
     "markdownreader-theme",
+    "markdownreader-theme-id",
     "markdownreader-autonumbering",
     "markdownreader-toc-width",
     "markdownreader-expandlevel",
@@ -59,13 +65,25 @@ SELECTORS = (
     ".code-block-wrapper",
     ".copy-btn",
     ".viewer-container",
+    ".theme-picker",
+    ".theme-menu",
+    ".theme-option",
+    ".theme-option.active",
 )
 
-ATTRIBUTES = ("data-theme", "data-auto-numbering", "data-id", "data-level", "--sidebar-width")
+ATTRIBUTES = (
+    "data-theme",
+    "data-theme-id",
+    "data-auto-numbering",
+    "data-id",
+    "data-level",
+    "--sidebar-width",
+)
 
 
 def test_every_toolbar_and_layout_id_is_still_there():
-    shell = viewer_assets.viewer_shell_text()
+    # 主题菜单是装配期填进 {{THEME_MENU}} 的，因此它的标记来源与外壳并列。
+    shell = viewer_assets.viewer_shell_text() + viewer_assets.theme_menu_markup()
     missing = [name for name in DOM_IDS if f'id="{name}"' not in shell]
 
     assert shell.strip(), "viewer 外壳缺失"

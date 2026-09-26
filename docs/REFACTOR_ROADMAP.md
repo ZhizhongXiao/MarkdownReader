@@ -462,7 +462,7 @@ VS Code
              html[data-theme-id] + body.theme-* 双条件；markdownreader-theme-id（全局，回落文档默认）
              初始状态与菜单进 shell（无 unthemed 首屏；已保存偏好 boot 后恢复）
              viewer/js/theme-switcher.js；contracts 22 → 30（THEME1–8）；浏览器 6 组合矩阵
-             demo 1,547,612 → 1,574,151 B（+25.9 KiB）；真实打包 + validate_release PASS
+             demo 1,547,612 → 1,574,223 B（+26.0 KiB）；真实打包 + validate_release PASS
 6D          清理旧目录与文档收口（未开始）
 ```
 

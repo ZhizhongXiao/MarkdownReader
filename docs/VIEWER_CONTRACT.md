@@ -54,7 +54,7 @@ tests/browser/*.test.mjs               真实浏览器：离线资源、Mermaid�
 - 恢复顺序：HTML 先带**文档默认主题**，boot 后若 `markdownreader-theme-id` 是本页有效的主题 id 才切过去。所以"持久化主题 ≠ 文档默认主题"时会有一次可见切换（见第 2 节的两行契约）。
 - builtin 主题是随包必需资产：任一可选主题的 `theme.css` 缺失时装配**硬失败**，不产出缺主题变量的 HTML（6B 及以前只降级）。
 
-## 4. DOM id（16 个）
+## 4. DOM id（15 个）
 
 `viewer.html` 提供的钩子，viewer JS 与索引页/测试都按名字取用：
 
@@ -93,7 +93,7 @@ tests/browser/*.test.mjs               真实浏览器：离线资源、Mermaid�
 
 GUI 自己的 `gui-theme` 属于应用外壳，不属于生成文档。
 
-## 5. class / 属性 / CSS 变量
+## 6. class / 属性 / CSS 变量
 
 - TOC：`.toc-row[data-id][data-level]`、`.toc-toggle`、`.toc-link`、`.active`
 - 折叠：`.is-collapsed`（TOC 分支）、`.is-hidden-by-collapse`、`.is-hidden-by-content-fold`、`.heading-toggle`
@@ -103,7 +103,7 @@ GUI 自己的 `gui-theme` 属于应用外壳，不属于生成文档。
 - 明暗 / 编号 / 主题：`html[data-theme]`、`html[data-auto-numbering]`、`html[data-theme-id]`
 - 布局变量：`--sidebar-width`（拖拽写入 `<html>` 的内联样式）
 
-## 6. 明确**不是**契约（可以自由改）
+## 7. 明确**不是**契约（可以自由改）
 
 - viewer JS 的内部函数名、模块边界、文件切分方式；
 - CSS 文件的切分与命名（`viewer.css` / `theme.css` 是否合并、拆分）；
@@ -114,7 +114,7 @@ GUI 自己的 `gui-theme` 属于应用外壳，不属于生成文档。
 - 主题菜单的视觉（位置、size、hover 样式）与工具条按钮的图标；
 - 主题菜单里名称的**文案**（`metadata.json` 的 `name` 可改），但"菜单项必须带 `data-theme-id`"是契约。
 
-## 7. 资产知识只有一处来源
+## 8. 资产知识只有一处来源
 
 Phase 6A 起，viewer/theme 资产的定位与读取集中在 `core/viewer_assets.py`：
 

@@ -680,16 +680,26 @@ contract("THEME1 the initial theme is the document default", "pass", async () =>
 contract("THEME2 switching updates data-theme-id and the body class together", "pass", async () => {
   const session = await boot();
   try {
+    // A class that merely *looks* like a theme class must survive a switch: the
+    // switcher owns the classes of the themes this document carries, not every name
+    // that happens to start with "theme-". Without this the assertion below passes
+    // on an implementation that wipes the whole prefix.
+    session.doc.body.classList.add("theme-product-marker");
+
     switchTheme(session, "office");
     assert.equal(activeThemeId(session), "office");
     assert.ok(session.doc.body.classList.contains("theme-office"));
     assert.ok(!session.doc.body.classList.contains("theme-modern"),
       "the previous theme class must be removed, not kept alongside");
+    assert.ok(session.doc.body.classList.contains("theme-product-marker"),
+      "a non-theme class must survive: body class = " + session.doc.body.className);
 
     switchTheme(session, "vscode");
     assert.equal(activeThemeId(session), "vscode");
     assert.ok(session.doc.body.classList.contains("theme-vscode"));
     assert.ok(!session.doc.body.classList.contains("theme-office"));
+    assert.ok(session.doc.body.classList.contains("theme-product-marker"),
+      "and it must still survive the second switch");
   } finally {
     session.close();
   }

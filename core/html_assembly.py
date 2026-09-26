@@ -99,7 +99,15 @@ def assemble_document(
     template_html = viewer_shell_text()
     if not template_html:
         raise ValueError("缺少阅读器页面外壳（viewer/viewer.html），无法装配。")
-    for placeholder in (PLACEHOLDER_TITLE, PLACEHOLDER_CONTENT, PLACEHOLDER_TOC):
+    # 缺任一必需占位符都必须在装配期失败：外壳不完整不该产出"看起来对"的文档。
+    # 6C 起 {{THEME_ID}}（默认主题）与 {{THEME_MENU}}（主题菜单）与标题、正文、目录同为必需。
+    for placeholder in (
+        PLACEHOLDER_TITLE,
+        PLACEHOLDER_CONTENT,
+        PLACEHOLDER_TOC,
+        PLACEHOLDER_THEME_ID,
+        PLACEHOLDER_THEME_MENU,
+    ):
         if placeholder not in template_html:
             raise ValueError(f"模板“{resolved_template}”缺少占位符 {placeholder}，无法装配。")
     template_html = template_html.replace(

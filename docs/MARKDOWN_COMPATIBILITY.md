@@ -380,8 +380,12 @@ samples/demo.html                         → 未改动，快照契约仍成立
   * **print 特异性**：`print.css` 的暗色覆盖由 `[data-theme="dark"]` 提升为 `html[data-theme-id][data-theme="dark"]` —— 与主题暗色 token 同特异性，靠 print.css 最后注入的 source order 胜出。这条外加 3 主题 × 明暗 **6 组合的 computed-style 实测**（`tests/browser/theme_matrix.test.mjs`），其中 Office 还带组件级差异断言（正文衬线字体），用于抓住"未定域组件选择器"这类最危险的泄漏。
   * **契约先行**：先写契约（红）再实现（绿）—— `tests/test_theme_bundle_contract.py` 8 项 + jsdom `THEME1–THEME8`（22 → **30**，条数硬锁），旧 22 条行为契约一字未改。6A 的"未选中主题不得进入文档"断言按计划**正式由 bundle 契约取代**（有意的 TARGET transition，不是修坏的测试）。
   * **硬失败锁**：主题文件缺失由 6B 的"降级"改为**硬失败**，这个有意语义变化锁在两层 —— 装配契约（`assemble_document` 抛 `ValueError` 并指明缺哪一套）与转换边界（v2 返回 `None` 不写文件、v1 上抛），并已用一次性脚本验证判别力：把 `theme_css_text` 换回"缺文件返回空串"的旧语义时，该断言确实变红（产物静默少一套主题）。
-  * **samples/demo.html 再生**：`1,547,612 → 1,574,151` B（**+25.9 KiB**，远低于 100 KiB guard）；SHA-256 由 `1018DB5A…` 变为 `1A8581AC…` —— 6C 是真实功能变更，因此不再与 6B 的字节比对，gate 变为"fresh generate == 新的入库标本"（比较前统一换行）。standalone verdict 仍为 `standalone`。标本工作区行尾按 `.gitattributes` 的 `eol=lf` 归为 LF。
+  * **samples/demo.html 再生**：`1,547,612 → 1,574,223` B（**+26.0 KiB**，远低于 100 KiB guard）；SHA-256 由 `1018DB5A…` 变为 `BFD53709…` —— 6C 是真实功能变更，因此不再与 6B 的字节比对，gate 变为"fresh generate == 新的入库标本"（比较前统一换行）。standalone verdict 仍为 `standalone`。标本工作区行尾按 `.gitattributes` 的 `eol=lf` 归为 LF。
   证据：`uv run pytest -q` = **526 passed / 0 failed / 0 xfailed**（6B 为 521；+2 为本次补的硬失败锁）；浏览器验收 **8 passed, 1 skipped, 0 failed（RESULT OK）** —— skipped 是既有的条件性用例（`assembler_offline` 未传 `MR_EXTRA_PAGE` 时按设计跳过），矩阵本身 3 主题 × 明暗全部实测；真实 onefile + onedir 重建后 `validate_release --mode both` **PASS**（`viewer/js/theme-switcher.js` 与 manifest 均在包内）；ruff 全绿。**未做**：外置主题（Phase 7）、GUI 下拉美化（Phase 9）、config schema 变更（Phase 8）、索引页主题切换（不属于本阶段）、任何视觉重新设计。
+- 2026-09-25（Phase 6C follow-up：远端审计发现的三处 contract 漂移）：审计确认主体实现无 CSS scope / bundle / 明暗正交 / print matrix 问题，同时指出三处需要收口的地方，已单独提交（不改写已推送的 `b7c372b`）：
+  * **切换器只删除本页实际携带的主题 class**：原实现删除一切 `theme-*` 前缀的 class，会把将来可能出现的 `theme-preview` 之类产品 class 一起抹掉；现在按 `knownThemeIds()` 生成待删集合。判别性断言：先给 body 加 `theme-product-marker`，切换两次后它必须仍在（旧实现下该断言为红）。
+  * **KEEP 契约与文档对齐**：`tests/test_viewer_keep_contract.py` 现在冻结 6C 新增的名字 —— `btn-theme`、`theme-menu`、`markdownreader-theme-id`、`data-theme-id`、`.theme-picker`、`.theme-menu`、`.theme-option`、`.theme-option.active`（菜单标记来源为 `theme_menu_markup()`，与外壳并列）。此前文档称 KEEP、测试并未冻结，违背 6A 建立该静态契约的初衷。同时修正文档计数与编号：DOM id 16 → **15**（菜单项无 id），`class / 属性` 一节由重复的 §5 改为 §6，后续顺延为 §7/§8。
+  * **新增必需占位符纳入装配前校验**：`{{THEME_ID}}` / `{{THEME_MENU}}` 与标题、正文、目录同为必需，`core/html_assembly.py` 的完整性循环扩到 5 个；并补参数化窄测试（逐个删掉任一占位符 → 装配必须抛错）。此前这两个占位符缺失不会被拦，只会表现为"主题不对/菜单没有"。
 
 
 

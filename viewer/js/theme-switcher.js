@@ -30,11 +30,13 @@
 
     function applyThemeId(themeId) {
         document.documentElement.setAttribute(THEME_ID_ATTRIBUTE, themeId);
-        // Only our own classes are removed: any other product class on <body> has to
-        // survive a theme switch, which is why className is never reassigned.
+        // Only the theme classes this document actually carries are removed, and only
+        // through classList: a class that merely starts with "theme-" (a future
+        // product marker, say) has to survive a switch, which is also why className is
+        // never reassigned.
         var body = document.body;
-        Array.prototype.slice.call(body.classList).forEach(function (name) {
-            if (name.indexOf(THEME_CLASS_PREFIX) === 0) body.classList.remove(name);
+        knownThemeIds().forEach(function (known) {
+            body.classList.remove(THEME_CLASS_PREFIX + known);
         });
         body.classList.add(THEME_CLASS_PREFIX + themeId);
     }

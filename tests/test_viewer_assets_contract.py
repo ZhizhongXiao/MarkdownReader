@@ -13,11 +13,20 @@ import ast
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from core import viewer_assets  # noqa: E402
+from core import html_assembly, viewer_assets  # noqa: E402
+from core.config import (  # noqa: E402
+    PLACEHOLDER_CONTENT,
+    PLACEHOLDER_THEME_ID,
+    PLACEHOLDER_THEME_MENU,
+    PLACEHOLDER_TITLE,
+    PLACEHOLDER_TOC,
+)
 from core.html_assembly import assemble_document  # noqa: E402
 
 # Phase 6B unified these three: the selector, the metadata id and the directory
@@ -107,6 +116,31 @@ def test_the_delivered_document_uses_classic_scripts_only():
 
     assert 'type="module"' not in html
     assert "<script>" in html
+
+
+@pytest.mark.parametrize(
+    "placeholder",
+    (
+        PLACEHOLDER_TITLE,
+        PLACEHOLDER_CONTENT,
+        PLACEHOLDER_TOC,
+        PLACEHOLDER_THEME_ID,
+        PLACEHOLDER_THEME_MENU,
+    ),
+)
+def test_an_incomplete_shell_is_refused_before_assembly(placeholder, monkeypatch):
+    """shell 缺任一必需占位符时装配必须失败，而不是产出"看起来对"的文档。
+
+    5 个占位符都是必需的：前三个是文档内容，6C 新增的两个是**默认主题**与**主题菜单**。
+    少了它们的产物不会报错，只会在浏览器里表现为"主题不对/菜单没有"，因此拒绝必须发生在
+    装配期（与"缺 builtin theme 即硬失败"同一原则）。
+    """
+    assert placeholder in viewer_assets.viewer_shell_text(), placeholder
+    incomplete = viewer_assets.viewer_shell_text().replace(placeholder, "")
+    monkeypatch.setattr(html_assembly, "viewer_shell_text", lambda: incomplete)
+
+    with pytest.raises(ValueError, match="缺少占位符"):
+        assemble_document(envelope(), title="标题", template_name="modern")
 
 
 def test_the_viewer_payload_is_assembled_from_the_manifest_in_order():
