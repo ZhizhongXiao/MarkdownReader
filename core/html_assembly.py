@@ -35,14 +35,13 @@ from core.config import (
     PLACEHOLDER_TOC,
     normalize_template_name,
 )
+from core.external_themes import theme_bundle
 from core.toc import generate_toc_html
 from core.viewer_assets import (
-    BASE_THEME_ID,
     builtin_theme_ids,
     shared_print_css_text,
     shared_viewer_js_text,
     theme_body_class,
-    theme_css_text,
     theme_menu_markup,
     validate_theme,
     viewer_layout_css_text,
@@ -71,6 +70,7 @@ def assemble_document(
     title: str,
     template_name: str = "modern",
     numbering: bool = False,
+    external_themes: list[str] | None = None,
 ) -> dict:
     """Assemble a standalone HTML document from a renderer v2 envelope.
 
@@ -124,11 +124,12 @@ def assemble_document(
         head_fragments.append((f"<style>\n{viewer_css}\n</style>", "viewer-css", None))
 
     try:
-        # ── Theme bundle (Phase 6C): base plus every builtin theme, each once ──
+        # ── Theme bundle (Phase 6C, extended by 7E) ──
+        # base + 全部 builtin + 本文档选中的外置主题，各恰好一次；
         # 每套主题单独一条 label：漏掉一套或重复内嵌都能被指出是哪一套。
-        for theme_id in (BASE_THEME_ID, *builtin_theme_ids()):
+        for entry in theme_bundle(external_themes, default=resolved_template):
             head_fragments.append(
-                (f"<style>\n{theme_css_text(theme_id)}\n</style>", f"theme:{theme_id}", None)
+                (f"<style>\n{entry['css']}\n</style>", f"theme:{entry['id']}", None)
             )
     except ValueError as error:
         raise ValueError(f"主题资源不可用：{error}") from error
@@ -203,6 +204,8 @@ def assemble_document(
     # Phase 6C: the document's default theme is active in the markup, and the theme
     # menu is part of the shell, so neither depends on a script having run.
     template_html = template_html.replace(PLACEHOLDER_THEME_ID, resolved_template)
-    template_html = template_html.replace(PLACEHOLDER_THEME_MENU, theme_menu_markup())
+    template_html = template_html.replace(
+        PLACEHOLDER_THEME_MENU, theme_menu_markup(external_themes)
+    )
 
     return {"html": template_html, "injections": injections, "assembly_warnings": assembly_warnings}

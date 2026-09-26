@@ -248,20 +248,27 @@ def normalize_theme_id(theme_id: str | None) -> str:
     return normalize_template_name(theme_id)
 
 
-def theme_menu_markup() -> str:
+def theme_menu_markup(extra_ids: list[str] | None = None) -> str:
     """Return the theme menu markup for the shell's ``{{THEME_MENU}}`` placeholder.
 
     The menu ships inside the document instead of being built by the viewer script:
     the options and their names are registry facts, and the page must be correct
-    before any script runs (Phase 6C).
+    before any script runs (Phase 6C). ``extra_ids`` are the user themes this
+    document carries (Phase 7E); the order stays builtin first, then theirs.
     """
+    entries = list(builtin_themes())
+    known = {theme_id for theme_id, _ in entries}
+    for theme_id in selectable_theme_ids(extra_ids):
+        if theme_id in known:
+            continue
+        entries.append((theme_id, str(theme_metadata(theme_id).get("name") or theme_id)))
     options = "".join(
         '<button type="button" class="theme-option" data-theme-id="'
         + escape(theme_id, quote=True)
         + '">'
         + escape(name)
         + "</button>"
-        for theme_id, name in builtin_themes()
+        for theme_id, name in entries
     )
     return '<div class="theme-menu" id="theme-menu" hidden>' + options + "</div>"
 

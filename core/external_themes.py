@@ -273,6 +273,39 @@ def inline_theme_css(theme_id: str) -> str:
     return "\n".join(parts)
 
 
+def theme_bundle(selected: list[str] | None = None, *, default: str | None = None) -> list[dict]:
+    """Return every theme a document carries: id, source and inline-ready CSS.
+
+    Order is base, then the builtin themes, then the selected user themes. base holds
+    the tokens; each selectable theme scopes its rules to its own id, so a later theme
+    only wins for what it actually sets.
+
+    A document whose default theme is an installed user theme carries it even when the
+    selection forgot to mention it: the alternative is a document that opens in a theme
+    it does not contain.
+    """
+    chosen = {str(item) for item in (selected or [])}
+    default_id = str(default) if default else ""
+    if default_id and viewer_assets.theme_source(default_id) == viewer_assets.SOURCE_EXTERNAL:
+        if default_id not in chosen:
+            _logger.warning("文档默认主题 %s 未在选中列表里，已自动补入本文档。", default_id)
+            chosen.add(default_id)
+
+    order = [viewer_assets.BASE_THEME_ID, *viewer_assets.builtin_theme_ids()]
+    order.extend(viewer_assets.selectable_theme_ids(sorted(chosen)))
+
+    payload = []
+    for theme_id in dict.fromkeys(order):
+        source = viewer_assets.theme_source(theme_id)
+        css = (
+            inline_theme_css(theme_id)
+            if source == viewer_assets.SOURCE_EXTERNAL
+            else viewer_assets.theme_css_text(theme_id)
+        )
+        payload.append({"id": theme_id, "source": source, "css": css})
+    return payload
+
+
 def _inline_assets(css: str, css_dir: str, theme_root: str, label: str) -> str:
     """Replace every allowed local ``url()`` target with a data URI."""
 

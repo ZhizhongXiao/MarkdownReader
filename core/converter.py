@@ -27,13 +27,13 @@ from core.conversion_plan import (
     collect_input_documents,
     document_output_map,
 )
+from core.external_themes import theme_bundle
 from core.fm import parse_front_matter
 from core.html_assembly import assemble_document
 from core.index_builder import DEFAULT_INDEX_FILENAME, build_index
 from core.renderer_node import render_markdown_node
 from core.toc import generate_toc_html
 from core.viewer_assets import (
-    builtin_theme_css_text,
     shared_print_css_text,
     shared_viewer_js_text,
     theme_body_class,
@@ -57,6 +57,15 @@ def _resolve_v2_options(overrides: dict | None) -> dict:
     if overrides:
         options.update(overrides)
     return options
+
+
+def _selected_external_themes(cfg: dict) -> list[str]:
+    """Return the installed user themes this document should carry (Phase 7E).
+
+    Builtin themes are always bundled; this is only the per-document selection from
+    config.json. Ids that are not installed are ignored further down, by the registry.
+    """
+    return [str(item) for item in (cfg.get("external_themes") or [])]
 
 
 def _write_output(output_path: str, template_html: str) -> str:
@@ -161,6 +170,7 @@ def process_single(
             title=title,
             template_name=template_name,
             numbering=bool(cfg.get("numbering", False)),
+            external_themes=_selected_external_themes(cfg),
             output_path=output_path,
             renderer_options=renderer_options,
             report=report,
@@ -190,6 +200,8 @@ def process_single(
     # 6. Load the reader assets through the asset layer (Phase 6A/6B)
     # 不可用（不存在 / 循环继承 / 非可选）的主题必须在这里失败，与拆分前一致。
     validate_theme(template_name)
+    # 7E：本文档额外携带哪些已安装外置主题（config.json 的 external_themes）。
+    selected_external = _selected_external_themes(cfg)
     template_html = viewer_shell_text()
     if not template_html:
         _logger.error("阅读器外壳缺失：viewer/viewer.html。")
@@ -200,15 +212,20 @@ def process_single(
     )
     # Phase 6C：默认主题在标记里就已生效，主题菜单也是 shell 的一部分，都不依赖脚本。
     template_html = template_html.replace(PLACEHOLDER_THEME_ID, template_name)
-    template_html = template_html.replace(PLACEHOLDER_THEME_MENU, theme_menu_markup())
+    template_html = template_html.replace(
+        PLACEHOLDER_THEME_MENU, theme_menu_markup(selected_external)
+    )
 
     # 7. Collect CSS (viewer.css + 主题 bundle) → inject into <head>
     css_parts = []
     layout_css = viewer_layout_css_text()
     if layout_css:
         css_parts.append(layout_css)
-    # Phase 6C：每份文档携带全部 builtin 主题，阅读时即时切换（不重新渲染正文）。
-    css_parts.append(builtin_theme_css_text())
+    # Phase 6C：每份文档携带全部 builtin 主题；7E 起还带上本文档选中的外置主题。
+    # 两条装配路径都走 theme_bundle()，因此 v1 回退与 v2 的主题载荷一致。
+    css_parts.extend(
+        entry["css"] for entry in theme_bundle(selected_external, default=template_name)
+    )
     combined_css = "\n".join(css_parts)
 
     # 8. Collect JS → inject before </body>
@@ -265,6 +282,7 @@ def _convert_v2(
     title: str,
     template_name: str,
     numbering: bool,
+    external_themes: list[str] | None,
     output_path: str,
     renderer_options: dict | None,
     report: dict | None,
@@ -289,6 +307,7 @@ def _convert_v2(
             title=title,
             template_name=template_name,
             numbering=numbering,
+            external_themes=external_themes,
         )
     except ValueError as error:
         _logger.error("v2 装配失败：%s；原因：%s", output_path, error)

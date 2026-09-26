@@ -9,6 +9,7 @@ closure checker 只在测试里跑（`tools/standalone_closure.py`）；`core/co
 """
 
 import base64
+import json
 import sys
 from pathlib import Path
 
@@ -324,3 +325,25 @@ def test_a_missing_required_builtin_theme_fails_the_conversion(tmp_path, monkeyp
     with pytest.raises(ValueError):
         convert(tmp_path, "# 标题\n\n正文。\n", name="v1.md", version="v1")
     assert not (tmp_path / "v1.html").exists(), "v1 也不得留下半成品"
+
+
+def test_an_installed_user_theme_reaches_the_document_when_selected(tmp_path, monkeypatch):
+    """Phase 7E：config.json 的 external_themes 决定文档额外携带哪些外置主题。"""
+    external = tmp_path / "external" / "paper"
+    external.mkdir(parents=True)
+    (external / "theme.css").write_text(
+        'html[data-theme-id="paper"]{--paper:1}', encoding="utf-8"
+    )
+    (external / "metadata.json").write_text(
+        json.dumps({"id": "paper", "name": "Paper", "files": ["theme.css"]}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        viewer_assets, "external_themes_root", lambda: str(tmp_path / "external")
+    )
+
+    result = convert(tmp_path, "# 标题\n\n正文。\n", cfg={"external_themes": ["paper"]})
+
+    assert result["saved"] is not None
+    assert "--paper:1" in result["html"]
+    assert 'data-theme-id="paper">Paper</button>' in result["html"]

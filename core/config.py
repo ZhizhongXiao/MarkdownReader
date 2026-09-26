@@ -67,6 +67,9 @@ _DEFAULTS: dict = {
     "overwrite": False,
     "preserve_structure": False,
     "title": None,
+    # Phase 7E: which installed user themes the next documents carry. Builtin themes
+    # are bundled into every document and never belong in this list (AGENTS 17).
+    "external_themes": [],
 }
 
 _TEMPLATE_ALIASES: dict[str, str] = {
@@ -108,6 +111,7 @@ def _parse_json(filepath: str) -> dict:
         ("build", "input"): "input",
         ("build", "template"): "template",
         ("build", "output"): "output",
+        ("build", "external_themes"): "external_themes",
         ("document", "numbering"): "numbering",
         ("features", "build_index"): "build_index",
         ("features", "auto_open"): "auto_open",

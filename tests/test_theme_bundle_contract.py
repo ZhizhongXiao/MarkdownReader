@@ -14,6 +14,7 @@ them at runtime, so three things must hold at assembly time:
 covers the delivered artifact.
 """
 
+import json
 import sys
 from pathlib import Path
 
@@ -108,6 +109,95 @@ def test_the_document_stays_standalone_and_runs_one_classic_script():
     assert "<script src=" not in html
     assert "<link" not in html
     assert "http://" not in html and "https://" not in html
+
+
+def make_user_theme(root, theme_id, css, **metadata):
+    """Write an installed user theme under ``root``."""
+    directory = root / theme_id
+    directory.mkdir(parents=True, exist_ok=True)
+    payload = {"id": theme_id, "name": theme_id.title(), "files": list(css)}
+    payload.update(metadata)
+    (directory / "metadata.json").write_text(
+        json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+    )
+    for name, text in css.items():
+        (directory / name).write_text(text, encoding="utf-8")
+    return directory
+
+
+def test_a_selected_user_theme_is_bundled_with_its_assets_inlined(tmp_path, monkeypatch):
+    """7E：文档携带 builtin + 本次选中的外置主题，且外置主题的资源必须内嵌。"""
+    external = tmp_path / "external"
+    source = make_user_theme(
+        external, "paper", {"theme.css": 'html[data-theme-id="paper"]{--paper:1}'}
+    )
+    (source / "assets").mkdir()
+    (source / "assets" / "bg.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    (source / "theme.css").write_text(
+        'html[data-theme-id="paper"]{background:url(assets/bg.png)}', encoding="utf-8"
+    )
+    monkeypatch.setattr(viewer_assets, "external_themes_root", lambda: str(external))
+
+    built = assemble_document(
+        envelope(), title="标题", template_name="modern", external_themes=["paper"]
+    )
+    labels = [entry["label"] for entry in built["injections"]]
+
+    assert labels.count("theme:paper") == 1
+    assert labels.count("theme:office") == 1, "builtin 仍然全带"
+    assert "data:image/png;base64," in built["html"], "外置主题的资源必须内嵌"
+    assert (
+        '<button type="button" class="theme-option" data-theme-id="paper">Paper</button>'
+        in built["html"]
+    ), "菜单必须包含已选中的外置主题，且用 metadata 的可读名称"
+
+
+def test_an_installed_but_unselected_user_theme_stays_out(tmp_path, monkeypatch):
+    external = tmp_path / "external"
+    make_user_theme(external, "paper", {"theme.css": "html{--paper:1}"})
+    make_user_theme(external, "academic", {"theme.css": "html{--academic:1}"})
+    monkeypatch.setattr(viewer_assets, "external_themes_root", lambda: str(external))
+
+    built = assemble_document(
+        envelope(), title="标题", template_name="modern", external_themes=["paper"]
+    )
+    labels = [entry["label"] for entry in built["injections"]]
+
+    assert labels.count("theme:paper") == 1
+    assert "theme:academic" not in labels
+    assert "--academic" not in built["html"]
+
+
+def test_a_configured_theme_that_is_not_installed_is_ignored(tmp_path, monkeypatch):
+    """AGENTS section 17：配置里存在但已删除的主题忽略即可，转换继续。"""
+    external = tmp_path / "external"
+    external.mkdir()
+    monkeypatch.setattr(viewer_assets, "external_themes_root", lambda: str(external))
+
+    built = assemble_document(
+        envelope(), title="标题", template_name="modern", external_themes=["ghost"]
+    )
+    labels = [entry["label"] for entry in built["injections"]]
+
+    assert labels.count("theme:ghost") == 0
+    assert labels.count("theme:modern") == 1
+    assert '<html lang="zh-CN" data-theme-id="modern">' in built["html"]
+
+
+def test_a_document_default_user_theme_is_bundled_even_when_unselected(tmp_path, monkeypatch):
+    """决策 3：template 指向已安装但未选中的外置主题时，自动补入本文档。"""
+    external = tmp_path / "external"
+    make_user_theme(external, "paper", {"theme.css": 'html[data-theme-id="paper"]{--paper:1}'})
+    monkeypatch.setattr(viewer_assets, "external_themes_root", lambda: str(external))
+
+    built = assemble_document(
+        envelope(), title="标题", template_name="paper", external_themes=[]
+    )
+    labels = [entry["label"] for entry in built["injections"]]
+
+    assert labels.count("theme:paper") == 1
+    assert '<html lang="zh-CN" data-theme-id="paper">' in built["html"]
+    assert '<body class="theme-paper">' in built["html"]
 
 
 def test_a_missing_required_theme_fails_instead_of_shipping_partial_css(tmp_path, monkeypatch):
