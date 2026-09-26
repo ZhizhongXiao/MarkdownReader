@@ -2,15 +2,20 @@
 
 An external theme is a directory carrying ``metadata.json`` and the CSS files it
 declares. It is CSS-only on purpose (AGENTS section 14): no JavaScript, no custom
-viewer DOM, no network. A generated document embeds the whole theme, so it has to
-keep working offline and keep working after the theme is deleted from
-MarkdownReader (Phase 7 acceptance 3).
+viewer DOM, no network. A generated document embeds the whole theme, so it has to keep
+working offline and keep working after the theme is deleted from MarkdownReader
+(Phase 7 acceptance 3).
 
-The reference policy is the one the closure checker already applies to a finished
-document (``tools/standalone_closure.py``): a ``url()`` target that is not ``data:``,
-``about:`` or a fragment is an external subresource, and ``core`` may not import
-``tools``, so the patterns exist in both places with a contract test asserting they
-agree rather than drifting apart.
+Two rules shape this module:
+
+* **Validation happens at import time and again at every read.** The installed
+directory is a persistent user asset that later phases will let people open and edit,
+so "it was valid when it was installed" is not a reason to trust it afterwards.
+* **One scanner, three consumers.** ``core.css_audit`` owns the CSS analysis used by
+  this module, by the asset inliner and by the standalone closure checker: there is no
+  second URL parser behind the scenes. The theme *policy* (scope, at-rules, data URIs)
+  lives there as well, but the checker deliberately shares only the scanner -- ordinary
+  author CSS and the CSS-only theme format are different trust boundaries.
 """
 
 import base64
@@ -20,7 +25,7 @@ import os
 import re
 import shutil
 
-from core import viewer_assets
+from core import css_audit, viewer_assets
 
 _logger = logging.getLogger(__name__)
 
@@ -33,39 +38,30 @@ class ExternalThemeError(ValueError):
 # localStorage, so it has to be a plain lowercase slug.
 THEME_ID_PATTERN = re.compile(r"^[a-z][a-z0-9-]{1,31}$")
 
-# Same two patterns as tools/standalone_closure.py (locked by
-# tests/test_external_theme_contract.py): the loader and the checker must agree on
-# what counts as an external reference.
-CSS_URL_PATTERN = re.compile(r"""url\(\s*(?P<quote>["']?)(?P<ref>[^"'()]+)(?P=quote)\s*\)""")
-CSS_IMPORT_PATTERN = re.compile(r"""@import\s+(?P<quote>["'])(?P<ref>[^"']+)(?P=quote)""")
-INLINE_PREFIXES = ("data:", "about:", "#")
-REMOTE_PATTERN = re.compile(r"^(?:https?:)?//", re.IGNORECASE)
+# An external theme may only extend the global token layer. Extending a builtin
+# *selectable* theme would be semantically false after Phase 6C: those themes scope
+# their rules to their own id, so the parent's CSS would not apply while another theme
+# is active. Selector rebasing or token inheritance would have to be designed first.
+ALLOWED_PARENTS = ("base",)
 
 MAX_FILES = 16
-MAX_FILE_BYTES = 256 * 1024
-MAX_TOTAL_BYTES = 1024 * 1024
+# Budgets are for the payload that ends up inside the document, not for the directory:
+# declared CSS bytes plus, for every asset reference actually expanded, its base64
+# payload and the `data:<mime>;base64,` prefix.
+MAX_CSS_BYTES = 512 * 1024
+MAX_ASSET_BYTES = 2 * 1024 * 1024
+MAX_PAYLOAD_BYTES = 8 * 1024 * 1024
 
-# Markup or script that would escape the <style> element the theme is embedded in,
-# or that can run code from CSS.
-FORBIDDEN_CSS = (
-    ("@import", "@import"),
-    ("</style", "</style"),
-    ("<script", "<script"),
-    ("javascript:", "javascript"),
-    ("expression(", "expression"),
-    ("behavior:", "behavior"),
-    ("-moz-binding", "-moz-binding"),
-)
-
-MIME_TYPES = {
+# Extension to MIME, deliberately a subset of css_audit.ALLOWED_DATA_MIME: an SVG is
+# markup and would need its own content audit, so Phase 7 refuses it entirely.
+ASSET_MIME_TYPES = {
     ".png": "image/png",
     ".jpg": "image/jpeg",
     ".jpeg": "image/jpeg",
     ".gif": "image/gif",
     ".webp": "image/webp",
-    ".svg": "image/svg+xml",
-    ".woff2": "font/woff2",
     ".woff": "font/woff",
+    ".woff2": "font/woff2",
     ".ttf": "font/ttf",
     ".otf": "font/otf",
 }
@@ -82,9 +78,7 @@ def _read_text(path: str) -> str:
 def _check_id(theme_id: str) -> None:
     """Refuse malformed and reserved ids."""
     if not THEME_ID_PATTERN.match(theme_id):
-        raise ExternalThemeError(
-            f"主题 id 必须匹配 {THEME_ID_PATTERN.pattern}：{theme_id!r}"
-        )
+        raise ExternalThemeError(f"主题 id 必须匹配 {THEME_ID_PATTERN.pattern}：{theme_id!r}")
     reserved = set(viewer_assets.RESERVED_THEME_IDS)
     if theme_id in reserved:
         raise ExternalThemeError(
@@ -92,47 +86,51 @@ def _check_id(theme_id: str) -> None:
         )
 
 
+def _contained(candidate: str, root: str) -> bool:
+    """Return True when ``candidate`` really lives inside ``root``.
+
+    Both sides are resolved first: a symlink or junction inside the theme directory
+    points somewhere else on disk while looking contained as a string, and only the
+    real path can tell. Comparison is case-insensitive on Windows.
+    """
+    real_candidate = os.path.normcase(os.path.realpath(candidate))
+    real_root = os.path.normcase(os.path.realpath(root))
+    return real_candidate == real_root or real_candidate.startswith(real_root + os.sep)
+
+
 def _resolve_local(css_dir: str, theme_root: str, target: str, label: str) -> str:
-    """Resolve a local ``url()`` target inside the theme, or explain why not."""
-    candidate = os.path.abspath(os.path.join(css_dir, target))
-    inside = candidate == theme_root or candidate.startswith(theme_root + os.sep)
-    if not inside:
+    """Resolve a local reference to a real file inside the theme, or refuse."""
+    candidate = os.path.join(css_dir, target)
+    if not _contained(candidate, theme_root):
         raise ExternalThemeError(f"{label} 的 url() 逃逸主题目录：{target}")
     if not os.path.isfile(candidate):
         raise ExternalThemeError(f"{label} 引用的本地资源不存在：{target}")
-    return candidate
+    return os.path.realpath(candidate)
 
 
-def _check_css(text: str, label: str, css_dir: str, theme_root: str) -> None:
-    """Refuse CSS that could run code, break out of <style>, or reach the network."""
-    lowered = text.lower()
-    for needle, reason in FORBIDDEN_CSS:
-        if needle in lowered:
-            raise ExternalThemeError(f"{label} 含有被禁止的内容：{reason}")
-
-    import_match = CSS_IMPORT_PATTERN.search(text)
-    if import_match:
+def _asset_payload(css_dir: str, theme_root: str, target: str, label: str) -> tuple[str, int]:
+    """Return ``(data URI, payload bytes)`` for one local asset reference."""
+    path = _resolve_local(css_dir, theme_root, target, label)
+    mime = ASSET_MIME_TYPES.get(os.path.splitext(path)[1].lower())
+    if not mime:
+        raise ExternalThemeError(f"{label} 引用了不支持的资源类型：{target}")
+    size = os.path.getsize(path)
+    if size > MAX_ASSET_BYTES:
         raise ExternalThemeError(
-            f"{label} 不得使用 @import（{import_match.group('ref')}）：外置主题必须离线自包含。"
+            f"{label} 引用的资源超过单文件上限 {MAX_ASSET_BYTES // 1024} KiB：{target}"
         )
-
-    for match in CSS_URL_PATTERN.finditer(text):
-        target = match.group("ref").strip()
-        if target.startswith(INLINE_PREFIXES):
-            continue
-        if REMOTE_PATTERN.match(target):
-            raise ExternalThemeError(
-                f"{label} 引用了远程资源（{target}）：外置主题必须离线自包含。"
-            )
-        _resolve_local(css_dir, theme_root, target, label)
+    with open(path, "rb") as handle:
+        encoded = base64.b64encode(handle.read()).decode("ascii")
+    prefix = "data:" + mime + ";base64,"
+    return prefix + encoded, len(prefix) + len(encoded)
 
 
 def validate_theme_directory(directory: str) -> dict:
     """Validate a theme directory and return its metadata.
 
-    Everything an external theme may not do is refused here, before the files are
-    copied anywhere: a bad theme must fail at import with a reason, not at render
-    time in someone's browser.
+    Every rule an external theme must obey is checked here, and the same function runs
+    at import time and again on every read, because an installed theme is a user asset
+    that may be edited afterwards.
     """
     base = os.path.abspath(str(directory))
     if not os.path.isdir(base):
@@ -157,7 +155,14 @@ def validate_theme_directory(directory: str) -> dict:
 
     parent = metadata.get("extends")
     if parent is not None:
-        if not isinstance(parent, str) or not viewer_assets.theme_source(parent):
+        if not isinstance(parent, str) or parent not in ALLOWED_PARENTS:
+            raise ExternalThemeError(
+                "外置主题的 extends 只允许 "
+                + " / ".join(ALLOWED_PARENTS)
+                + " 或 null："
+                + str(parent)
+            )
+        if not viewer_assets.theme_source(parent):
             raise ExternalThemeError(f"父主题不存在：{parent}")
 
     declared = metadata.get("files")
@@ -166,7 +171,8 @@ def validate_theme_directory(directory: str) -> dict:
     if len(declared) > MAX_FILES:
         raise ExternalThemeError(f"files 最多 {MAX_FILES} 个文件：{len(declared)}")
 
-    total = 0
+    css_total = 0
+    payload_total = 0
     for entry in declared:
         filename = str(entry)
         if not filename.lower().endswith(".css"):
@@ -174,22 +180,68 @@ def validate_theme_directory(directory: str) -> dict:
         if os.path.isabs(filename) or ".." in filename.replace("\\", "/").split("/"):
             raise ExternalThemeError(f"声明文件不得逃逸主题目录：{filename}")
         path = os.path.join(base, filename)
-        if not os.path.isfile(path):
+        if not _contained(path, base):
+            raise ExternalThemeError(f"声明文件的真实路径逃逸主题目录：{filename}")
+        text = _read_text(path)
+        if not text:
             raise ExternalThemeError(f"主题缺少声明的 CSS 文件：{filename}")
-        size = os.path.getsize(path)
-        if size > MAX_FILE_BYTES:
-            raise ExternalThemeError(
-                f"{filename} 超过单文件上限 {MAX_FILE_BYTES // 1024} KiB：{size} bytes"
+
+        css_total += len(text.encode("utf-8"))
+        if css_total > MAX_CSS_BYTES:
+            raise ExternalThemeError(f"主题 CSS 总量超过上限 {MAX_CSS_BYTES // 1024} KiB")
+
+        try:
+            references = css_audit.check_theme_references(text, theme_id)
+        except css_audit.CssAuditError as error:
+            raise ExternalThemeError(f"{filename}：{error}") from error
+
+        for reference in references:
+            if css_audit.reference_kind(reference.target) != "local":
+                continue
+            _, payload = _asset_payload(
+                os.path.dirname(path), base, reference.target, filename
             )
-        total += size
-        _check_css(_read_text(path), filename, os.path.dirname(path), base)
+            payload_total += payload
+            if payload_total > MAX_PAYLOAD_BYTES:
+                raise ExternalThemeError(
+                    "内嵌载荷超过上限 " + str(MAX_PAYLOAD_BYTES // 1024 // 1024) + " MiB"
+                )
 
-    if total > MAX_TOTAL_BYTES:
-        raise ExternalThemeError(
-            f"主题 CSS 总量超过上限 {MAX_TOTAL_BYTES // 1024} KiB：{total} bytes"
-        )
-
+        # Scope last: when a rule is both unscoped and broken, the broken reference is
+        # the more useful complaint.
+        try:
+            css_audit.check_selector_scope(text, theme_id)
+        except css_audit.CssAuditError as error:
+            raise ExternalThemeError(f"{filename}：{error}") from error
     return metadata
+
+
+def validate_installed_theme(theme_id: str) -> str:
+    """Re-validate an installed user theme and return its directory.
+
+    Called before any read that can end up inside a generated document. It re-checks
+    what an *installed* directory has to satisfy on its own -- directory name equals
+    metadata id, plus everything ``validate_theme_directory`` checks -- so a theme that
+    was copied in by hand or edited after installation passes the same gate as one that
+    came through ``import_theme``.
+    """
+    name = str(theme_id)
+    if viewer_assets.theme_source(name) != viewer_assets.SOURCE_EXTERNAL:
+        raise ExternalThemeError(f"未安装的外置主题：{name}")
+    directory = viewer_assets.theme_dir(name)
+    if os.path.basename(os.path.abspath(directory)) != name:
+        raise ExternalThemeError(
+            "安装目录名必须等于主题 id："
+            + os.path.basename(directory)
+            + " != "
+            + name
+        )
+    metadata = validate_theme_directory(directory)
+    if str(metadata.get("id")) != name:
+        raise ExternalThemeError(
+            "metadata.id 与安装目录名不一致：" + str(metadata.get("id")) + " != " + name
+        )
+    return directory
 
 
 def theme_root() -> str:
@@ -256,20 +308,38 @@ def export_template(destination: str) -> str:
 
 
 def inline_theme_css(theme_id: str) -> str:
-    """Return a theme's CSS with its local ``url()`` assets embedded as data URIs.
+    """Return a theme's CSS with its local assets embedded, after re-validating it.
 
-    This is what makes a generated document independent of the installed theme: once
-    the theme is deleted from MarkdownReader the document still renders (Phase 7
-    acceptance 3).
+    The re-validation is the point: this is the last gate before the CSS becomes part
+    of a delivered document, and the installed directory may have changed since it was
+    imported. Replacement is span based and driven by ``css_audit.scan_references``,
+    so the inliner and the validator cannot disagree about where a reference starts.
     """
-    directory = viewer_assets.theme_dir(theme_id)
-    if not directory:
-        raise ExternalThemeError(f"未安装主题：“{theme_id}”")
-    root = os.path.abspath(directory)
-    parts = []
+    root = validate_installed_theme(theme_id)
+    parts: list[str] = []
     for filename in viewer_assets.theme_files(theme_id):
         path = os.path.join(root, filename)
-        parts.append(_inline_assets(_read_text(path), os.path.dirname(path), root, filename))
+        css = _read_text(path)
+        pieces: list[str] = []
+        cursor = 0
+        for reference in css_audit.scan_references(css):
+            if reference.kind != "url":
+                continue
+            target = reference.target.strip()
+            kind = css_audit.reference_kind(target)
+            if kind in ("fragment", "data"):
+                continue
+            if kind == "remote":
+                # 前置校验已经拒过；这里再拦一次，避免将来有人单独调用本函数。
+                raise ExternalThemeError(
+                    f"{filename} 引用了远程资源（{target}）：外置主题必须离线自包含"
+                )
+            uri, _ = _asset_payload(os.path.dirname(path), root, target, filename)
+            pieces.append(css[cursor : reference.start])
+            pieces.append('url("' + uri + '")')
+            cursor = reference.end
+        pieces.append(css[cursor:])
+        parts.append("".join(pieces))
     return "\n".join(parts)
 
 
@@ -282,7 +352,9 @@ def theme_bundle(selected: list[str] | None = None, *, default: str | None = Non
 
     A document whose default theme is an installed user theme carries it even when the
     selection forgot to mention it: the alternative is a document that opens in a theme
-    it does not contain.
+    it does not contain. Selecting a user theme also validates it, because the installed
+    directory is a user asset and the CSS has to be safe *now*, not only when it was
+    installed.
     """
     chosen = {str(item) for item in (selected or [])}
     default_id = str(default) if default else ""
@@ -304,25 +376,3 @@ def theme_bundle(selected: list[str] | None = None, *, default: str | None = Non
         )
         payload.append({"id": theme_id, "source": source, "css": css})
     return payload
-
-
-def _inline_assets(css: str, css_dir: str, theme_root: str, label: str) -> str:
-    """Replace every allowed local ``url()`` target with a data URI."""
-
-    def replace(match: re.Match) -> str:
-        target = match.group("ref").strip()
-        if target.startswith(INLINE_PREFIXES):
-            return match.group(0)
-        if REMOTE_PATTERN.match(target):
-            raise ExternalThemeError(
-                f"{label} 引用了远程资源（{target}）：外置主题必须离线自包含。"
-            )
-        path = _resolve_local(css_dir, theme_root, target, label)
-        mime = MIME_TYPES.get(os.path.splitext(path)[1].lower())
-        if not mime:
-            raise ExternalThemeError(f"{label} 引用了不支持的资源类型：{target}")
-        with open(path, "rb") as handle:
-            payload = base64.b64encode(handle.read()).decode("ascii")
-        return "url(data:" + mime + ";base64," + payload + ")"
-
-    return CSS_URL_PATTERN.sub(replace, css)

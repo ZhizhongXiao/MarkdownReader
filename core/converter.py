@@ -158,7 +158,7 @@ def process_single(
         or os.path.splitext(os.path.basename(input_path))[0]
     )
 
-    # 4. Render → assemble. v1 是默认生产路径（下面原样保留）；v2 只在显式选择时走。
+    # 4. Render → assemble. v2 是生产默认（Cutover C4）；v1 只在显式选择时走，保留为回退。
     render_context = dict(link_context or {})
     render_context.setdefault("source_path", input_path)
     render_context.setdefault("output_path", output_path)
@@ -290,7 +290,7 @@ def _convert_v2(
     """Render with the v2 renderer and assemble with `core/html_assembly.py`.
 
     Reachable only when a caller explicitly asks for ``renderer_version="v2"``
-    (Cutover C3 / K26); the production default stays v1. Failure semantics follow
+    (Cutover C3 / K26); the production default is v2 since Cutover C4. Failure semantics follow
     v1: a template that cannot be assembled is logged and becomes ``None`` (nothing
     written), while renderer or bridge failures keep their actionable exception --
     a missing artifact must not be swallowed into a silent no-output.

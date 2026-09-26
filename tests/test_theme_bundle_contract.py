@@ -154,8 +154,10 @@ def test_a_selected_user_theme_is_bundled_with_its_assets_inlined(tmp_path, monk
 
 def test_an_installed_but_unselected_user_theme_stays_out(tmp_path, monkeypatch):
     external = tmp_path / "external"
-    make_user_theme(external, "paper", {"theme.css": "html{--paper:1}"})
-    make_user_theme(external, "academic", {"theme.css": "html{--academic:1}"})
+    make_user_theme(external, "paper", {"theme.css": 'html[data-theme-id="paper"]{--paper:1}'})
+    make_user_theme(
+        external, "academic", {"theme.css": 'html[data-theme-id="academic"]{--academic:1}'}
+    )
     monkeypatch.setattr(viewer_assets, "external_themes_root", lambda: str(external))
 
     built = assemble_document(

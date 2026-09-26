@@ -8,6 +8,7 @@ generated document working after the theme has been deleted from MarkdownReader.
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -181,13 +182,261 @@ def test_export_then_import_round_trips(tmp_path, install_root):
     assert viewer_assets.external_theme_ids() == ["my-theme"]
 
 
-def test_the_checker_and_the_loader_agree_on_external_references():
-    """一个策略、两处实现：工具链与装配期必须认同「什么算外部引用」。"""
+def scoped(theme_id: str, body: str = "--x:1") -> str:
+    """Return the canonical scoped spelling every theme rule must use."""
+    return 'html[data-theme-id="' + theme_id + '"]{' + body + '}\n'
+
+
+def test_a_theme_tampered_after_installation_is_refused(tmp_path, install_root):
+    """审计阻断项 1：import 只在导入时校验，消费时必须再校验一次。"""
+    source = theme_files(tmp_path, "my-theme", {"theme.css": scoped("my-theme")})
+    external_themes.import_theme(str(source))
+    (install_root / "my-theme" / "theme.css").write_text(
+        "</style><script>alert(1)</script>\n", encoding="utf-8"
+    )
+
+    with pytest.raises(external_themes.ExternalThemeError):
+        external_themes.inline_theme_css("my-theme")
+    with pytest.raises(external_themes.ExternalThemeError):
+        external_themes.theme_bundle(["my-theme"])
+
+
+def test_a_theme_hand_copied_into_the_root_is_refused(install_root):
+    """审计阻断项 1：绕过 import 直接放进安装目录的目录同样要过 gate。"""
+    directory = install_root / "manual"
+    directory.mkdir(parents=True)
+    (directory / "metadata.json").write_text(
+        json.dumps({"id": "manual", "name": "Manual", "files": ["theme.css"]}),
+        encoding="utf-8",
+    )
+    (directory / "theme.css").write_text("body{color:red}\n", encoding="utf-8")
+
+    with pytest.raises(external_themes.ExternalThemeError):
+        external_themes.inline_theme_css("manual")
+
+
+def test_an_installed_directory_must_match_its_metadata_id(install_root):
+    directory = install_root / "renamed"
+    directory.mkdir(parents=True)
+    (directory / "metadata.json").write_text(
+        json.dumps({"id": "other", "name": "Other", "files": ["theme.css"]}),
+        encoding="utf-8",
+    )
+    (directory / "theme.css").write_text(scoped("other"), encoding="utf-8")
+
+    with pytest.raises(external_themes.ExternalThemeError) as failure:
+        external_themes.inline_theme_css("renamed")
+    assert "目录名" in str(failure.value)
+
+
+@pytest.mark.parametrize(
+    "declaration, reason",
+    (
+        ('background:url("https://example.invalid/a(b).png")', "远程"),
+        ('background:url("//cdn.example.invalid/x.png")', "远程"),
+        ('background:url("data:text/html;base64,AAAA")', "data URI"),
+        ('background:url("data:image/svg+xml;base64,AAAA")', "data URI"),
+        ("background:url(assets/missing.png)", "不存在"),
+    ),
+)
+
+
+def test_references_that_leave_the_document_are_refused(
+    tmp_path, install_root, declaration, reason
+):
+    """审计项 3/11/12/13：远程、scheme 混淆、非白名单 data URI、缺失资源全部拒绝。"""
+    source = theme_files(tmp_path, "my-theme", {"theme.css": scoped("my-theme", declaration)})
+
+    with pytest.raises(external_themes.ExternalThemeError) as failure:
+        external_themes.import_theme(str(source))
+    assert reason in str(failure.value), str(failure.value)
+
+
+def test_a_css_escape_cannot_hide_a_scheme(tmp_path, install_root):
+    """审计附加项 11：`url("https\\3a //…")` 这类 scheme 混淆必须 fail closed。
+
+    用 chr(92) 构造反斜杠，避免测试文件本身被转义层级搞混。
+    """
+    escaped = "https" + chr(92) + "3a //example.invalid/x.png"
+    source = theme_files(
+        tmp_path,
+        "my-theme",
+        {"theme.css": scoped("my-theme", 'background:url("' + escaped + '")')},
+    )
+
+    with pytest.raises(external_themes.ExternalThemeError) as failure:
+        external_themes.import_theme(str(source))
+    assert "转义" in str(failure.value), str(failure.value)
+
+
+def test_an_allow_listed_data_uri_is_accepted(tmp_path, install_root):
+    source = theme_files(
+        tmp_path,
+        "my-theme",
+        {"theme.css": scoped("my-theme", 'background:url("data:image/png;base64,AAAA")')},
+    )
+
+    assert external_themes.import_theme(str(source)) == "my-theme"
+
+
+@pytest.mark.parametrize(
+    "css",
+    (
+        'html[data-theme-id="my-theme"]{background:url(x.png)}/* unclosed',
+        'html[data-theme-id="my-theme"]{content:"unclosed',
+        'html[data-theme-id="my-theme"]{color:red}\\',
+    ),
+)
+def test_structurally_unprovable_css_fails_closed(tmp_path, install_root, css):
+    """审计项：未闭合注释/字符串、孤立转义 —— 解析不了就拒绝，不猜。"""
+    source = theme_files(tmp_path, "my-theme", {"theme.css": css})
+
+    with pytest.raises(external_themes.ExternalThemeError):
+        external_themes.import_theme(str(source))
+
+
+@pytest.mark.parametrize("parent", ("modern", "office", "vscode"))
+def test_an_external_theme_may_not_extend_a_selectable_builtin(tmp_path, install_root, parent):
+    """审计阻断项 4：selectable builtin 的规则按自身 id scoped，继承它们是语义假的。"""
+    source = theme_files(
+        tmp_path, "my-theme", {"theme.css": scoped("my-theme")}, extends=parent
+    )
+
+    with pytest.raises(external_themes.ExternalThemeError) as failure:
+        external_themes.import_theme(str(source))
+    assert "extends" in str(failure.value)
+
+
+def test_an_external_theme_may_extend_base_or_nothing(tmp_path, install_root):
+    for parent in ("base", None):
+        directory = tmp_path / ("with-" + str(parent))
+        source = theme_files(
+            directory, "my-theme", {"theme.css": scoped("my-theme")}, extends=parent
+        )
+        assert external_themes.import_theme(str(source), replace=True) == "my-theme"
+
+
+def test_an_external_theme_may_not_extend_another_external(tmp_path, install_root):
+    parent = theme_files(tmp_path, "parent", {"theme.css": scoped("parent")})
+    assert external_themes.import_theme(str(parent)) == "parent"
+    child = theme_files(
+        tmp_path / "child-src", "child", {"theme.css": scoped("child")}, extends="parent"
+    )
+
+    with pytest.raises(external_themes.ExternalThemeError):
+        external_themes.import_theme(str(child))
+
+
+@pytest.mark.parametrize(
+    "css",
+    (
+        "body{color:red}\n",
+        ":root{--x:1}\n",
+        'html{--x:1}\n',
+        'html[data-theme-id="my-theme"] body.theme-my-theme{--x:1}\n',
+    ),
+)
+def test_unscoped_rules_are_refused(tmp_path, install_root, css):
+    """审计项：未 scoped 的规则会污染其他主题，必须拒绝（最后一条是 scoped，正例）。"""
+    source = theme_files(tmp_path, "my-theme", {"theme.css": css})
+
+    if css.startswith('html[data-theme-id="my-theme"]'):
+        assert external_themes.import_theme(str(source)) == "my-theme"
+    else:
+        with pytest.raises(external_themes.ExternalThemeError) as failure:
+            external_themes.import_theme(str(source))
+        assert "scoped" in str(failure.value)
+
+
+def test_media_queries_recurse_and_still_require_scope(tmp_path, install_root):
+    good = theme_files(
+        tmp_path / "good",
+        "my-theme",
+        {"theme.css": "@media print {\n" + scoped("my-theme") + "}\n"},
+    )
+    assert external_themes.import_theme(str(good)) == "my-theme"
+
+    bad = theme_files(
+        tmp_path / "bad", "other", {"theme.css": "@media print {\nbody{color:red}\n}\n"}
+    )
+    with pytest.raises(external_themes.ExternalThemeError):
+        external_themes.import_theme(str(bad))
+
+
+@pytest.mark.parametrize(
+    "css",
+    (
+        "@keyframes pulse { from { opacity:0 } }\n" + scoped("my-theme"),
+        "@font-face { font-family: X; src: url(a.woff2) }\n" + scoped("my-theme"),
+        "@page { margin: 1cm }\n" + scoped("my-theme"),
+        '@charset "utf-8";\n' + scoped("my-theme"),
+        "@layer base;\n" + scoped("my-theme"),
+        "@namespace svg url(http://www.w3.org/2000/svg);\n" + scoped("my-theme"),
+    ),
+)
+def test_at_rules_with_global_names_are_refused(tmp_path, install_root, css):
+    """@keyframes/@font-face 拥有全局命名；@page 无法 scope；@charset/@layer/@namespace 无意义。"""
+    source = theme_files(tmp_path, "my-theme", {"theme.css": css})
+
+    with pytest.raises(external_themes.ExternalThemeError):
+        external_themes.import_theme(str(source))
+
+
+def test_the_payload_budget_counts_inlined_assets(tmp_path, install_root, monkeypatch):
+    """审计次要项：预算按最终内嵌载荷（含 base64 膨胀）计算，而不是目录大小。"""
+    source = theme_files(
+        tmp_path, "my-theme", {"theme.css": scoped("my-theme", "background:url(assets/big.png)")}
+    )
+    (source / "assets").mkdir()
+    (source / "assets" / "big.png").write_bytes(b"\x89PNG" + b"A" * 512)
+    monkeypatch.setattr(external_themes, "MAX_ASSET_BYTES", 64)
+
+    with pytest.raises(external_themes.ExternalThemeError) as failure:
+        external_themes.import_theme(str(source))
+    assert "上限" in str(failure.value)
+
+
+def test_an_asset_reached_through_a_symlink_is_refused(tmp_path, install_root):
+    """审计附加项 12：真实路径逃逸（symlink/junction）必须拒绝。"""
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secret.png").write_bytes(b"\x89PNG")
+    source = theme_files(
+        tmp_path, "my-theme", {"theme.css": scoped("my-theme", "background:url(link/secret.png)")}
+    )
+    try:
+        os.symlink(str(outside), str(source / "link"), target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("当前环境无法创建 symlink")
+
+    with pytest.raises(external_themes.ExternalThemeError):
+        external_themes.import_theme(str(source))
+
+
+def test_the_checker_uses_the_shared_scanner():
+    """一个扫描器、三条消费链：checker 不得自带第二套 URL 解析。"""
+    source = (ROOT / "tools" / "standalone_closure.py").read_text(encoding="utf-8")
+
+    assert "scan_references" in source
+    assert "CSS_URL_PATTERN" not in source
+
+
+def test_the_checker_sees_a_reference_the_old_pattern_could_not():
+    """反证：带括号的合法 URL —— 旧正则看不见，共享扫描器必须看见（13 条之一）。"""
     from tools import standalone_closure
 
-    assert external_themes.CSS_URL_PATTERN.pattern == standalone_closure.CSS_URL_PATTERN.pattern
-    assert (
-        external_themes.CSS_IMPORT_PATTERN.pattern
-        == standalone_closure.CSS_IMPORT_PATTERN.pattern
+    css = 'a{background:url("https://example.invalid/a(b).png")}'
+    found = standalone_closure.collect_subresources("<style>" + css + "</style>")
+
+    assert [item["ref"] for item in found] == ["https://example.invalid/a(b).png"]
+
+
+def test_the_checker_fails_the_gate_on_css_it_cannot_parse():
+    """解析不了就判失败：看不见全貌的扫描器不能保证没有遗漏。"""
+    from tools import standalone_closure
+
+    found = standalone_closure.collect_subresources(
+        "<style>a{background:url(x.png)}/* unclosed</style>"
     )
-    assert external_themes.INLINE_PREFIXES == standalone_closure.INLINE_PREFIXES
+
+    assert [item["ref"] for item in found][0].startswith("css-unparseable(style)")

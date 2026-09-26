@@ -470,11 +470,16 @@ def test_a_string_form_import_is_a_subresource():
 
 
 def test_a_url_form_import_is_still_a_subresource():
+    """`@import url(...)` 仍必须让 gate 失败；Phase 7 follow-up 后按 at-rule 记一次账。
+
+    共享扫描器把整条 at-rule 当作一个引用（不再额外地把它里面的 url() 再报一次），
+    所以形式是 `@import` 而不是 `url()`：结论不变，仍是 failure。
+    """
     html = _page("<style>@import url(https://cdn.example.invalid/theme.css);</style>")
 
     found = collect_subresources(html)
 
-    assert [entry["attribute"] for entry in found] == ["url()"]
+    assert [entry["attribute"] for entry in found] == ["@import"]
     assert scan(html)["verdict"] == "failure"
 
 

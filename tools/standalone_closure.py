@@ -48,6 +48,15 @@ import re
 import sys
 from collections.abc import Sequence
 from html.parser import HTMLParser
+from pathlib import Path
+
+# The reference scanner is shared with the theme loader. This tool runs both as a
+# script and as an import, so make the package importable either way.
+_REPO_ROOT = str(Path(__file__).resolve().parents[1])
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+from core.css_audit import CssAuditError, CssReference, scan_references  # noqa: E402
 
 # A value here must be closed (inlined) for the document to be standalone.
 # `<a href>` and plain text are not listed.
@@ -104,8 +113,9 @@ NON_FETCHING_LINK_RELS = frozenset(
 
 # Controlled CSS: `url(...)` and string-form `@import` inside `<style>` elements, plus
 # `url(...)` inside `style="..."` attributes (a browser loads those too).
-CSS_URL_PATTERN = re.compile(r"""url\(\s*(?P<quote>["']?)(?P<ref>[^"'()]+)(?P=quote)\s*\)""")
-CSS_IMPORT_PATTERN = re.compile(r"""@import\s+(?P<quote>["'])(?P<ref>[^"']+)(?P=quote)""")
+# `url()` and `@import` are found by `core.css_audit.scan_references`, which the theme
+# loader uses as well: one scanner, so the two cannot disagree. It returns spans and
+# refuses CSS it cannot prove it understands, such as an unterminated comment.
 SRCSET_TOKEN_PATTERN = re.compile(r"\S+")
 
 # Anything else (http/https/file/relative/absolute paths) is an external subresource.
@@ -168,13 +178,24 @@ def srcset_references(value: str) -> list[str]:
     return references
 
 
-def _css_references(css: str, *, string_imports: bool) -> list[tuple[str, str]]:
-    """Return `(reference, form)` for every `url()` and string-form `@import`."""
-    found = [(match.group("ref").strip(), "url()") for match in CSS_URL_PATTERN.finditer(css)]
+def _css_references(
+    css: str, *, string_imports: bool, context: str = "css"
+) -> list[tuple[str, str]]:
+    """Return `(reference, form)` for every `url()` and string-form `@import`.
+
+    The scanner is shared with the theme loader, so the two cannot disagree about what a
+    reference is -- the regular expression this replaces could not see
+    `url("…/a(b).png")` at all, and a checker that misses a reference makes the gate
+    lie. CSS the scanner refuses fails the gate instead: a scanner that cannot see the
+    whole file cannot promise that nothing is missing.
+    """
+    try:
+        references: list[CssReference] = scan_references(css)
+    except CssAuditError as error:
+        return [("css-unparseable(" + context + "): " + str(error), "css")]
+    found = [(item.target, "url()") for item in references if item.kind == "url"]
     if string_imports:
-        found.extend(
-            (match.group("ref").strip(), "@import") for match in CSS_IMPORT_PATTERN.finditer(css)
-        )
+        found.extend((item.target, "@import") for item in references if item.kind == "import")
     return found
 
 
@@ -242,7 +263,9 @@ def collect_subresources(html: str) -> list[dict]:
         for element, attribute, reference in parser.references
     ]
     for element, css in parser.style_attributes:
-        for reference, _form in _css_references(css, string_imports=False):
+        for reference, _form in _css_references(
+            css, string_imports=False, context="style-attr:" + element
+        ):
             found.append(
                 {
                     "ref": reference,
@@ -252,7 +275,7 @@ def collect_subresources(html: str) -> list[dict]:
                 }
             )
     style_css = parser.style_text()
-    for reference, form in _css_references(style_css, string_imports=True):
+    for reference, form in _css_references(style_css, string_imports=True, context="style"):
         found.append({"ref": reference, "origin": "css", "element": "style", "attribute": form})
     return found
 

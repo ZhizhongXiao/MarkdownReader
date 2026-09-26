@@ -2,7 +2,8 @@
 
 AGENTS section 24: business modules must not judge PyInstaller paths themselves, so
 `sys.frozen` and `sys._MEIPASS` are read here and nowhere else under `core/`, `gui/`
-or `tools/`. Three layouts exist, and only the first is writable:
+or `tools/`. Three layouts exist; all three user-data roots are writable, while the
+bundled assets are read-only:
 
     source   <repo>/.runtime/{profile,assets,runtime}
     onedir   <app>/data/{profile,assets,runtime}
