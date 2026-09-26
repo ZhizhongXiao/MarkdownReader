@@ -641,6 +641,42 @@ Settings page
 
 主题管理和本次主题选择职责互不混淆。
 
+## 落地记录（Phase 9A：主页面外置主题选择）
+
+设置页与它的入口整体留给 9B：9A 故意**不**引入 `#btn-settings`（避免一个尚无功能的临时产品状态），
+并由静态守卫**反向断言** `btn-settings` / `settings-page` / `import_theme` / `remove_theme` /
+`export_theme_template` / `open_theme_location` 都不出现在 `gui/assets/` 中。
+
+UI 形态、写入语义与串行化规则先以红契约冻结（`GT1–GT14` 14 项 + 静态守卫 2 项 = 16 项真红；
+`tests/test_gui_theme_state_contract.py` 3 项是既有语义的桥接层回归锁，预期即时绿），再实现：
+
+```text
+行状态（四态封闭，全部推导自桥接字段，绝不解析 warning 文本）
+  selected   可选且在工作集内 → 勾选、可改
+  available  可选但不在工作集内 → 未勾选、可改
+  missing    ∈ missing → 未勾选、不可改（保留在列表，带「移除」）
+  invalid    ∈ invalid → 未勾选、不可改（保留在列表，带「移除」）
+
+工作集写入规则
+  初始       = configured 原样副本（configured 是记忆，永不隐式裁剪）
+  check(X)   → 追加到末尾（既有条目相对顺序不变）
+  uncheck(X) → 只删除 X
+  remove(X)  → 只删除 X，且只对 missing / invalid 提供
+  保存       → { external_themes: 完整工作集 }（不是 selected；9A 只写这一个键）
+  串行化     → 至多 1 个在途写；后续改动合并为最新；旧 payload 不会覆盖新 payload
+  保存失败   → 丢弃未确认的假定态 → get_theme_state() → 以后端状态重建 → ERROR 日志
+```
+
+选择只有一条生效通道：`config.json` 的 `build.external_themes`（`converter._selected_external_themes(cfg)`
+→ `html_assembly.assemble_document()` → `resolve_theme_selection()`），因此 `convert` 请求形状不变
+（`GU1` 的 7 键保持绿），`gui/api.py` 与 `core/**` **零改动**。转换在途时整面冻结（与模板下拉同一把锁）。
+
+证据：全套 `uv run pytest -q` = **654 passed / 0 failed / 1 skipped**（+6 = 3 项静态守卫 + 3 项桥接回归锁）；
+GUI 契约 `GUI_CONTRACTS {"pass": 23, "xfail": 0, "xpass": 0, "fail": 0}`、`GUI_CONTRACT_RECORDS 23 of 23`；
+红阶段为 23 条中 14 条失败（`assert 14 == 0`）+ 静态守卫 2 项失败；ruff 全绿；`samples/` 逐字节未动。
+**未做**：设置页（9B）、主题导入/删除/导出模板的桥接方法与 UI、`remove-user-data` 流程（9B 先做 user-data ownership 侦察）、
+`docs/USAGE.md` 的存储位置收口、截图更新（记为 KNOWN STALE）、`_write_output(newline="\n")` 卫生债。
+
 ---
 
 # Phase 10 — 剩余 user-storage 迁移与治理

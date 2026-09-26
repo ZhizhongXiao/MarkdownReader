@@ -687,9 +687,15 @@ contract("GT13 theme selection: a run in flight freezes the theme controls", "pa
     await session.resolve("convert", CONVERT_OK);
     await session.flush(3);
 
-    session.themeRows().forEach(function (row) {
-      assert.equal(row.disabled, false, row.id + " comes back after the run");
-    });
+    // Only the selectable rows come back: a missing or invalid id stays unselectable,
+    // while its removal button becomes usable again.
+    assert.equal(session.themeRow("paper").disabled, false,
+      "a run must not leave the surface frozen");
+    assert.equal(session.themeRow("academic").disabled, false);
+    assert.equal(session.themeRow("zeta").disabled, false);
+    assert.equal(session.themeRow("ghost").disabled, true,
+      "an unusable id stays unselectable after the run");
+    assert.equal(session.themeRow("broken").disabled, true);
     assert.equal(session.themeRow("ghost").removeDisabled, false);
   } finally { session.close(); }
 });

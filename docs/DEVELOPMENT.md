@@ -211,6 +211,15 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
   `BridgeApi.get_theme_state()` 区分 `configured` / `selected` / `missing` / `invalid`（后两者分别是「不在 registry」与「在
   registry 但过不了 use-time gate」），判定与转换同源于 `external_themes._classify_configured_theme()`；GUI 控件属 Phase 9。
 
+- 外置主题选择（Phase 9A）：主页面新增「外置主题」面（`gui/assets/{index.html,gui.js,gui.css}`，不新增资源文件 ⇒
+  打包面零改动），消费 Phase 8 封板的 `configured / selected / missing / invalid` 状态模型。四态全部推导自桥接字段：
+  `missing` / `invalid` 决定「保留在列表但不可勾选」，`selected` / `available` 表达工作集成员关系，**不解析 warning 文本**；
+  `configured` 是记忆，工作集初始为其副本，只有用户显式取消勾选或点「移除」才会缩小，保存 payload 永远是完整工作集
+  （不是 `selected`）。写入串行化：至多一个在途写、后续改动合并为最新、旧 payload 不会覆盖新 payload；被拒的保存不「翻回
+  checkbox」，而是丢弃假定态并重新拉取 `get_theme_state()` 重建。选择唯一生效通道是 `config.json` 的
+  `build.external_themes`，因此 `convert` 请求形状与 `gui/api.py` 均未改动；`get_templates()` 仍是 builtin-only
+  （模板下拉 = 文档默认主题，外置主题 = 本次额外携带，AGENTS §17 的两件事）。设置页与设置入口整体属 9B。
+
 ## 命名与路径约定
 
 - 项目名、窗口标题与产物统一 `MarkdownReader`；npm 包标识为小写 `markdownreader-node-renderer`。

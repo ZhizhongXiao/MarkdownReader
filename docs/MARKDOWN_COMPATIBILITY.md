@@ -452,6 +452,31 @@ samples/demo.html                         → 未改动，快照契约仍成立
   * **`missing` / `invalid` 边界明文化（F2，文档专项）**：`docs/VIEWER_CONTRACT.md` 原先把「id 非法 / 属保留名」写进 `missing` 的说明，而 Phase 8 audit follow-up 的分类器实现是「registry 只按有可解析的 metadata object 发现目录、**不校验 id 形状**」：目录名非法的主题仍算 `installed`，随后在 use-time gate 失败，因此归 `invalid`；只有 registry 从未发现的 id 才归 `missing`。文档按实现收口为一条规则（`missing` = 从未发现，`invalid` = 发现了但 gate 不通过），**转换侧对 `invalid` 的 hard failure 不变** —— 文档不能带一个无法按 id 作用域生效的主题。本轮未改任何实现语义，只改文档与测试。
   证据：F1 新增 7 项用例（`tests/test_viewer_assets_contract.py` 参数化 `"broken"` / `[1]` / `"{}"` 3 项 —— 含 loader 侧 `validate_theme("broken")` 的 `ValueError` 锁；`tests/test_gui_theme_state_contract.py` 3 项；`tests/test_external_theme_contract.py` 转换侧 1 项），其中 5 项是红→绿，`"{}"` 的 2 项是边界锁（修复前也走 `if not metadata` 分支、本来就绿）；F2 新增 2 项锁定边界的用例（`"Bad ID"` 在状态侧是 `installed` + `invalid`，在转换侧仍 `raise` 且异常文本 == 状态 warning 文本）。改前 5 项失败于 `core/viewer_assets.py:122` 的 `AttributeError: str object has no attribute get`，改后 9 项全绿；`tests/test_external_theme_contract.py` 69 项（68 passed / 1 skipped）、`tests/test_gui_theme_state_contract.py` 12 项、`tests/test_viewer_assets_contract.py` 21 项；全套 **648 passed / 0 failed / 1 skipped**（Phase 8 audit follow-up 为 639）；demo 内容逐字节不变（重新生成后 `git diff --numstat -- samples/` 为空，`samples/demo.html` 1,574,223 B、sha256 `BFD53709…`）；ruff 全绿。
 
+- 2026-09-26（Phase 9A：主页面外置主题选择 —— 先冻结写入语义，再实现）：设置页整体留给 9B，本阶段只交付主页面选择面，
+  因此 9A 故意**不**引入设置入口（静态守卫反向断言 `btn-settings` / `settings-page` / `import_theme` / `remove_theme` /
+  `export_theme_template` / `open_theme_location` 均不存在于 `gui/assets/`）。
+  * **用户可见**：左侧新增「外置主题」面，列出已安装的外置主题。已配置但当前不可用的条目**保留**在列表中并分别标注
+    「未安装」（missing）/「不可用」（invalid），各自带一个「移除」动作；勾选即写入 `config.json` 的
+    `build.external_themes`，下一次转换立即生效。四态由桥接字段推导，**不从 warning 文本反推**（判别性用例把 warning
+    文本故意写乱，分类仍不变）。转换在途时这面与其它控件一起冻结。
+  * **红契约先行**：`tests/js/gui.test.js` 新增 `GT1–GT14` 并把条数硬锁由 9 提到 23（`tests/test_gui_state_contract.py`），
+    静态守卫 3 项（`tests/test_gui_contract.py`），桥接层回归锁 3 项（`tests/test_gui_theme_state_contract.py`）。红阶段
+    23 条中 14 条失败（`assert 14 == 0`）、静态守卫 2 项失败；红的原因逐条确认为「功能未实现」（取不到
+    `#external-theme-list`），不是探针写错。其中一条红契约在实现时暴露自相矛盾并**按语义修正**：运行结束后
+    「所有行恢复可勾选」与「missing / invalid 行永久不可勾选」不可兼得，改为「可选行恢复可勾选 + 不可用行的移除按钮
+    恢复可用、复选框仍不可勾选」。
+  * **写入串行化（本阶段真正的风险）**：主页面前端是 `configured` 的第一个写入者，连续勾选可能产生乱序写。实现为
+    「至多一个在途写；后续改动合并为最新工作集；提交序列单调，最后一笔等于最终工作集」；被拒的保存不逐项回滚，而是
+    丢弃未确认的假定态、重新拉取 `get_theme_state()` 并以后端状态重建界面。
+  证据：`tests/js/gui.test.js` + `tests/test_gui_state_contract.py` → `GUI_CONTRACTS {"pass": 23, "xfail": 0, "xpass": 0,
+  "fail": 0}`、`GUI_CONTRACT_RECORDS 23 of 23`；`tests/test_gui_contract.py` + `tests/test_gui_theme_state_contract.py`
+  25 passed；全套 `uv run pytest -q` = **654 passed / 0 failed / 1 skipped**（Phase 8 封板为 648，+6）；ruff 全绿；
+  `samples/` 逐字节未动（本次不改产物）；`gui/api.py`、`core/**`、`packaging/**` 零改动 —— 选择经 `config.json` 生效，
+  `GU1` 的 `convert` 7 键请求形状保持绿（这本身就是「9A 没有污染既有桥接面」的证据）。
+  **未做**：设置页与设置入口（9B）、主题导入/删除/导出模板的桥接方法与 UI（9B）、`remove-user-data` 流程（9B 先做
+  user-data ownership 侦察，不预承诺 `core/user_data.py`）、`docs/USAGE.md` 里 `config.json` 位置的历史表述（随 9B 收口，
+  届时设置页会直接向用户展示真实存储位置）、`docs/screenshots/gui_main.png` 与 `gui_dark.png`（KNOWN STALE，本阶段不重拍）。
+
 ## texmath 审计记录（Phase 4B，为什么不复用 `markdown-it-texmath`）
 
 `markdown-it-texmath@1.0.0` 的注册方式是固定的：

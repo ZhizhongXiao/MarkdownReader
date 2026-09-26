@@ -19,6 +19,16 @@ var _dialogOpen = false;
 var _expandedItems = {};
 var _logIssueCount = 0;
 var _logIssueLevel = "";
+// The external theme surface (phase 9A). `_themeState` is the bridge's answer and
+// `_themeSelection` is what the next document will carry: it starts as a copy of the
+// configured list, so a theme that is merely gone stays remembered until the user
+// drops it. `_themeSavePending` is the newest unconfirmed selection and
+// `_themeSaveInFlight` makes the writes serial, so an older payload can never land
+// after a newer one.
+var _themeState = null;
+var _themeSelection = [];
+var _themeSaveInFlight = false;
+var _themeSavePending = null;
 
 function pathKey(value) {
     return String(value || "").replace(/\\/g, "/").toLowerCase();
@@ -90,6 +100,7 @@ function setConversionRunning(running) {
     });
     updateInputSummary();      // keeps the clear button in step with the inputs
     renderConversionList();    // the remove buttons are recreated, so they read _conversionRunning
+    applyThemeControlLock();   // the theme controls freeze with everything else
 }
 
 // The dialog controls are disabled while one is open. This is a state lock, not
@@ -262,6 +273,194 @@ function closeOnClickOutside(event) {
     var wrap = document.getElementById("template-select-wrap");
     var dropdown = document.getElementById("template-select-dropdown");
     if (!wrap.contains(event.target) && !dropdown.contains(event.target)) closeTemplateDropdown();
+}
+
+// ── External theme selection (phase 9A) ────────────────────────────────────────
+//
+// Two concepts share one bridge call but stay separate here, because AGENTS section 17
+// separates them: the template dropdown picks the document's default theme (builtin
+// only), while this surface picks which installed user themes the next documents carry.
+//
+// The state has four row forms. `missing` and `invalid` come from the bridge fields, so a
+// remembered id that cannot be used today is always shown as such and stays unselectable.
+// `selected` and `available` describe the working selection itself, so a local change is
+// visible before the bridge answers again. No form is ever derived from warning wording.
+//
+//   selected   selectable and in the working selection   checked, selectable
+//   available  selectable but not in it                  unchecked, selectable
+//   missing    in `missing`                              unchecked, not selectable
+//   invalid    in `invalid`                              unchecked, not selectable
+
+function themeRowState(id) {
+    var state = _themeState || {};
+    if ((state.missing || []).indexOf(id) !== -1) return "missing";
+    if ((state.invalid || []).indexOf(id) !== -1) return "invalid";
+    return _themeSelection.indexOf(id) !== -1 ? "selected" : "available";
+}
+
+function themeStateLabel(state) {
+    if (state === "selected") return "已选";
+    if (state === "missing") return "未安装";
+    if (state === "invalid") return "不可用";
+    return "可添加";
+}
+
+// Remembered ids first, in their own order, then the installed ids nobody selected yet.
+function themeRowOrder() {
+    var state = _themeState || {};
+    var rows = [];
+    (_themeSelection || []).forEach(function (id) {
+        if (rows.indexOf(id) === -1) rows.push(id);
+    });
+    (state.installed || []).forEach(function (id) {
+        if (rows.indexOf(id) === -1) rows.push(id);
+    });
+    return rows;
+}
+
+function renderThemeSelection() {
+    var list = document.getElementById("external-theme-list");
+    if (!list) return;
+    var empty = document.getElementById("external-theme-empty");
+    var summary = document.getElementById("external-theme-summary");
+    var state = _themeState || {};
+    list.innerHTML = "";
+
+    var rows = themeRowOrder();
+    rows.forEach(function (id) {
+        var rowState = themeRowState(id);
+        var row = document.createElement("div");
+        row.className = "theme-row";
+        row.setAttribute("data-theme-id", id);
+        row.setAttribute("data-theme-state", rowState);
+
+        var label = document.createElement("label");
+        label.className = "theme-check";
+        var box = document.createElement("input");
+        box.type = "checkbox";
+        box.setAttribute("data-theme-id", id);
+        box.checked = rowState === "selected";
+        box.setAttribute("data-theme-state", rowState);
+        box.addEventListener("change", function () { toggleExternalTheme(id); });
+        label.appendChild(box);
+        var name = document.createElement("span");
+        name.textContent = id;
+        label.appendChild(name);
+        row.appendChild(label);
+
+        var badge = document.createElement("span");
+        badge.className = "theme-state theme-state-" + rowState;
+        badge.textContent = themeStateLabel(rowState);
+        row.appendChild(badge);
+
+        if (rowState === "missing" || rowState === "invalid") {
+            var remove = document.createElement("button");
+            remove.className = "theme-remove";
+            remove.setAttribute("data-theme-action", "remove");
+            remove.textContent = "移除";
+            remove.title = "从本次选择中移除 " + id;
+            remove.addEventListener("click", function () { removeConfiguredTheme(id); });
+            row.appendChild(remove);
+        }
+        list.appendChild(row);
+    });
+
+    if (summary) {
+        var selected = (state.selected || []).length;
+        var missing = (state.missing || []).length;
+        var invalid = (state.invalid || []).length;
+        summary.setAttribute("data-selected", String(selected));
+        summary.setAttribute("data-missing", String(missing));
+        summary.setAttribute("data-invalid", String(invalid));
+        summary.textContent = "已选 " + selected + " · 缺失 " + missing + " · 不可用 " + invalid;
+    }
+    if (empty) empty.classList.toggle("hidden", rows.length !== 0);
+    applyThemeControlLock();
+}
+
+// A missing or invalid theme is never selectable, and nothing on this surface may move
+// while a run is in flight: the conversion already under way must not see the selection
+// change beneath it.
+function applyThemeControlLock() {
+    var list = document.getElementById("external-theme-list");
+    if (!list) return;
+    for (var i = 0; i < list.children.length; i += 1) {
+        var row = list.children[i];
+        var rowState = row.getAttribute("data-theme-state");
+        var unusable = rowState === "missing" || rowState === "invalid";
+        var box = row.querySelector('input[type="checkbox"]');
+        if (box) box.disabled = _conversionRunning || unusable;
+        var remove = row.querySelector('[data-theme-action="remove"]');
+        if (remove) remove.disabled = _conversionRunning;
+    }
+}
+
+function toggleExternalTheme(id) {
+    if (_conversionRunning) return;
+    var index = _themeSelection.indexOf(id);
+    if (index === -1) {
+        _themeSelection.push(id);          // a new choice goes to the end of the memory
+    } else {
+        _themeSelection.splice(index, 1);
+    }
+    renderThemeSelection();
+    saveThemeSelection();
+}
+
+// Only an explicit removal may drop a remembered id that cannot be used today -- the same
+// surfaces must not shrink the memory as a side effect of anything else (AGENTS section 17).
+function removeConfiguredTheme(id) {
+    if (_conversionRunning) return;
+    var index = _themeSelection.indexOf(id);
+    if (index === -1) return;
+    _themeSelection.splice(index, 1);
+    renderThemeSelection();
+    saveThemeSelection();
+}
+
+// One write at a time. The newest selection wins and is committed once the write in
+// flight settled, so the file can never end up holding a state older than the surface.
+function saveThemeSelection() {
+    _themeSavePending = _themeSelection.slice();
+    if (_themeSaveInFlight) return;
+    drainThemeSaves();
+}
+
+async function drainThemeSaves() {
+    _themeSaveInFlight = true;
+    try {
+        while (_themeSavePending !== null) {
+            var payload = _themeSavePending;
+            _themeSavePending = null;
+            try {
+                await pywebview.api.set_configs({ external_themes: payload });
+            } catch (error) {
+                // The surface may have assumed several changes by then, so it must not try
+                // to undo them one by one: ask the bridge what is true and rebuild from it.
+                _themeSavePending = null;
+                log("ERROR", "保存外置主题选择失败：" + error);
+                await reloadThemeState();
+                return;
+            }
+        }
+    } finally {
+        _themeSaveInFlight = false;
+    }
+}
+
+// `configured` is the memory, so the working selection starts as a copy of it and the
+// bridge's warnings are reported as warnings: a theme that is gone or broken must not
+// turn into a failed run (AGENTS section 17).
+function applyThemeState(state) {
+    _themeState = state || {};
+    _themeSelection = (_themeState.configured || []).slice();
+    renderThemeSelection();
+    (_themeState.warnings || []).forEach(function (message) { log("WARNING", message); });
+}
+
+async function reloadThemeState() {
+    var state = await pywebview.api.get_theme_state();
+    applyThemeState(state);
 }
 
 // Input collection and preflight plan
@@ -747,6 +946,7 @@ async function init() {
     buildTemplateDropdown(["modern"]);
     updateInputSummary();
     renderConversionList();
+    renderThemeSelection();
     showPreviewTab();
     log("INFO", "等待 pywebview API 就绪...");
 
@@ -770,6 +970,8 @@ async function init() {
         document.getElementById("chk-build-index").checked = config.build_index !== false;
         document.getElementById("chk-preserve-structure").checked = !!config.preserve_structure;
         _lastOutputDir = config.output || "output";
+        var themeState = await pywebview.api.get_theme_state();
+        applyThemeState(themeState);
         showPreviewTab();
     } catch (error) {
         log("ERROR", "Init failed: " + error);
