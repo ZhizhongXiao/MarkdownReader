@@ -10,24 +10,20 @@ place that knows where those files are.
 import json
 import logging
 import os
-import sys
+
+from core import paths
 
 _logger = logging.getLogger(__name__)
-
-# Source root when running from Python.
-_SOURCE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def get_bundle_root() -> str:
     """Return the directory containing bundled read-only application assets."""
-    return os.path.abspath(getattr(sys, "_MEIPASS", _SOURCE_ROOT))
+    return paths.bundle_root()
 
 
 def get_application_dir() -> str:
     """Return the EXE directory when frozen, otherwise the source root."""
-    if getattr(sys, "frozen", False):
-        return os.path.dirname(os.path.abspath(sys.executable))
-    return _SOURCE_ROOT
+    return paths.application_dir()
 
 
 BUNDLE_ROOT = get_bundle_root()
@@ -58,7 +54,7 @@ PLACEHOLDER_THEME_MENU = "{{THEME_MENU}}"
 DEFAULT_OUTPUT_EXTENSION = ".html"
 
 # Runtime configuration file
-CONFIG_FILENAME = "config.json"
+CONFIG_FILENAME = paths.CONFIG_FILENAME
 
 # Default configuration values
 _DEFAULTS: dict = {
