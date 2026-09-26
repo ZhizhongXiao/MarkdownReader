@@ -44,6 +44,8 @@ themes/builtin/base/  基础主题 token（调色板、字体、布局尺寸）�
 themes/builtin/modern/     通用阅读主题（scoped 到 html[data-theme-id="modern"]）
 themes/builtin/office/     类 Word 正式文档与打印主题（scoped 到 html[data-theme-id="office"]）
 themes/builtin/vscode/     编辑器预览风格的技术主题（scoped 到 html[data-theme-id="vscode"]）
+themes/template/      外置主题开发模板（随包发布；导出 -> 编辑 -> 导入）
+assets/themes/external/  用户安装的外置主题（用户资产，永不随包）
 templates/index/      批量索引页（index.html + theme.css + index.js，生成时内嵌；独立表面）
 ```
 
