@@ -141,3 +141,55 @@ def test_the_auto_open_path_uses_the_same_file_uri_helper():
 
     assert "webbrowser.open(_file_uri(entry_file))" in api
     assert "webbrowser.open(_file_uri(path))" in api
+
+
+def test_gui_exposes_the_external_theme_selection_surface():
+    """Phase 9A：主页有自己的外置主题选择面，而不是把选择塞进模板下拉。
+
+    模板下拉是「文档默认主题」，只出 builtin（`get_templates()` 的 docstring 已冻结）；
+    外置主题是「本文档额外携带哪些」，两者是不同的概念（AGENTS §17）。
+    """
+    html = (ROOT / "gui" / "assets" / "index.html").read_text(encoding="utf-8")
+    javascript = (ROOT / "gui" / "assets" / "gui.js").read_text(encoding="utf-8")
+
+    assert 'id="external-theme-list"' in html
+    assert 'id="external-theme-summary"' in html
+    assert 'id="external-theme-empty"' in html
+    assert "data-theme-state" in javascript
+    assert "data-theme-id" in javascript
+    assert "data-theme-action" in javascript
+    assert "function renderThemeSelection()" in javascript
+    assert "function toggleExternalTheme(" in javascript
+    assert "function removeConfiguredTheme(" in javascript
+    assert "function saveThemeSelection(" in javascript
+    assert "get_theme_state" in javascript
+
+
+def test_the_runtime_document_carries_the_theme_selection_surface():
+    """内联文档必须带上新面：打包/内联路径漏掉它时，窗口会显示一个空壳。"""
+    document = load_gui_document()
+
+    assert 'id="external-theme-list"' in document
+    assert 'id="external-theme-summary"' in document
+    assert "function renderThemeSelection()" in document
+
+
+def test_the_main_page_selects_themes_and_does_not_manage_them():
+    """AGENTS §17：安装 / 删除 / 导出模板 / 打开主题目录属于设置页，主页只管「本次携带哪些」。
+
+    Phase 9A 故意不引入设置入口，设置页整体属于 9B；因此这条守卫同时锁住两件事：
+    主页不得出现管理动作，也不得提前出现一个尚无功能的设置按钮。
+    """
+    html = (ROOT / "gui" / "assets" / "index.html").read_text(encoding="utf-8")
+    javascript = (ROOT / "gui" / "assets" / "gui.js").read_text(encoding="utf-8")
+
+    for token in (
+        "btn-settings",
+        "settings-page",
+        "import_theme",
+        "remove_theme",
+        "export_theme_template",
+        "open_theme_location",
+    ):
+        assert token not in html, token + " belongs to the settings page (phase 9B)"
+        assert token not in javascript, token + " belongs to the settings page (phase 9B)"

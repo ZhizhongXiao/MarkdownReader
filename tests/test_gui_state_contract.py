@@ -38,10 +38,11 @@ GUI_JS = ROOT / "gui" / "assets" / "gui.js"
 API_PY = ROOT / "gui" / "api.py"
 
 # Locked counts: a vanished or renamed contract must fail instead of silently
-# reducing coverage.
-EXPECTED_PASS = 9
+# reducing coverage. Phase 9A adds GT1-GT14 (the external theme selection surface)
+# to GU0-GU8, which is where 9 + 14 comes from.
+EXPECTED_PASS = 23
 EXPECTED_XFAIL = 0
-EXPECTED_CONTRACTS = 9
+EXPECTED_CONTRACTS = 23
 
 
 def _single_request_shape(method: str) -> int:

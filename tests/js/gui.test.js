@@ -350,3 +350,359 @@ contract("GU8 dialog lock: one dialog at a time disables the other controls", "p
     assert.equal(outputButton.disabled, false, "the controls come back");
   } finally { session.close(); }
 });
+
+// ── Phase 9A: the external theme selection surface ─────────────────────────────
+//
+// The state comes from the bridge, so every contract below hands the page a state and
+// then reads the DOM. Two facts stay separate on purpose (AGENTS section 17): what the
+// configuration remembers (`configured`) and what a document can use right now
+// (`selected`, with `missing` / `invalid` saying why the rest cannot be restored). A
+// theme that is merely gone must never be dropped from that memory silently.
+
+const CONVERT_OK = {
+  success: true,
+  files: ["output/a.html"],
+  errors: [],
+  warnings: [],
+  documents: [{
+    source_path: "C:\\docs\\a.md", input_path: "C:\\docs\\a.md",
+    output_path: "output/a.html", output_relative: "a.html",
+    origin: "selected", status: "success", warnings: [],
+  }],
+  output_dir: "output",
+  entry_file: "output/a.html",
+};
+
+// `broken` is installed *and* remembered, which is what makes it invalid; `ghost` is
+// remembered but not installed, which is what makes it missing; `academic` and `zeta`
+// are installed and selectable.
+const THEME_STATE_A = {
+  default: "modern",
+  installed: ["academic", "broken", "paper", "zeta"],
+  configured: ["paper", "ghost", "broken"],
+  selected: ["paper"],
+  missing: ["ghost"],
+  invalid: ["broken"],
+  warnings: ["外置主题当前未安装：ghost", "外置主题当前不可用：broken"],
+};
+
+// Two selectable themes are already remembered, so an uncheck has something to remove
+// from the middle of the order rather than from its end.
+const THEME_STATE_B = {
+  default: "modern",
+  installed: ["academic", "broken", "paper", "zeta"],
+  configured: ["paper", "academic", "ghost", "broken"],
+  selected: ["paper", "academic"],
+  missing: ["ghost"],
+  invalid: ["broken"],
+  warnings: [],
+};
+
+const THEME_STATE_EMPTY = {
+  default: "modern",
+  installed: [], configured: [], selected: [], missing: [], invalid: [], warnings: [],
+};
+
+// The same facts with warning text that contradicts them: a surface that classified by
+// reading the warnings would render this state wrong.
+const THEME_STATE_MISLEADING = Object.assign({}, THEME_STATE_A, {
+  warnings: [
+    "外置主题当前未安装：academic",
+    "外置主题当前不可用：zeta",
+    "已忽略未安装的外置主题：paper",
+  ],
+});
+
+function themeIdList(rows) {
+  return (rows || []).map(function (row) { return row.id; }).sort();
+}
+
+contract("GT1 theme rows: selected, available, missing and invalid render apart", "pass", async () => {
+  const session = await bootGui({ themeState: THEME_STATE_A });
+  try {
+    const rows = session.themeRows();
+    assert.ok(rows, "the main page must carry the external theme surface");
+    assert.deepEqual(themeIdList(rows), ["academic", "broken", "ghost", "paper", "zeta"]);
+
+    assert.deepEqual(session.themeRow("paper"),
+      { id: "paper", state: "selected", checked: true, disabled: false,
+        removable: false, removeDisabled: null });
+    assert.deepEqual(session.themeRow("academic"),
+      { id: "academic", state: "available", checked: false, disabled: false,
+        removable: false, removeDisabled: null });
+    assert.deepEqual(session.themeRow("zeta"),
+      { id: "zeta", state: "available", checked: false, disabled: false,
+        removable: false, removeDisabled: null });
+    assert.equal(session.themeRow("ghost").state, "missing");
+    assert.equal(session.themeRow("ghost").checked, false);
+    assert.equal(session.themeRow("ghost").disabled, true);
+    assert.equal(session.themeRow("broken").state, "invalid");
+    assert.equal(session.themeRow("broken").checked, false);
+    assert.equal(session.themeRow("broken").disabled, true);
+
+    assert.deepEqual(session.themeSummary(), { selected: "1", missing: "1", invalid: "1" });
+    assert.equal(session.themeEmptyVisible(), false);
+    assert.equal(session.callsOf("set_configs").length, 0,
+      "rendering a state must never write the configuration");
+  } finally { session.close(); }
+});
+
+contract("GT2 theme rows: only a remembered unusable theme can be removed", "pass", async () => {
+  const session = await bootGui({ themeState: THEME_STATE_A });
+  try {
+    const ghost = session.themeRow("ghost");
+    const broken = session.themeRow("broken");
+    assert.notEqual(ghost.state, broken.state,
+      "a theme that is gone and a theme that is broken are different states");
+    assert.equal(ghost.removable, true, "a missing id can be dropped from the memory");
+    assert.equal(ghost.removeDisabled, false);
+    assert.equal(broken.removable, true, "an invalid id can be dropped from the memory");
+    assert.equal(broken.removeDisabled, false);
+    assert.equal(session.themeRow("academic").removable, false,
+      "an installed theme is carried by checking it, not by removing it");
+    assert.equal(session.themeRow("paper").removable, false);
+  } finally { session.close(); }
+});
+
+contract("GT3 theme rows: the classification is read from fields, never from warning text", "pass", async () => {
+  const session = await bootGui({ themeState: THEME_STATE_MISLEADING });
+  try {
+    assert.equal(session.themeRow("academic").state, "available",
+      "a warning that names it must not demote an installed theme");
+    assert.equal(session.themeRow("zeta").state, "available",
+      "a warning that names it must not demote an installed theme");
+    assert.equal(session.themeRow("paper").state, "selected",
+      "a warning that names it must not demote the remembered selection");
+    assert.equal(session.themeRow("ghost").state, "missing", "the missing field owns this state");
+    assert.equal(session.themeRow("broken").state, "invalid", "the invalid field owns this state");
+    assert.equal(session.themeRow("ghost").disabled, true);
+    assert.equal(session.themeRow("broken").disabled, true);
+  } finally { session.close(); }
+});
+
+contract("GT4 theme selection: checking a theme appends it and keeps the remembered order", "pass", async () => {
+  const session = await bootGui({ themeState: THEME_STATE_A });
+  try {
+    session.window.toggleExternalTheme("academic");
+    await session.flush(3);
+
+    assert.equal(session.callsOf("set_configs").length, 1, "one change is one save");
+    assert.deepEqual(Array.from(session.savePayloads()[0].external_themes),
+      ["paper", "ghost", "broken", "academic"],
+      "the remembered order is kept and the new id goes to the end");
+    assert.equal(session.themeRow("academic").checked, true);
+
+    await session.resolve("set_configs", null);
+    session.window.toggleExternalTheme("zeta");
+    await session.flush(3);
+    assert.deepEqual(Array.from(session.savePayloads()[1].external_themes),
+      ["paper", "ghost", "broken", "academic", "zeta"],
+      "a second check appends after the first one");
+    await session.resolve("set_configs", null);
+  } finally { session.close(); }
+});
+
+contract("GT5 theme selection: unchecking a remembered theme removes only that id", "pass", async () => {
+  const session = await bootGui({ themeState: THEME_STATE_B });
+  try {
+    session.window.toggleExternalTheme("paper");
+    await session.flush(3);
+
+    assert.equal(session.themeRow("paper").checked, false);
+    assert.equal(session.themeRow("academic").checked, true,
+      "the other remembered theme keeps its state");
+    assert.deepEqual(Array.from(session.savePayloads()[0].external_themes),
+      ["academic", "ghost", "broken"],
+      "only the unchecked id leaves, and the rest keep the remembered order");
+    await session.resolve("set_configs", null);
+  } finally { session.close(); }
+});
+
+contract("GT6 theme selection: dropping an unusable remembered id removes only that id", "pass", async () => {
+  const session = await bootGui({ themeState: THEME_STATE_B });
+  try {
+    session.window.removeConfiguredTheme("ghost");
+    await session.flush(3);
+    assert.deepEqual(Array.from(session.savePayloads()[0].external_themes),
+      ["paper", "academic", "broken"], "a missing id is dropped on its own");
+    await session.resolve("set_configs", null);
+
+    session.window.removeConfiguredTheme("broken");
+    await session.flush(3);
+    assert.deepEqual(Array.from(session.savePayloads()[1].external_themes),
+      ["paper", "academic"], "an invalid id is dropped on its own");
+    await session.resolve("set_configs", null);
+  } finally { session.close(); }
+});
+
+contract("GT7 theme selection: every save carries the whole working selection", "pass", async () => {
+  const session = await bootGui({ themeState: THEME_STATE_B });
+  try {
+    assert.equal(session.callsOf("set_configs").length, 0, "booting is a read");
+
+    session.window.toggleExternalTheme("zeta");
+    await session.flush(3);
+
+    const payload = session.savePayloads()[0];
+    assert.deepEqual(Object.keys(payload), ["external_themes"],
+      "the theme surface writes the theme list and nothing else");
+    assert.deepEqual(Array.from(payload.external_themes),
+      ["paper", "academic", "ghost", "broken", "zeta"],
+      "the payload is the working selection, not the usable subset");
+    assert.ok(payload.external_themes.indexOf("ghost") !== -1,
+      "a merely missing id stays in the memory");
+    assert.ok(payload.external_themes.indexOf("broken") !== -1,
+      "an unusable id stays in the memory until the user drops it");
+    await session.resolve("set_configs", null);
+  } finally { session.close(); }
+});
+
+contract("GT8 theme selection: a refused save hands the page back to the bridge state", "pass", async () => {
+  const session = await bootGui({ autoThemeState: false });
+  try {
+    await session.resolve("get_theme_state", THEME_STATE_A);
+    assert.equal(session.themeRow("paper").checked, true, "the first state is rendered");
+
+    session.window.toggleExternalTheme("academic");
+    await session.flush(3);
+    await session.reject("set_configs", new Error("boom"));
+
+    assert.equal(session.callsOf("get_theme_state").length, 2,
+      "a refused save must ask the bridge what is true instead of trusting the page");
+    assert.ok(session.logErrorCount() >= 1, "the refusal must be visible in the log");
+
+    // The page must rebuild from what the bridge reports, not from what it assumed:
+    // the state that comes back remembers a different id than the failed change did.
+    const afterFailure = Object.assign({}, THEME_STATE_EMPTY, {
+      installed: ["zeta"], configured: ["zeta"], selected: ["zeta"],
+    });
+    await session.resolve("get_theme_state", afterFailure);
+    assert.deepEqual(themeIdList(session.themeRows()), ["zeta"]);
+    assert.equal(session.themeRow("zeta").checked, true);
+    assert.equal(session.callsOf("set_configs").length, 1,
+      "the refetch itself must not write anything");
+
+    session.window.toggleExternalTheme("zeta");
+    await session.flush(3);
+    assert.deepEqual(Array.from(session.savePayloads()[1].external_themes), [],
+      "the rebuilt selection is what gets saved, not the change that failed");
+    await session.resolve("set_configs", null);
+  } finally { session.close(); }
+});
+
+contract("GT9 theme selection: at most one write is in flight", "pass", async () => {
+  const session = await bootGui({ themeState: THEME_STATE_A });
+  try {
+    session.window.toggleExternalTheme("academic");
+    await session.flush(3);
+    session.window.toggleExternalTheme("zeta");
+    await session.flush(3);
+
+    assert.equal(session.callsOf("set_configs").length, 1,
+      "the second change must not open a second write");
+    assert.equal(session.pendingOf("set_configs").length, 1);
+    assert.deepEqual(Array.from(session.savePayloads()[0].external_themes),
+      ["paper", "ghost", "broken", "academic"],
+      "the write in flight is the state that existed when it started");
+
+    await session.resolve("set_configs", null);
+    await session.resolve("set_configs", null);
+  } finally { session.close(); }
+});
+
+contract("GT10 theme selection: writes are serialised so an older payload never lands last", "pass", async () => {
+  const session = await bootGui({ themeState: THEME_STATE_A });
+  try {
+    session.window.toggleExternalTheme("academic");
+    await session.flush(3);
+    session.window.toggleExternalTheme("zeta");
+    await session.flush(3);
+    assert.equal(session.callsOf("set_configs").length, 1,
+      "the change that arrived while a write was in flight is held back");
+
+    await session.resolve("set_configs", null);
+    assert.equal(session.callsOf("set_configs").length, 2,
+      "the held change is committed once the first write settled");
+
+    const committed = session.savePayloads().map(function (payload) {
+      return Array.from(payload.external_themes);
+    });
+    assert.deepEqual(committed, [
+      ["paper", "ghost", "broken", "academic"],
+      ["paper", "ghost", "broken", "academic", "zeta"],
+    ], "the committed sequence is monotonic and ends at the working selection");
+
+    await session.flush(4);
+    assert.equal(session.callsOf("set_configs").length, 2,
+      "no stale write may follow the newest one");
+  } finally { session.close(); }
+});
+
+contract("GT11 theme surface: booting only reads, and an empty state says so", "pass", async () => {
+  const configured = await bootGui({ themeState: THEME_STATE_A });
+  try {
+    assert.equal(configured.callsOf("set_configs").length, 0,
+      "rendering a state must never write the configuration");
+  } finally { configured.close(); }
+
+  const empty = await bootGui({ themeState: THEME_STATE_EMPTY });
+  try {
+    assert.deepEqual(empty.themeRows(), [], "no installed theme means no row to offer");
+    assert.equal(empty.themeEmptyVisible(), true);
+    assert.deepEqual(empty.themeSummary(), { selected: "0", missing: "0", invalid: "0" });
+    assert.equal(empty.callsOf("set_configs").length, 0);
+  } finally { empty.close(); }
+});
+
+contract("GT12 theme surface: an unusable remembered theme warns without failing the run", "pass", async () => {
+  const session = await bootGui({ themeState: THEME_STATE_A });
+  try {
+    assert.ok(session.logIssues() >= 2,
+      "both unusable ids must reach the user through the log");
+    assert.equal(session.logErrorCount(), 0,
+      "a theme that is gone or broken is a warning, not a failed run (AGENTS section 17)");
+  } finally { session.close(); }
+});
+
+contract("GT13 theme selection: a run in flight freezes the theme controls", "pass", async () => {
+  const session = await bootGui({ themeState: THEME_STATE_A });
+  try {
+    const first = PLAN_ONE.items[0].source_path;
+    session.window.addInputs([first]);
+    await session.flush(3);
+    await session.resolve("prepare_conversion", PLAN_ONE);
+
+    session.window.runConvert();
+    await session.flush(3);
+
+    session.themeRows().forEach(function (row) {
+      assert.equal(row.disabled, true, row.id + " must not change while a run is in flight");
+    });
+    assert.equal(session.themeRow("ghost").removeDisabled, true);
+
+    await session.resolve("prepare_conversion", PLAN_ONE);
+    await session.flush(3);
+    await session.resolve("set_configs", null);
+    await session.flush(3);
+    await session.resolve("convert", CONVERT_OK);
+    await session.flush(3);
+
+    session.themeRows().forEach(function (row) {
+      assert.equal(row.disabled, false, row.id + " comes back after the run");
+    });
+    assert.equal(session.themeRow("ghost").removeDisabled, false);
+  } finally { session.close(); }
+});
+
+contract("GT14 main page: theme selection never becomes theme management", "pass", async () => {
+  const session = await bootGui({ themeState: THEME_STATE_A });
+  try {
+    const actions = Array.from(session.doc.querySelectorAll("[data-theme-action]"))
+      .map(function (node) { return node.getAttribute("data-theme-action"); });
+    assert.deepEqual(Array.from(new Set(actions)), ["remove"],
+      "the only theme action on the main page is dropping one remembered id");
+    assert.equal(session.list("btn-settings"), null,
+      "installing and removing themes belongs to the settings page and to phase 9B");
+    assert.equal(session.list("settings-page"), null);
+  } finally { session.close(); }
+});

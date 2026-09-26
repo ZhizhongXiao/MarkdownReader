@@ -226,3 +226,41 @@ def test_set_configs_refuses_a_path_like_theme_id(sandbox):
     """程序内部传路径型 ID 属于调用方违约：立刻报错，不写进配置。"""
     with pytest.raises(ValueError):
         BridgeApi().set_configs({"external_themes": ["C:\\themes\\paper"]})
+
+
+def test_an_unrelated_save_never_prunes_the_theme_selection(sandbox, monkeypatch):
+    """Phase 9A：主页面成为 `configured` 的写入者后，别的设置保存不得顺手裁掉主题。
+
+    `set_configs()` 只做 GUI 特有的路径规范化，然后委托 `core.config`；「保存一个无关
+    设置」因此是一次读-改-写，必须把配置里已有的主题列表原样带过。这条锁坐在桥接入口，
+    因为 core 层的 `save_config()` 只认识调用方递进来的那个字典。
+    """
+    pretend_registry(monkeypatch, ["paper"])
+    core_config.save_config({"external_themes": ["paper", "ghost"]})
+
+    BridgeApi().set_configs({"auto_open": False, "build_index": True})
+
+    assert core_config.load_config()["external_themes"] == ["paper", "ghost"]
+
+
+def test_the_selection_write_round_trips_verbatim_in_configured_order(sandbox):
+    """顺序是用户语义的一部分：新选择追加在末尾，已有条目不得被重排。
+
+    `ghost`（missing）与 `Bad ID`（已安装但 id 非法 → invalid）都必须原样留在配置里：
+    配置层不知道、也不该知道一个 id 今天是否可用（AGENTS §17「永不裁剪」）；重复项由
+    core 按首次出现收敛，这一层不必也不该自己判重。
+    """
+    BridgeApi().set_configs(
+        {"external_themes": ["paper", "ghost", "Bad ID", "paper"]}
+    )
+
+    assert core_config.load_config()["external_themes"] == ["paper", "ghost", "Bad ID"]
+
+
+def test_an_explicitly_empty_selection_is_written_as_empty(sandbox):
+    """空列表是「用户取消了全部选择」，与「这次保存不涉及主题」是两种不同的情况。"""
+    core_config.save_config({"external_themes": ["paper"]})
+
+    BridgeApi().set_configs({"external_themes": []})
+
+    assert core_config.load_config()["external_themes"] == []

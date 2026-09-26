@@ -1,5 +1,8 @@
 // Stage 6.6a - jsdom harness for the real GUI (index.html + gui.js) driven
 // through a controllable pywebview stub. Test-only; no production code here.
+// Phase 9A adds the external theme surface: its state is a bridge reply like every
+// other fact on the page, so the harness owns that reply and a contract can hand the
+// page any state it needs to render.
 
 import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
@@ -23,6 +26,19 @@ const AUTO_RESOLVE = {
   },
 };
 
+// A fresh installation: no user theme is installed or remembered. It is the default
+// theme-state reply so the contracts that are not about themes keep the behaviour
+// they had before this surface existed.
+export const EMPTY_THEME_STATE = {
+  default: "modern",
+  installed: [],
+  configured: [],
+  selected: [],
+  missing: [],
+  invalid: [],
+  warnings: [],
+};
+
 function deferred() {
   let resolve;
   let reject;
@@ -31,12 +47,13 @@ function deferred() {
 }
 
 export class GuiSession {
-  constructor(dom, window, calls, errors) {
+  constructor(dom, window, calls, errors, options) {
     this.dom = dom;
     this.window = window;
     this.doc = window.document;
     this.calls = calls;
     this.errors = errors;
+    this.options = options || {};
   }
 
   // ── stub accounting ──────────────────────────────────────────────
@@ -64,6 +81,14 @@ export class GuiSession {
     await this.flush(3);
   }
 
+  async reject(name, error, index) {
+    const entry = this.pendingOf(name)[index || 0];
+    if (!entry) throw new Error("gui harness: no pending " + name + " call to reject");
+    entry.settled = true;
+    entry.deferred.reject(error instanceof Error ? error : new Error(String(error)));
+    await this.flush(3);
+  }
+
   async flush(ticks) {
     const count = ticks || 1;
     for (let i = 0; i < count; i += 1) {
@@ -71,13 +96,30 @@ export class GuiSession {
     }
   }
 
+  // init() ends after the configuration *and* the theme state reply, because the theme
+  // surface is rendered from the bridge rather than from a constant. A contract that
+  // deliberately keeps that reply open (autoThemeState: false) opts out of the second
+  // wait instead of spinning out the deadline here.
   async ready(limit) {
     const deadline = Date.now() + (limit || 3000);
     while (Date.now() < deadline) {
-      if (this.callsOf("get_config").length !== 0) { await this.flush(3); return true; }
+      if (this.callsOf("get_config").length !== 0) break;
       await this.flush(1);
     }
-    return false;
+    if (this.callsOf("get_config").length === 0) return false;
+
+    if (this.options.autoThemeState !== false) {
+      const themeDeadline = Date.now() + (limit || 3000);
+      while (Date.now() < themeDeadline) {
+        const themeCalls = this.callsOf("get_theme_state");
+        if (themeCalls.length !== 0 && themeCalls.every(function (entry) { return entry.settled; })) {
+          break;
+        }
+        await this.flush(1);
+      }
+    }
+    await this.flush(3);
+    return true;
   }
 
   // ── DOM probes (state via the DOM, never via gui.js internals) ───
@@ -118,6 +160,70 @@ export class GuiSession {
              warning: this.text("stat-warning"), error: this.text("stat-error") };
   }
 
+  // ── theme selection probes (DOM only, like every probe above) ─────────────
+  // Rows are the list's own children that carry an id; the checkbox and the remove
+  // button are found inside them, so the markup may put the label anywhere.
+  themeRows() {
+    const list = this.list("external-theme-list");
+    if (!list) return null;
+    const rows = [];
+    for (let i = 0; i < list.children.length; i += 1) {
+      const row = list.children[i];
+      const id = row.getAttribute ? row.getAttribute("data-theme-id") : null;
+      if (!id) continue;
+      const box = row.querySelector('input[type="checkbox"]');
+      const remove = row.querySelector('[data-theme-action="remove"]');
+      rows.push({
+        id: id,
+        state: row.getAttribute("data-theme-state"),
+        checked: box ? box.checked : null,
+        disabled: box ? box.disabled : null,
+        removable: !!remove,
+        removeDisabled: remove ? remove.disabled : null,
+      });
+    }
+    return rows;
+  }
+
+  themeRow(id) {
+    const rows = this.themeRows() || [];
+    for (let i = 0; i < rows.length; i += 1) {
+      if (rows[i].id === id) return rows[i];
+    }
+    return null;
+  }
+
+  themeSummary() {
+    const node = this.list("external-theme-summary");
+    if (!node) return null;
+    return {
+      selected: node.getAttribute("data-selected"),
+      missing: node.getAttribute("data-missing"),
+      invalid: node.getAttribute("data-invalid"),
+    };
+  }
+
+  themeEmptyVisible() {
+    const node = this.list("external-theme-empty");
+    if (!node) return null;
+    return !node.classList.contains("hidden");
+  }
+
+  // Every set_configs payload, in the order the GUI made the calls.
+  savePayloads() {
+    return this.callsOf("set_configs").map(function (entry) { return entry.args[0]; });
+  }
+
+  logErrorCount() {
+    const area = this.list("log-area");
+    if (!area) return -1;
+    let count = 0;
+    for (let i = 0; i < area.children.length; i += 1) {
+      if (area.children[i].classList.contains("log-err")) count += 1;
+    }
+    return count;
+  }
+
   sentinels() {
     return {
       readyState: this.doc.readyState,
@@ -135,7 +241,8 @@ export class GuiSession {
   close() { this.window.close(); }
 }
 
-export async function bootGui() {
+export async function bootGui(options) {
+  const settings = options || {};
   const dom = new JSDOM(GUI_HTML, {
     url: "http://localhost/gui/index.html",
     pretendToBeVisual: true,
@@ -149,7 +256,8 @@ export async function bootGui() {
 
   const calls = {};
   const api = {};
-  const methods = ["get_templates", "get_config", "set_configs", "prepare_conversion", "convert",
+  const methods = ["get_templates", "get_config", "set_configs", "get_theme_state",
+    "prepare_conversion", "convert",
     "select_input_files", "select_input_directory", "select_output_directory",
     "open_file", "open_directory"];
   methods.forEach(function (name) {
@@ -161,6 +269,15 @@ export async function bootGui() {
       if (AUTO_RESOLVE[name]) {
         entry.settled = true;
         entry.deferred.resolve(AUTO_RESOLVE[name]());
+        return entry.deferred.promise;
+      }
+      // The theme state is a normal bridge reply: auto-resolved to the state the
+      // contract asked for, or left open for a contract that needs to answer it (or
+      // fail it) itself.
+      if (name === "get_theme_state" && settings.autoThemeState !== false) {
+        entry.settled = true;
+        const state = settings.themeState || EMPTY_THEME_STATE;
+        entry.deferred.resolve(JSON.parse(JSON.stringify(state)));
       }
       return entry.deferred.promise;
     };
@@ -173,7 +290,7 @@ export async function bootGui() {
   });
 
   window.eval(GUI_SOURCE);
-  const session = new GuiSession(dom, window, calls, errors);
+  const session = new GuiSession(dom, window, calls, errors, settings);
   await session.ready();
   return session;
 }
