@@ -641,6 +641,17 @@ Settings page
 
 主题管理和本次主题选择职责互不混淆。
 
+## 状态
+
+```text
+9A  PASS  Phase 9A overall PASS（实现 + 契约 + 远端终审）
+          主页面外置主题选择：GT1–GT14 + 静态守卫 2 项先红，桥接回归锁 3 项即时绿；follow-up 把
+          GT15/GT16/GT18 由红转绿、GT13 扩展为「运行中 direct 调用也不改持久状态」、GT17 锁住
+          「失败丢弃排队意图」；远端独立终审（对象 9a7063a）9A-1…9A-8 全 PASS
+9B  NOT STARTED  设置页：external theme management / import / remove / export theme template /
+                 open theme location / storage information / about / remove user data and exit
+```
+
 ## 落地记录（Phase 9A：主页面外置主题选择）
 
 设置页与它的入口整体留给 9B：9A 故意**不**引入 `#btn-settings`（避免一个尚无功能的临时产品状态），
@@ -680,7 +691,8 @@ GUI 契约 `GUI_CONTRACTS {"pass": 23, "xfail": 0, "xpass": 0, "fail": 0}`、`GU
 ## 落地记录（Phase 9A follow-up：确认持久化先于转换 —— 远端审计发现）
 
 远端审计（`cf7be38`）判定 **9A-4 / 9A-5 / 9A-6 = FOLLOW-UP REQUIRED**，原因是三处窄缺口；本 follow-up 全部收口
-（**尚未 push、尚无终审结论，因此不写 Phase 9A PASS**）：
+（**`9a7063a` 已推送并通过远端独立终审：9A-1…9A-8 全 PASS，production semantics / contract coverage /
+scope discipline 均 PASS ⇒ Phase 9A overall PASS**）：
 
 ```text
 F1  主题保存与转换之间没有 happens-before：pywebview 的每个桥接调用各跑一个线程，而
@@ -703,6 +715,8 @@ F5  save 失败后 reload 也失败时，异常从「未被 await 的 drain」�
 GT15（红）conversion waits for confirmed theme persistence —— 双分支：写在途时 run 不发任何请求，
            落定后才 prepare_conversion → run set_configs → convert；写被拒则三者都不发生、转换锁释放、
            界面回到桥接状态、随后仍可用
+           （红证据口径：该 record 红是因为 **success branch** 的断言先失败；failure branch 当时未被
+           独立观察为 red，现在由正式 green 契约覆盖 —— 不把历史写成「两个分支分别红过」。）
 GT16（红）summary 跟随 working selection（1 → check → 2 → uncheck → 1）
 GT17（绿）A 在途、B 到达、A 被拒 → B 不再发出、发生 get_theme_state、optimistic 状态被完整替换
            （既有行为的回归锁）
@@ -712,12 +726,19 @@ GT13（扩展）运行中 direct toggleExternalTheme / removeConfiguredTheme →
 ```
 
 证据：红阶段 `GUI_CONTRACTS {"pass": 24, "xfail": 0, "xpass": 0, "fail": 3}`、`GUI_CONTRACT_RECORDS 27 of 27`，
-三条红分别停在对应缺失行为的断言上（`gui.test.js` `:747` / `:816` / `:870`，失败原因逐条确认为功能缺失，
+三条红分别停在对应缺失行为的断言上（`gui.test.js` `:747` / `:816` / `:870`，失败原因逐条确认为功能缺失
+（其中 GT15 停在 success branch 的断言 —— failure branch 当时未被独立观察为 red），
 其中 GT17 初版曾因契约自身的 harness auto-resolve 误报，已按 GT8 的方式改为 `autoThemeState: false`）；
 实现后 `GUI_CONTRACTS {"pass": 27, "fail": 0}`、`27 of 27`；全套 `654 passed / 0 failed / 1 skipped`
 （契约增加不新增 pytest 函数 ⇒ 总数不变）；ruff 全绿。本次只动 `gui/assets/gui.js`、
 `tests/js/gui.test.js`、`tests/test_gui_state_contract.py`（+3 份文档）；`gui/assets/{index.html,gui.css}`、
 `gui/api.py`、`core/**`、`packaging/**`、`viewer/**`、`themes/**`、`samples/**` 均未改动。
+
+证据边界：以上（`654 passed / 1 skipped`、`GUI_CONTRACTS 27 of 27`、ruff 全绿）都是**本地**证据；远端
+combined status 为空（本仓库没有 CI），因此不把 pytest / ruff 结果写成远端执行结果 —— 远端只做静态终审
+（拓扑、diff 面、契约与文档口径）。终审对象是 `9a7063a`（终审时的远端 HEAD）；其后 HEAD 前进到
+`7358b87`（`chore(lint): reach zero diagnostics under the agreed MCP and pyright gates`，22 文件的
+lint/类型口径收口，不改变 9A 语义，另行记录、不并入 9A 的改动面）。
 
 ---
 

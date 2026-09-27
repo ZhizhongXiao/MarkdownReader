@@ -226,7 +226,9 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
   改为从工作集 + `themeRowState()` 计算，不再读启动快照；`_themeConfirmed` 记录最近一次确认落盘的选择，
   用于「save 失败 + reload 也失败」的双重失败回退（**不回退启动快照**），并消除该路径的 unhandled rejection。
   契约 `GT15/GT16/GT18` 先红（`24 pass / 3 fail`）后绿（`27 of 27`），`GT13` 扩展为「运行中 direct 调用也不得
-  改变持久状态」，`GT17` 把「失败丢弃排队意图」锁成既有行为契约。仍未 push 终审，故不宣称 9A PASS。
+  改变持久状态」，`GT17` 把「失败丢弃排队意图」锁成既有行为契约。该 follow-up 已推送并通过远端独立终审
+  （对象 `9a7063a`）⇒ **Phase 9A overall PASS**；`654 passed / 1 skipped` 与 ruff 全绿只记**本地**证据
+  （远端无 CI status）。
 
 ## 命名与路径约定
 

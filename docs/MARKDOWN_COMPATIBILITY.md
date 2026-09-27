@@ -495,13 +495,15 @@ samples/demo.html                         → 未改动，快照契约仍成立
     桥接状态更新），reload 失败 → ERROR + 回到 `_themeConfirmed`，**不回退启动快照**（它可能早于一次已成功的保存）。
   证据：新增/扩展契约 5 处 —— 红阶段 `GUI_CONTRACTS {"pass": 24, "xfail": 0, "xpass": 0, "fail": 3}`、
   `GUI_CONTRACT_RECORDS 27 of 27`（`GT15`/`GT16`/`GT18` 分别红在 `gui.test.js:747` / `:816` / `:870` 的对应断言，
-  失败原因逐条确认为功能缺失；`GT17` 与扩展后的 `GT13` 是既有行为的回归锁，立即绿）；实现后
+  失败原因逐条确认为功能缺失 —— 其中 `GT15` 红在 **success branch** 的断言，failure branch 当时未被
+  独立观察为 red、现由正式 green 契约覆盖；`GT17` 与扩展后的 `GT13` 是既有行为的回归锁，立即绿）；实现后
   `{"pass": 27, "fail": 0}`、`27 of 27`；全套 `uv run pytest -q` = **654 passed / 0 failed / 1 skipped**
-  （契约数变化不新增 pytest 函数，总数不变）；ruff 全绿；改动面严格限定 `gui/assets/gui.js`、
+  （契约数变化不新增 pytest 函数，总数不变）；ruff 全绿（本地证据；远端 combined status 为空，无 CI）；改动面严格限定 `gui/assets/gui.js`、
   `tests/js/gui.test.js`、`tests/test_gui_state_contract.py` 与三份文档，`gui/assets/{index.html,gui.css}`、
   `gui/api.py`、`core/**`、`packaging/**`、`viewer/**`、`themes/**`、`samples/**` 均未进入 diff。
-  **状态**：本 follow-up 尚未 push、尚未通过远端终审 ⇒ **不写 Phase 9A PASS**；9B（设置页 + user-data ownership
-  侦察）仍未开始。
+  **状态**：本 follow-up 已推送（`9a7063a`）并通过远端独立终审：9A-1…9A-8 全 PASS，production semantics /
+  contract coverage / scope discipline 均 PASS ⇒ **Phase 9A overall PASS**（终审时的远端 HEAD；其后 HEAD 前进到
+  `7358b87` 的零诊断 lint 提交，另记，不改 9A 语义）。9B（设置页 + user-data ownership 侦察）仍未开始。
 
 ## texmath 审计记录（Phase 4B，为什么不复用 `markdown-it-texmath`）
 
