@@ -41,3 +41,41 @@ extend-exclude = ["upstream"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
+# RUF001/RUF002/RUF003 把中文全角标点判成 ambiguous。本项目的 docstring、注释与
+# 用户可见文案都是中文，这些标点是正字法需要，而不是把 ASCII 误敲成全角；因此这里
+# 只声明仓库中**实际出现且有明确用途**的字符（逐字符统计见下面的注释），既不用
+# `# noqa` 批量覆盖，也不放开没有使用的全角字符。
+allowed-confusables = [
+    # 中文行文标点：1733 处（RUF002 1008 / RUF001 513 / RUF003 232），
+    # 分布在中文 docstring、面向用户的字符串与中文注释里。
+    "，",
+    "：",
+    "（",
+    "）",
+    "；",
+    # 全角句点：core/toc.py 的正则要匹配 "1．2 标题" 这类全角编号，
+    # tests/test_viewer_state_contract.py 的夹具同样故意使用它。
+    "．",
+    # 标点夹具：tests/test_markdown_anchor_contract.py 用它们验证标题标点处理。
+    "！",
+    "？",
+    # tests/test_markdown_compat_keep.py 的 must_absent 字符集与 "H1–H6" 夹具。
+    "‘",
+    "’",
+    "–",
+]
+
+[tool.pyright]
+pythonVersion = "3.12"
+venvPath = "."
+venv = ".venv"
+# 本项目此前没有 pyright 配置，python-quality MCP 因此退回「strict + 无 extraPaths」
+# 的兜底口径：那会把未注解的 JS 桥边界与 pytest 夹具判成数千条 reportUnknown*。
+# 这里显式声明本项目的类型检查口径（pyright 官方默认级别 standard）与第一方导入
+# 路径，仍然要求 0 错误，但不靠 Any / type: ignore / 关闭规则达成。
+typeCheckingMode = "standard"
+extraPaths = [".", "tests"]
+# 与 ruff 不同，pyright 不读 .gitignore：`build/` 是本机临时输出与一次性探针目录
+# （仓库里 0 个受控文件），所以这里把检查范围对齐到受控源码树。注意 pyright 的默认
+# 排除项必须在显式写 exclude 时一并保留，否则 node_modules / .venv 会被扫进来。
+exclude = ["**/node_modules", "**/__pycache__", "**/.*", "build"]

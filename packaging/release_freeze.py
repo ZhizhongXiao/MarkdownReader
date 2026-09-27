@@ -30,6 +30,7 @@ import sys
 import zipfile
 from datetime import date
 from pathlib import Path
+from typing import NoReturn
 
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / "dist"
@@ -44,7 +45,8 @@ PASS_MARKER = "QA 结论：通过"
 BOX = re.compile(r"^\s*-\s*\[\s*([^\]]*?)\s*\]", re.MULTILINE)
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
+    """打印失败原因并终止；声明 NoReturn，调用方才知道此处之后不可达。"""
     print("[FAIL] " + message)
     raise SystemExit(1)
 

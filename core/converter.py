@@ -133,7 +133,7 @@ def process_single(
         recorded in ``report``, and that path is returned.
     """
     if os.path.exists(output_path) and not cfg.get("overwrite", False):
-        warning = "目标文件已存在且未启用覆盖，已跳过：%s" % output_path
+        warning = f"目标文件已存在且未启用覆盖，已跳过：{output_path}"
         _logger.warning(warning)
         if report is not None:
             report["warnings"] = [warning]
@@ -143,7 +143,7 @@ def process_single(
 
     # 1. Read Markdown
     try:
-        with open(input_path, "r", encoding="utf-8") as f:
+        with open(input_path, encoding="utf-8") as f:
             md_text = f.read()
     except Exception as e:
         _logger.error("读取文件失败：%s；原因：%s", input_path, e)
@@ -178,7 +178,7 @@ def process_single(
         )
     if renderer_version != "v1":
         # 未知版本不能静默按 v1 处理：那会让调用方以为自己的选择生效了。
-        raise ValueError("renderer_version 只能是 'v1' 或 'v2'，收到：%r" % (renderer_version,))
+        raise ValueError(f"renderer_version 只能是 'v1' 或 'v2'，收到：{renderer_version!r}")
 
     render_result = render_markdown_node(
         body_md,
@@ -397,7 +397,7 @@ def process_batch(
         if saved:
             # Extract metadata for index
             try:
-                with open(input_path, "r", encoding="utf-8") as f:
+                with open(input_path, encoding="utf-8") as f:
                     raw = f.read()
                 meta, _ = parse_front_matter(raw)
             except Exception:

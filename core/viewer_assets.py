@@ -57,7 +57,7 @@ def _read_text(path: str | None) -> str:
     """Return the file text, or an empty string when it is missing."""
     if not path or not os.path.isfile(path):
         return ""
-    with open(path, "r", encoding="utf-8") as handle:
+    with open(path, encoding="utf-8") as handle:
         return handle.read()
 
 
@@ -106,7 +106,7 @@ def _metadata_at(directory: str) -> dict:
     path = os.path.join(directory, "metadata.json")
     if os.path.isfile(path):
         try:
-            with open(path, "r", encoding="utf-8") as handle:
+            with open(path, encoding="utf-8") as handle:
                 metadata = json.load(handle)
         except Exception as error:
             _logger.warning("解析主题元数据失败：%s；原因：%s", path, error)
@@ -310,7 +310,7 @@ def resolve_theme_chain(theme_id: str) -> list[str]:
         if parent is None:
             break
         if parent in seen:
-            raise ValueError(f"检测到模板循环继承：{' -> '.join(chain + [parent])}")
+            raise ValueError(f"检测到模板循环继承：{' -> '.join([*chain, parent])}")
         if not theme_dir(parent):
             raise ValueError(f"模板“{current}”继承“{parent}”，但未找到父模板“{parent}”。")
         chain.insert(0, parent)

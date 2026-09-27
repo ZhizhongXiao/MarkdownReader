@@ -129,15 +129,17 @@ def test_only_the_paths_module_judges_the_frozen_layout():
             if path == ROOT / "core" / "paths.py":
                 continue
             text = path.read_text(encoding="utf-8")
-            for token in ("sys.frozen", "_MEIPASS"):
-                if token in text:
-                    offenders.append(path.as_posix() + " :: " + token)
+            offenders.extend(
+                path.as_posix() + " :: " + token
+                for token in ("sys.frozen", "_MEIPASS")
+                if token in text
+            )
     assert offenders == [], offenders
 
 
 def test_the_config_module_still_exposes_the_paths_it_always_did():
     """既有调用方（index_builder / renderer_node / viewer_assets / gui）不受影响。"""
-    assert core_config.BUNDLE_ROOT == paths.bundle_root()
-    assert core_config.PROJECT_ROOT == paths.application_dir()
+    assert paths.bundle_root() == core_config.BUNDLE_ROOT
+    assert paths.application_dir() == core_config.PROJECT_ROOT
     assert core_config.get_bundle_root() == paths.bundle_root()
     assert core_config.get_application_dir() == paths.application_dir()

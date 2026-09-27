@@ -506,7 +506,7 @@ def test_the_checker_fails_the_gate_on_css_it_cannot_parse():
         "<style>a{background:url(x.png)}/* unclosed</style>"
     )
 
-    assert [item["ref"] for item in found][0].startswith("css-unparseable(style)")
+    assert next(item["ref"] for item in found).startswith("css-unparseable(style)")
 
 
 def test_the_conversion_gate_and_the_reader_state_share_rules_not_verdicts(

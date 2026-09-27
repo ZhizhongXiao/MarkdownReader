@@ -223,7 +223,7 @@ def _find_config(config_path: str | None = None) -> str | None:
 def _parse_json(filepath: str) -> dict:
     """Parse a JSON configuration file into a flat dict."""
     try:
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(filepath, encoding="utf-8") as f:
             data = json.load(f)
     except Exception as e:
         _logger.warning("解析配置文件失败：%s；原因：%s", filepath, e)
@@ -269,9 +269,8 @@ def load_config(
         file_cfg = _parse_json(path)
         cfg.update(file_cfg)
     if runtime_overrides:
-        for key, value in runtime_overrides.items():
-            if value is not None:
-                cfg[key] = value
+        overrides = {key: value for key, value in runtime_overrides.items() if value is not None}
+        cfg.update(overrides)
     cfg["template"] = normalize_template_name(cfg.get("template"))
     cfg["external_themes"] = _clean_external_themes(cfg.get("external_themes"), strict=False)
     return cfg

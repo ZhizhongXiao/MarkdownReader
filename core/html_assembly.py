@@ -130,10 +130,10 @@ def assemble_document(
         # 每套主题单独一条 label：漏掉一套或重复内嵌都能被指出是哪一套。
         selection = resolve_theme_selection(external_themes, default=resolved_template)
         assembly_warnings.extend(selection["warnings"])
-        for entry in theme_bundle(selection):
-            head_fragments.append(
-                (f"<style>\n{entry['css']}\n</style>", f"theme:{entry['id']}", None)
-            )
+        head_fragments.extend(
+            (f"<style>\n{entry['css']}\n</style>", f"theme:{entry['id']}", None)
+            for entry in theme_bundle(selection)
+        )
     except ValueError as error:
         raise ValueError(f"主题资源不可用：{error}") from error
     _logger.debug("已内嵌主题 bundle：base + %s", ", ".join(builtin_theme_ids()))

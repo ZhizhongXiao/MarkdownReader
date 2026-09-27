@@ -135,9 +135,7 @@ def _link_reference_is_fetched(rel: str | None) -> bool:
     tokens = {token.lower() for token in str(rel or "").split() if token}
     if tokens & FETCHING_LINK_RELS:
         return True
-    if tokens and tokens <= NON_FETCHING_LINK_RELS:
-        return False
-    return True
+    return not (tokens and tokens <= NON_FETCHING_LINK_RELS)
 
 
 def srcset_references(value: str) -> list[str]:
@@ -544,7 +542,7 @@ def _load_json(path: str | None):
     """Load a JSON document, or return None when no path was given."""
     if not path:
         return None
-    with open(path, "r", encoding="utf-8") as handle:
+    with open(path, encoding="utf-8") as handle:
         return json.load(handle)
 
 
@@ -573,7 +571,7 @@ def _build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the checker as a CLI; exit code 1 when the verdict is `failure`."""
     args = _build_parser().parse_args(argv)
-    with open(args.html, "r", encoding="utf-8") as handle:
+    with open(args.html, encoding="utf-8") as handle:
         html = handle.read()
 
     report = scan(

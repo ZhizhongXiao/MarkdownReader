@@ -52,7 +52,7 @@ def generate_demo(
         renderer_options=options,
     )
     if result is None:
-        raise RuntimeError("demo generation failed: %s" % input_path)
+        raise RuntimeError(f"demo generation failed: {input_path}")
     return Path(result)
 
 

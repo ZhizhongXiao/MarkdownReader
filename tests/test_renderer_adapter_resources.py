@@ -98,7 +98,7 @@ def assert_manifest_shape(envelope: dict) -> None:
     assert isinstance(resources["scripts"], list)
     for item in resources["items"]:
         keys = set(item)
-        assert BASE_ITEM_KEYS <= keys, item
+        assert keys >= BASE_ITEM_KEYS, item
         assert keys <= BASE_ITEM_KEYS | OPTIONAL_ITEM_KEYS, item
         assert item["status"] in STATUSES, item
         assert isinstance(item["ref"], str) and isinstance(item["source"], str), item

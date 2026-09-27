@@ -133,9 +133,9 @@ def hello(name):
 """,
     )
 
-    sections = []
-    for index in range(1, 25):
-        sections.append("## 第 %d 节\n\n正文内容，用于滚动、折叠和打印分页测试。\n" % index)
+    sections = [
+        f"## 第 {index} 节\n\n正文内容，用于滚动、折叠和打印分页测试。\n" for index in range(1, 25)
+    ]
     write(root / "甲组" / "二号.md", "# 长文文档\n\n" + "\n".join(sections))
 
     write(

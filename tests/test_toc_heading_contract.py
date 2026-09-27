@@ -142,7 +142,7 @@ def test_heading_metadata_exposes_inline_html(tmp_path: Path):
 
     assert len(headings) == len(HEADING_SOURCES)
     assert len(body) == len(HEADING_SOURCES)
-    for heading, expected in zip(headings, body):
+    for heading, expected in zip(headings, body, strict=True):
         assert heading["inline_html"] == expected
 
 
@@ -152,7 +152,7 @@ def test_heading_metadata_exposes_toc_inline_html(tmp_path: Path):
     )["headings"]
 
     assert len(headings) == len(TOC_INLINE_HTML_EXPECTATIONS)
-    for heading, (_, expected) in zip(headings, TOC_INLINE_HTML_EXPECTATIONS):
+    for heading, (_, expected) in zip(headings, TOC_INLINE_HTML_EXPECTATIONS, strict=True):
         assert heading["toc_inline_html"] == expected
 
 

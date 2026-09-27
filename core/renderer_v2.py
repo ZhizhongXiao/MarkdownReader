@@ -65,7 +65,7 @@ def node_major(version: str) -> int:
     text = str(version or "").strip().lstrip("vV")
     head = text.split(".", 1)[0]
     if not head.isdigit():
-        raise ValueError("无法解析 Node 版本：%r" % (version,))
+        raise ValueError(f"无法解析 Node 版本：{version!r}")
     return int(head)
 
 
@@ -80,8 +80,7 @@ def require_artifact() -> str:
     """Return the v2 artifact path, failing actionably when it was never built."""
     if not os.path.isfile(ARTIFACT):
         raise RuntimeError(
-            "v2 renderer 构建产物缺失：%s。%s（显式选择 v2 后不会回退到 v1）。"
-            % (ARTIFACT, BUILD_HINT)
+            f"v2 renderer 构建产物缺失：{ARTIFACT}。{BUILD_HINT}（显式选择 v2 后不会回退到 v1）。"
         )
     return ARTIFACT
 
@@ -107,16 +106,14 @@ def _invoke_artifact(node_command: str, markdown: str, options, context) -> str:
             **_subprocess_window_kwargs(),
         )
     except subprocess.TimeoutExpired as error:
-        raise RuntimeError(
-            "v2 renderer 运行超过 %d 秒，已超时。" % TIMEOUT_SECONDS
-        ) from error
+        raise RuntimeError(f"v2 renderer 运行超过 {TIMEOUT_SECONDS} 秒，已超时。") from error
     except Exception as error:
-        raise RuntimeError("运行 v2 renderer 失败：%s" % error) from error
+        raise RuntimeError(f"运行 v2 renderer 失败：{error}") from error
 
     if result.returncode != 0:
         stderr = (result.stderr or "").strip() or "(no stderr)"
         raise RuntimeError(
-            "v2 renderer 执行失败（退出码 %d）。错误输出：%s" % (result.returncode, stderr)
+            f"v2 renderer 执行失败（退出码 {result.returncode}）。错误输出：{stderr}"
         )
     return result.stdout or ""
 
@@ -134,15 +131,15 @@ def parse_envelope(stdout: str) -> dict:
     try:
         output = json.loads(text)
     except json.JSONDecodeError as error:
-        raise RuntimeError("v2 renderer 返回了无效 JSON：%s" % text[:500]) from error
+        raise RuntimeError(f"v2 renderer 返回了无效 JSON：{text[:500]}") from error
     if not isinstance(output, dict):
-        raise RuntimeError("v2 renderer 返回的不是 JSON 对象：%s" % text[:200])
+        raise RuntimeError(f"v2 renderer 返回的不是 JSON 对象：{text[:200]}")
 
     protocol = output.get("protocol_version")
     if protocol != PROTOCOL_VERSION:
         raise RuntimeError(
-            "v2 renderer 返回了非 v2 协议（protocol_version=%r，期望 %d）："
-            "不做协议探测，也不会回退到 v1。" % (protocol, PROTOCOL_VERSION)
+            f"v2 renderer 返回了非 v2 协议（protocol_version={protocol!r}，"
+            f"期望 {PROTOCOL_VERSION}）：不做协议探测，也不会回退到 v1。"
         )
 
     if output.get("ok") is not True:
@@ -151,12 +148,12 @@ def parse_envelope(stdout: str) -> dict:
         code = str(error.get("code") or "unknown")
         message = str(error.get("message") or "").strip() or "（renderer 未提供消息）"
         detail = str(error.get("detail") or "").strip()
-        suffix = "（%s）" % detail if detail else ""
-        raise RuntimeError("v2 renderer 失败 [%s]：%s%s" % (code, message, suffix))
+        suffix = f"（{detail}）" if detail else ""
+        raise RuntimeError(f"v2 renderer 失败 [{code}]：{message}{suffix}")
 
     missing = [key for key in REQUIRED_ENVELOPE_KEYS if key not in output]
     if missing:
-        raise RuntimeError("v2 renderer 的 envelope 缺少必在字段：%s" % ", ".join(missing))
+        raise RuntimeError(f"v2 renderer 的 envelope 缺少必在字段：{', '.join(missing)}")
     if not isinstance(output["html"], str):
         raise RuntimeError("v2 renderer 的 html 不是字符串。")
     resources = output["resources"]
@@ -164,7 +161,7 @@ def parse_envelope(stdout: str) -> dict:
         raise RuntimeError("v2 renderer 的 resources 不是对象。")
     invalid = [key for key in REQUIRED_RESOURCE_KEYS if not isinstance(resources.get(key), list)]
     if invalid:
-        raise RuntimeError("v2 renderer 的 resources 缺少列表字段：%s" % ", ".join(invalid))
+        raise RuntimeError(f"v2 renderer 的 resources 缺少列表字段：{', '.join(invalid)}")
     return output
 
 
@@ -188,7 +185,7 @@ def _require_smoke_evidence(envelope: dict) -> None:
     if envelope["resources"]["author_references"]:
         raise RuntimeError("v2 renderer 冒烟的 author_references 必须为空。")
     if envelope["warnings"]:
-        raise RuntimeError("v2 renderer 冒烟产生了 warning：%s" % envelope["warnings"])
+        raise RuntimeError(f"v2 renderer 冒烟产生了 warning：{envelope['warnings']}")
 
 
 def validate_v2_runtime(node_command: str) -> str:

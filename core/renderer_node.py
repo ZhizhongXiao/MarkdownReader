@@ -63,16 +63,16 @@ def _run_renderer_smoke(node_command: str) -> None:
             **_subprocess_window_kwargs(),
         )
     except Exception as error:
-        raise RuntimeError("Node 渲染器自检无法运行：%s" % error)
+        raise RuntimeError(f"Node 渲染器自检无法运行：{error}") from error
     if result.returncode != 0:
         raise RuntimeError(
-            "Node 渲染器自检失败（退出码 %d）：%s"
-            % (result.returncode, (result.stderr or "").strip() or "无错误输出")
+            f"Node 渲染器自检失败（退出码 {result.returncode}）："
+            f"{(result.stderr or '').strip() or '无错误输出'}"
         )
     try:
         output = json.loads((result.stdout or "").strip())
-    except json.JSONDecodeError:
-        raise RuntimeError("Node 渲染器自检返回了无效 JSON。")
+    except json.JSONDecodeError as error:
+        raise RuntimeError("Node 渲染器自检返回了无效 JSON。") from error
     if not isinstance(output, dict) or not output.get("html"):
         raise RuntimeError("Node 渲染器自检未返回 HTML。")
 
@@ -89,8 +89,8 @@ def resolve_node_runtime() -> str:
         return _BUNDLED_NODE
     if _is_frozen():
         raise RuntimeError(
-            "MarkdownReader 打包物损坏：缺少内置 Node 运行时（%s）。请重新获取完整发布包。"
-            % _BUNDLED_NODE
+            f"MarkdownReader 打包物损坏：缺少内置 Node 运行时（{_BUNDLED_NODE}）。"
+            "请重新获取完整发布包。"
         )
     return "node"
 
@@ -141,7 +141,7 @@ def validate_renderer_runtime() -> str:
     probe_node_version(node_command)
 
     if not os.path.isfile(_RENDER_JS):
-        raise RuntimeError("未找到 Node 渲染脚本：%s" % _RENDER_JS)
+        raise RuntimeError(f"未找到 Node 渲染脚本：{_RENDER_JS}")
     node_modules = os.path.join(os.path.dirname(_RENDER_JS), "node_modules")
     if not os.path.isdir(node_modules):
         raise RuntimeError("Node 渲染依赖尚未安装，请运行：cd node_renderer && npm install")
@@ -183,7 +183,7 @@ def validate_renderer_runtime_for(renderer_version: str) -> str:
         return validate_renderer_runtime()
     if renderer_version == "v2":
         return _require_v2_runtime()
-    raise ValueError("renderer_version 只能是 'v1' 或 'v2'，收到：%r" % (renderer_version,))
+    raise ValueError(f"renderer_version 只能是 'v1' 或 'v2'，收到：{renderer_version!r}")
 
 
 def render_markdown_node(md_text, context=None, *, renderer_version="v1", options=None):
@@ -205,7 +205,7 @@ def render_markdown_node(md_text, context=None, *, renderer_version="v1", option
         from core import renderer_v2
 
         return renderer_v2.render_markdown_v2(node_command, md_text, context, options)
-    raise ValueError("renderer_version 只能是 'v1' 或 'v2'，收到：%r" % (renderer_version,))
+    raise ValueError(f"renderer_version 只能是 'v1' 或 'v2'，收到：{renderer_version!r}")
 
 
 def _require_v2_node_major(version: str) -> int:
@@ -220,13 +220,12 @@ def _require_v2_node_major(version: str) -> int:
         major = renderer_v2.node_major(version)
     except ValueError as error:
         raise RuntimeError(
-            "无法解析 Node 版本，v2 需要 major >= %d：%s"
-            % (renderer_v2.MINIMUM_NODE_MAJOR, error)
+            f"无法解析 Node 版本，v2 需要 major >= {renderer_v2.MINIMUM_NODE_MAJOR}：{error}"
         ) from error
     if major < renderer_v2.MINIMUM_NODE_MAJOR:
         raise RuntimeError(
-            "v2 renderer 需要 Node major >= %d，当前为 %s。请升级内置 Node，"
-            "或改用 renderer_version='v1'。" % (renderer_v2.MINIMUM_NODE_MAJOR, version)
+            f"v2 renderer 需要 Node major >= {renderer_v2.MINIMUM_NODE_MAJOR}，当前为 {version}。"
+            "请升级内置 Node，或改用 renderer_version='v1'。"
         )
     return major
 
@@ -253,29 +252,25 @@ def _render_markdown_v1(md_text, context=None):
             cwd=os.path.dirname(_RENDER_JS),
             **_subprocess_window_kwargs(),
         )
-    except subprocess.TimeoutExpired:
-        raise RuntimeError("Node 渲染器运行超过 30 秒，已超时。")
-    except Exception as e:
-        raise RuntimeError("运行 Node 渲染器失败：%s" % e)
+    except subprocess.TimeoutExpired as error:
+        raise RuntimeError("Node 渲染器运行超过 30 秒，已超时。") from error
+    except Exception as error:
+        raise RuntimeError(f"运行 Node 渲染器失败：{error}") from error
 
     if result.returncode != 0:
         stderr = (result.stderr or "").strip() or "(no stderr)"
-        raise RuntimeError(
-            "Node 渲染器执行失败（退出码 %d）。错误输出：%s"
-            % (result.returncode, stderr)
-        )
+        raise RuntimeError(f"Node 渲染器执行失败（退出码 {result.returncode}）。错误输出：{stderr}")
 
     stdout = (result.stdout or "").strip()
     if not stdout:
         raise RuntimeError(
-            "Node 渲染器返回了空结果。\n"
-            "错误输出：%s" % ((result.stderr or "").strip() or "无")
+            f"Node 渲染器返回了空结果。\n错误输出：{(result.stderr or '').strip() or '无'}"
         )
 
     try:
         output = json.loads(stdout)
-    except json.JSONDecodeError:
-        raise RuntimeError("Node 渲染器返回了无效 JSON：%s" % stdout[:500])
+    except json.JSONDecodeError as error:
+        raise RuntimeError(f"Node 渲染器返回了无效 JSON：{stdout[:500]}") from error
 
     html = output.get("html", "")
     headings = output.get("headings", [])

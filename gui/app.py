@@ -1,5 +1,6 @@
 """MarkdownReader GUI entry point — pywebview window with log bridging."""
 
+import contextlib
 import importlib
 import json
 import logging
@@ -104,11 +105,11 @@ def load_gui_document() -> str:
     if not all(os.path.isfile(path) for path in required):
         return "<html><body><h1>MarkdownReader</h1><p>HTML asset not found.</p></body></html>"
 
-    with open(html_path, "r", encoding="utf-8") as handle:
+    with open(html_path, encoding="utf-8") as handle:
         document = handle.read()
-    with open(css_path, "r", encoding="utf-8") as handle:
+    with open(css_path, encoding="utf-8") as handle:
         css = handle.read()
-    with open(js_path, "r", encoding="utf-8") as handle:
+    with open(js_path, encoding="utf-8") as handle:
         javascript = handle.read()
 
     document = document.replace(
@@ -197,10 +198,8 @@ def main():
         return paths
 
     def _set_drop_overlay(active: bool):
-        try:
+        with contextlib.suppress(Exception):
             window.evaluate_js(f"setDropOverlay({str(active).lower()})")
-        except Exception:
-            pass
 
     def on_drop(event):
         paths = _drop_paths(event)
@@ -212,21 +211,30 @@ def main():
 
     def bind_drop_events():
         document = window.dom.document
-        document.events.dragenter += DOMEventHandler(
-            lambda _event: _set_drop_overlay(True),
-            prevent_default=True,
-            stop_propagation=True,
+        # pywebview 的 `DOMEvent.__iadd__` / `__add__` 注解只写了 `Callable[..., Any]`，
+        # 漏了它们实际接受的 `DOMEventHandler`（`Element.on` 的注解里是明写的），而
+        # `__iadd__` 的实现就是转发给 `Element.on`：这里直接调用注解完整的那一层，
+        # 运行路径不变（`DOMEvent._items` 只服务 `-=`，本应用不解绑事件）。
+        document.on(
+            "dragenter",
+            DOMEventHandler(
+                lambda _event: _set_drop_overlay(True),
+                prevent_default=True,
+                stop_propagation=True,
+            ),
         )
-        document.events.dragover += DOMEventHandler(
-            lambda _event: _set_drop_overlay(True),
-            prevent_default=True,
-            stop_propagation=True,
-            debounce=250,
+        document.on(
+            "dragover",
+            DOMEventHandler(
+                lambda _event: _set_drop_overlay(True),
+                prevent_default=True,
+                stop_propagation=True,
+                debounce=250,
+            ),
         )
-        document.events.drop += DOMEventHandler(
-            on_drop,
-            prevent_default=True,
-            stop_propagation=True,
+        document.on(
+            "drop",
+            DOMEventHandler(on_drop, prevent_default=True, stop_propagation=True),
         )
 
     def reveal_window():

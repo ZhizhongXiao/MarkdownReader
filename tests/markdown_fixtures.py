@@ -21,7 +21,7 @@ CASE_KEYS = ("id", "group", "file", "note")
 
 def load_manifest() -> dict:
     """返回 manifest 的解析结果。"""
-    with open(MANIFEST_PATH, "r", encoding="utf-8") as stream:
+    with open(MANIFEST_PATH, encoding="utf-8") as stream:
         return json.load(stream)
 
 

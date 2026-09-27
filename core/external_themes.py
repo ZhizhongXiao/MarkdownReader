@@ -71,7 +71,7 @@ def _read_text(path: str) -> str:
     """Return a text file's content, or ``""`` when it is missing."""
     if not os.path.isfile(path):
         return ""
-    with open(path, "r", encoding="utf-8") as handle:
+    with open(path, encoding="utf-8") as handle:
         return handle.read()
 
 
@@ -140,7 +140,7 @@ def validate_theme_directory(directory: str) -> dict:
     if not os.path.isfile(metadata_path):
         raise ExternalThemeError(f"主题缺少 metadata.json：{base}")
     try:
-        with open(metadata_path, "r", encoding="utf-8") as handle:
+        with open(metadata_path, encoding="utf-8") as handle:
             metadata = json.load(handle)
     except Exception as error:
         raise ExternalThemeError(f"metadata.json 无法解析：{metadata_path}（{error}）") from error
@@ -485,13 +485,14 @@ def resolve_theme_selection(
         chosen.append(theme_id)
 
     default_id = str(default) if default else ""
-    if default_id and viewer_assets.theme_source(default_id) == viewer_assets.SOURCE_EXTERNAL:
-        if default_id not in chosen:
-            validate_installed_theme(default_id)
-            warnings.append(
-                "文档默认主题 " + default_id + " 未在选中列表里，已自动补入本文档。"
-            )
-            chosen.append(default_id)
+    if (
+        default_id
+        and viewer_assets.theme_source(default_id) == viewer_assets.SOURCE_EXTERNAL
+        and default_id not in chosen
+    ):
+        validate_installed_theme(default_id)
+        warnings.append("文档默认主题 " + default_id + " 未在选中列表里，已自动补入本文档。")
+        chosen.append(default_id)
 
     external_ids = sorted(chosen)
     return {

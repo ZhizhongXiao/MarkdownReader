@@ -18,6 +18,7 @@ import json
 import shutil
 import subprocess
 from pathlib import Path
+from typing import NamedTuple
 
 import pytest
 
@@ -118,17 +119,35 @@ def _parse_gitmodules() -> dict:
     return entries
 
 
-def _run_update_script(*args: str) -> subprocess.CompletedProcess:
+class _ScriptRun(NamedTuple):
+    """pin 更新脚本一次运行的结论。
+
+    脚本把自己的判定作为 `RESULT: OK/ERROR` 打进输出里，所以断言需要的是整段输出；
+    `subprocess.CompletedProcess` 并没有这样一个字段，给它挂动态属性既不是它的契约，
+    也无法通过类型检查。
+    """
+
+    returncode: int
+    output: str
+
+
+def _run_update_script(*args: str) -> _ScriptRun:
+    pwsh = shutil.which("pwsh")
+    if pwsh is None:
+        # 每个调用方都先跑 _require_pwsh()：这里只是不让 `str | None` 流进 subprocess。
+        raise RuntimeError("pwsh 不在 PATH 上：调用方必须先执行 _require_pwsh()。")
     completed = subprocess.run(
-        [shutil.which("pwsh"), "-NoProfile", "-File", str(UPDATE_SCRIPT), *args],
+        [pwsh, "-NoProfile", "-File", str(UPDATE_SCRIPT), *args],
         cwd=str(ROOT),
         capture_output=True,
         text=True,
         encoding="utf-8",
         errors="replace",
     )
-    completed.output = (completed.stdout or "") + (completed.stderr or "")
-    return completed
+    return _ScriptRun(
+        returncode=completed.returncode,
+        output=(completed.stdout or "") + (completed.stderr or ""),
+    )
 
 
 def test_gitmodules_is_the_upstream_location_source():

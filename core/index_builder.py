@@ -26,7 +26,7 @@ def make_index_filename(source_name: str = "") -> str:
 
 
 def _read_text(path: str) -> str:
-    with open(path, "r", encoding="utf-8") as stream:
+    with open(path, encoding="utf-8") as stream:
         return stream.read()
 
 
@@ -38,7 +38,7 @@ def _load_index_assets() -> tuple[str, str, str]:
         if not os.path.isfile(path)
     ]
     if missing:
-        raise RuntimeError("索引模板资源缺失：%s" % ", ".join(missing))
+        raise RuntimeError(f"索引模板资源缺失：{', '.join(missing)}")
     return _read_text(_INDEX_HTML), _read_text(_INDEX_CSS), _read_text(_INDEX_JS)
 
 

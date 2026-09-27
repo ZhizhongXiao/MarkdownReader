@@ -80,12 +80,11 @@ def render_envelope(markdown: str, context: dict) -> dict:
     )
     if completed.returncode != 0:
         raise RuntimeError(
-            "renderer 执行失败（exit %d）：%s"
-            % (completed.returncode, (completed.stderr or "").strip())
+            f"renderer 执行失败（exit {completed.returncode}）：{(completed.stderr or '').strip()}"
         )
     envelope = json.loads(completed.stdout)
     if not envelope.get("ok"):
-        raise RuntimeError("renderer 返回失败：%s" % envelope.get("warnings"))
+        raise RuntimeError(f"renderer 返回失败：{envelope.get('warnings')}")
     return envelope
 
 

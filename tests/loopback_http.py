@@ -26,7 +26,7 @@ import socket
 import threading
 import time
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
@@ -93,11 +93,11 @@ def _handler_factory(stats: LoopbackStats) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
-        def log_message(self, *args: object) -> None:
-            """测试输出不需要访问日志。"""
+        def log_message(self, format: str, *args: object) -> None:
+            """测试输出不需要访问日志（签名与 BaseHTTPRequestHandler 一致）。"""
             return
 
-        def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler 的约定名
+        def do_GET(self) -> None:  # BaseHTTPRequestHandler 的约定名，不是本地命名选择
             path = urlparse(self.path).path
             stats.enter(path)
             try:
@@ -115,10 +115,8 @@ def _handler_factory(stats: LoopbackStats) -> type[BaseHTTPRequestHandler]:
 
         def _abort(self) -> None:
             """不打招呼直接中断连接：制造「headers 正常、body 读到一半」的网络错误。"""
-            try:
+            with suppress(OSError):
                 self.connection.shutdown(socket.SHUT_RDWR)
-            except OSError:
-                pass
             self.close_connection = True
 
         def _send(
