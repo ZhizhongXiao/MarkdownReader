@@ -514,6 +514,10 @@ async function reloadThemeState() {
 // startup and cannot change what the main page does while it stays closed.
 
 var _themeInventory = null;
+// Closing is a two-step act -- re-read the main page, then reveal it -- so it needs a state
+// of its own: a second Back press must not start a second read, and the main page must not
+// appear while the rows it would show are known to be stale.
+var _settingsClosing = false;
 
 var STORAGE_FACT_LABELS = [
     ["mode", "运行模式"],
@@ -534,20 +538,31 @@ var ABOUT_FACT_LABELS = [
 
 function openSettings() {
     var page = document.getElementById("settings-page");
-    if (!page) return;
+    if (!page || _settingsClosing) return;
     page.classList.remove("hidden");
     applySettingsControlLock();
     loadSettingsFacts();
 }
 
-function closeSettings() {
-    var page = document.getElementById("settings-page");
-    if (page) page.classList.add("hidden");
-    // A visit may have changed what is installed, so the main page re-reads its own state
-    // instead of keeping a row for a theme the user just uninstalled.
-    reloadThemeState().catch(function (error) {
+// The main page is revealed only after its own state has been re-read: `closeSettings()` is
+// the one place that knows a visit may have changed what is installed, so it is also the one
+// place that must not hand the user a main page it knows to be stale. A failed re-read keeps
+// the settings page in front -- and Back stays pressable, so that state is a retry rather
+// than a dead end.
+async function closeSettings() {
+    if (_settingsClosing) return;
+    _settingsClosing = true;
+    applySettingsControlLock();
+    try {
+        await reloadThemeState();
+        var page = document.getElementById("settings-page");
+        if (page) page.classList.add("hidden");
+    } catch (error) {
         log("ERROR", "读取外置主题状态失败：" + error);
-    });
+    } finally {
+        _settingsClosing = false;
+        applySettingsControlLock();
+    }
 }
 
 async function loadSettingsFacts() {
@@ -656,20 +671,25 @@ function renderThemeInventory() {
     applySettingsControlLock();
 }
 
-// The management actions freeze with the rest of the page while a run is in flight: the run
-// resolves themes when it starts, and a theme that vanishes underneath it would turn a
-// healthy conversion into a failure.
+// The management surface freezes while a run is in flight (the run resolves themes when it
+// starts, so a theme that vanishes underneath it would turn a healthy conversion into a
+// failure) and while the page is closing (the facts on screen are about to be replaced).
+// The closing state also gates the actions themselves, because a disabled button is a hint,
+// not a rule: a direct call must not slip past it either.
 function applySettingsControlLock() {
+    var locked = _conversionRunning || _settingsClosing;
     ["btn-import-theme", "btn-export-theme-template", "btn-open-theme-location"]
         .forEach(function (id) {
             var button = document.getElementById(id);
-            if (button) button.disabled = _conversionRunning;
+            if (button) button.disabled = locked;
         });
+    var back = document.getElementById("btn-settings-back");
+    if (back) back.disabled = _settingsClosing;
     var list = document.getElementById("settings-theme-list");
     if (!list) return;
     for (var i = 0; i < list.children.length; i += 1) {
         var remove = list.children[i].querySelector('[data-theme-action="remove"]');
-        if (remove) remove.disabled = _conversionRunning;
+        if (remove) remove.disabled = locked;
     }
 }
 
@@ -691,7 +711,7 @@ async function runSettingsAction(request, describe) {
 }
 
 async function importTheme() {
-    if (_conversionRunning) return;
+    if (_conversionRunning || _settingsClosing) return;
     var result = await runSettingsAction(
         function () { return pywebview.api.import_theme({}); }, "导入外置主题");
     if (!result) return;
@@ -700,7 +720,7 @@ async function importTheme() {
 }
 
 async function removeInstalledTheme(id) {
-    if (_conversionRunning) return;
+    if (_conversionRunning || _settingsClosing) return;
     var result = await runSettingsAction(
         function () { return pywebview.api.remove_theme(id); }, "卸载外置主题");
     if (!result) return;
@@ -709,7 +729,7 @@ async function removeInstalledTheme(id) {
 }
 
 async function exportThemeTemplate() {
-    if (_conversionRunning) return;
+    if (_conversionRunning || _settingsClosing) return;
     var result = await runSettingsAction(
         function () { return pywebview.api.export_theme_template({}); }, "导出主题模板");
     if (!result) return;
@@ -717,7 +737,7 @@ async function exportThemeTemplate() {
 }
 
 async function openThemeLocation() {
-    if (_conversionRunning) return;
+    if (_conversionRunning || _settingsClosing) return;
     var result = await runSettingsAction(
         function () { return pywebview.api.open_theme_location(); }, "打开主题目录");
     if (!result) return;

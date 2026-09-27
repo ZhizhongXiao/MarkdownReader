@@ -895,7 +895,7 @@ contract("GT18 a failed refetch falls back to the last persisted selection", "pa
   } finally { session.close(); }
 });
 
-// ── Phase 9B1: the settings surface (GS1-GS13) ────────────────────────────────
+// ── Phase 9B1: the settings surface (GS1-GS13 + GS2b, 14 records) ─────────────
 //
 // The settings page owns a different fact than the main page (AGENTS section 17): the
 // main page reads which installed themes a document carries, the settings page reads
@@ -1216,7 +1216,7 @@ contract("GS11 no settings action ever writes the carry set", "pass", async () =
   } finally { session.close(); }
 });
 
-contract("GS12 returning from settings re-reads the main-page selection state", "pass", async () => {
+contract("GS12 returning from settings re-reads the state before it reveals the main page", "pass", async () => {
   const session = await bootGui({ autoThemeState: false, themeInventory: THEME_INVENTORY });
   try {
     await session.resolve("get_theme_state", THEME_STATE_A);
@@ -1236,15 +1236,53 @@ contract("GS12 returning from settings re-reads the main-page selection state", 
     await session.resolve("remove_theme", { ok: true, id: "zeta", error: "" });
     await session.flush(3);
 
+    // Phase 1: while the re-read is in flight the settings page must stay in front. Revealing
+    // the main page here would hand the user rows this GUI already knows are stale.
     session.window.closeSettings();
-    await session.flush(3);
+    await session.flush(2);
     assert.equal(session.callsOf("get_theme_state").length, 2,
-      "leaving the settings page re-reads what a document can carry");
+      "closing re-reads what a document can carry");
+    assert.equal(session.pendingOf("get_theme_state").length, 1, "the re-read is still in flight");
+    assert.equal(session.settingsVisible(), true,
+      "the main page must not be revealed before the new state arrives");
+    assert.equal(session.list("btn-settings-back").disabled, true, "a second Back is refused");
+    assert.equal(session.list("btn-import-theme").disabled, true,
+      "management stays frozen while the page is closing");
 
+    session.window.closeSettings();
+    await session.flush(2);
+    assert.equal(session.callsOf("get_theme_state").length, 2, "one close starts one re-read");
+
+    // Phase 2: the state arrives and only then does the main page appear -- already correct.
     await session.resolve("get_theme_state", THEME_STATE_AFTER_REMOVE);
     await session.flush(3);
+    assert.equal(session.settingsVisible(), false, "the page closes once the state is known");
     assert.equal(session.themeRow("zeta").state, "missing",
-      "the row follows the bridge instead of keeping an uninstalled theme selectable");
+      "the main page shows the new state at the moment it appears");
+    assert.equal(session.list("btn-settings-back").disabled, false);
+    assert.equal(session.list("btn-import-theme").disabled, false,
+      "closing must not leave the management surface locked");
+
+    // Phase 3: a failed re-read keeps the settings page in front instead of exposing a main
+    // page this GUI cannot vouch for, and Back stays a real retry.
+    session.window.openSettings();
+    await session.flush(4);
+    const failuresBefore = session.logErrorCount();
+    session.window.closeSettings();
+    await session.flush(2);
+    await session.reject("get_theme_state", new Error("bridge down"));
+    await session.flush(3);
+    assert.equal(session.settingsVisible(), true,
+      "a failed re-read must not reveal a stale main page");
+    assert.ok(session.logErrorCount() > failuresBefore, "the failure is reported");
+    assert.equal(session.list("btn-settings-back").disabled, false, "Back can be pressed again");
+
+    session.window.closeSettings();
+    await session.flush(2);
+    assert.equal(session.callsOf("get_theme_state").length, 4, "the retry really re-reads");
+    await session.resolve("get_theme_state", THEME_STATE_AFTER_REMOVE);
+    await session.flush(3);
+    assert.equal(session.settingsVisible(), false, "the retry closes the page");
   } finally { session.close(); }
 });
 

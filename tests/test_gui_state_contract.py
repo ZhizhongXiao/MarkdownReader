@@ -41,7 +41,7 @@ API_PY = ROOT / "gui" / "api.py"
 # reducing coverage. Phase 9A adds GT1-GT18 (the external theme selection surface and
 # the persistence-before-conversion ordering) to GU0-GU8, which is where 9 + 18 comes
 # from; the GT13 freeze contract grew a second half without adding a record.
-# Phase 9B1 adds GS1-GS14 (the settings surface: inventory, import/remove/export/open,
+# Phase 9B1 adds 14 settings records (GS1-GS13 plus GS2b: inventory, import/remove/export/open,
 # storage and about facts, the run lock and the joint call shapes).
 EXPECTED_PASS = 41
 EXPECTED_XFAIL = 0

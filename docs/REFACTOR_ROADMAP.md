@@ -648,8 +648,8 @@ Settings page
           主页面外置主题选择：GT1–GT14 + 静态守卫 2 项先红，桥接回归锁 3 项即时绿；follow-up 把
           GT15/GT16/GT18 由红转绿、GT13 扩展为「运行中 direct 调用也不改持久状态」、GT17 锁住
           「失败丢弃排队意图」；远端独立终审（对象 9a7063a）9A-1…9A-8 全 PASS
-9B1 PASS  设置页 + 外置主题管理 + 存储信息 + 关于（GS1–GS13 共 14 条契约；主页「携带集合」与设置页
-          「安装事实」两个状态机互不写入）
+9B1 PASS  设置页 + 外置主题管理 + 存储信息 + 关于（GS1–GS13 + GS2b，共 14 条契约；主页「携带集合」与设置页
+          「安装事实」两个状态机互不写入；返回主页先重读再显示）
 9B2 NOT STARTED  9B closeout：`docs/USAGE.md` 存储位置收口、截图刷新、主页「坏但未配置主题仍可勾选」
                  是否顺带修正
 Phase 10/11  移除用户数据：日志、WebView2 与 legacy config 三项治理完成后才提供（本轮明确不做）
@@ -765,7 +765,7 @@ profile 仍是 `%LOCALAPPDATA%\MarkdownReader\WebView2`（破坏 onedir「删掉
   串行    转换在途时四个动作与主页控件一起冻结（direct 调用也不触达桥接）；返回主页重读 get_theme_state()
 ```
 
-契约（GS1–GS13 共 14 条，红 → 绿）：
+契约（GS1–GS13 + GS2b，共 14 条，红 → 绿）：
 
 ```text
 GS1  settings shell：入口开页；返回后 workspace tab 与携带集合摘要不变
@@ -780,7 +780,8 @@ GS8  存储信息逐字渲染桥接回复（页面不得写死路径）
 GS9  关于逐字渲染桥接回复（版本不得是页面字面量）
 GS10 运行中的转换冻结管理面（含 direct-handler guard）并在结束后解锁
 GS11 设置面任何动作都不写携带集合（set_configs 计数为 0）
-GS12 返回主页重读 get_theme_state()，刚卸载的主题显示为 missing
+GS12 返回主页**先重读再显示**：pending 期间设置页仍在前面、Back 被拒；失败则留在设置页 + ERROR，
+     Back 可重试（重试真的再读一次）
 GS13 联合契约：import_theme / export_theme_template 必须是 (self, request)
 ```
 
@@ -797,6 +798,13 @@ Phase 10 filesystem cleanup、`core/user_data.py`、`docs/USAGE.md` 存储位置
 **9B 新发现 follow-up**：`theme_state()["invalid"]` 只分类 configured 的 id，因此「已安装、被手工改坏、又从未
 被选中」的主题在主页仍显示为可选，要到下一次转换才 hard fail。设置页不受影响（逐 id 跑 use-time gate）；
 是否顺带修正主页留给 9B2，不改写 Phase 8/9A 的历史语义。
+
+**远端复审（对象 `b58cdbd`）**：inventory / core / bridge / management boundary / storage / about 判定 PASS，
+但 `closeSettings()` 的「先隐藏、再异步重读」判定 **FOLLOW-UP REQUIRED** —— 存在「主页已可交互、行的状态仍是
+stale」的窗口，而 GS12 当时只证明「最终会重读」，不证明「可见切换发生在重读之后」。窄修复：新增
+`_settingsClosing`，关闭期间设置页保持在前、Back 与四个管理动作按 state 拒绝（不只是 disabled DOM），
+`await reloadThemeState()` 成功后才隐藏；失败则留在设置页并记 ERROR，Back 即重试（重试真的再读一次）。
+GS12 相应升级为「先重读再显示」的判别契约（含失败支路），record 数不变（仍 41）。
 
 ---
 
