@@ -477,6 +477,32 @@ samples/demo.html                         → 未改动，快照契约仍成立
   user-data ownership 侦察，不预承诺 `core/user_data.py`）、`docs/USAGE.md` 里 `config.json` 位置的历史表述（随 9B 收口，
   届时设置页会直接向用户展示真实存储位置）、`docs/screenshots/gui_main.png` 与 `gui_dark.png`（KNOWN STALE，本阶段不重拍）。
 
+- 2026-09-26（Phase 9A follow-up：远端审计后的窄修复 —— 确认持久化先于转换）：远端对 `cf7be38` 的独立审计判定
+  9A-1/2/3/7/8 PASS，**9A-4 / 9A-5 / 9A-6 = FOLLOW-UP REQUIRED**，并指出三处"测试绿但语义仍有洞"的位置；
+  `cf7be38` 自身不需要回滚，也不并入 9B。
+  * **Blocker 1（主题保存与转换无 happens-before）**：pywebview 每个桥接调用各跑一个线程，`BridgeApi.set_configs()`
+    是 `load→update→save`（无跨调用锁），而 `convert()` 又通过 `load_config(runtime_overrides=...)` 把
+    `build.external_themes` 读回来（convert 的 7 键请求不携带主题）。因此「主题写」与「run 自己的写」重叠时可能丢更新，
+    也可能出现「配置已是新的、本次转换仍按旧选择生成」——后者直接违背 9A 的产品语义。修复（全部在 `gui.js`）：
+    `drainThemeSaves()` 返回 `true|false`，`waitForThemeSaves()` 把结果交给 `runConvert()`；run 在
+    `setConversionRunning(true)` 之后、任何桥接调用之前等待，**并且写失败时取消本次转换**（ERROR 日志 + 释放锁），
+    而不是用旧配置继续。语义要点："队列停了" ≠ "选择已落盘"。
+  * **Blocker 2（摘要 stale）**：「已选 N」读的是启动快照 `state.selected`，而行勾选态来自工作集 `_themeSelection`，
+    于是勾选后摘要与实际勾选自相矛盾，且成功保存也不会重拉。现在 `selected` 计数 = 工作集中 `themeRowState(id)
+    === "selected"` 的行数（`missing` / `invalid` 不计入），summary 与 checkbox 同源。
+  * **save 失败 + reload 也失败**：该路径原本让异常从「未被 await 的 drain」逃出（unhandled promise rejection），
+    且界面停留在未确认的 optimistic 状态。现在维护 `_themeConfirmed`（最近一次确认落盘的选择，由成功保存或
+    桥接状态更新），reload 失败 → ERROR + 回到 `_themeConfirmed`，**不回退启动快照**（它可能早于一次已成功的保存）。
+  证据：新增/扩展契约 5 处 —— 红阶段 `GUI_CONTRACTS {"pass": 24, "xfail": 0, "xpass": 0, "fail": 3}`、
+  `GUI_CONTRACT_RECORDS 27 of 27`（`GT15`/`GT16`/`GT18` 分别红在 `gui.test.js:747` / `:816` / `:870` 的对应断言，
+  失败原因逐条确认为功能缺失；`GT17` 与扩展后的 `GT13` 是既有行为的回归锁，立即绿）；实现后
+  `{"pass": 27, "fail": 0}`、`27 of 27`；全套 `uv run pytest -q` = **654 passed / 0 failed / 1 skipped**
+  （契约数变化不新增 pytest 函数，总数不变）；ruff 全绿；改动面严格限定 `gui/assets/gui.js`、
+  `tests/js/gui.test.js`、`tests/test_gui_state_contract.py` 与三份文档，`gui/assets/{index.html,gui.css}`、
+  `gui/api.py`、`core/**`、`packaging/**`、`viewer/**`、`themes/**`、`samples/**` 均未进入 diff。
+  **状态**：本 follow-up 尚未 push、尚未通过远端终审 ⇒ **不写 Phase 9A PASS**；9B（设置页 + user-data ownership
+  侦察）仍未开始。
+
 ## texmath 审计记录（Phase 4B，为什么不复用 `markdown-it-texmath`）
 
 `markdown-it-texmath@1.0.0` 的注册方式是固定的：

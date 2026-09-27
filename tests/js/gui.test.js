@@ -680,6 +680,18 @@ contract("GT13 theme selection: a run in flight freezes the theme controls", "pa
     });
     assert.equal(session.themeRow("ghost").removeDisabled, true);
 
+    // The freeze is state, not only disabled controls: a direct call must not change what
+    // the run is about to persist either.
+    const frozenRows = JSON.stringify(session.themeRows());
+    const frozenSaves = session.callsOf("set_configs").length;
+    session.window.toggleExternalTheme("academic");
+    session.window.removeConfiguredTheme("ghost");
+    await session.flush(2);
+    assert.equal(JSON.stringify(session.themeRows()), frozenRows,
+      "a direct call must not move the rows while a run is in flight");
+    assert.equal(session.callsOf("set_configs").length, frozenSaves,
+      "a direct call must not persist anything while a run is in flight");
+
     await session.resolve("prepare_conversion", PLAN_ONE);
     await session.flush(3);
     await session.resolve("set_configs", null);
@@ -710,5 +722,167 @@ contract("GT14 main page: theme selection never becomes theme management", "pass
     assert.equal(session.list("btn-settings"), null,
       "installing and removing themes belongs to the settings page and to phase 9B");
     assert.equal(session.list("settings-page"), null);
+  } finally { session.close(); }
+});
+
+contract("GT15 conversion waits for confirmed theme persistence", "pass", async () => {
+  const first = PLAN_ONE.items[0].source_path;
+
+  // A selection that is still being persisted holds the run back. A run reads the
+  // selection back from config.json, so starting on an unconfirmed premise would either
+  // lose the write or convert without the theme the user just chose.
+  const session = await bootGui({ themeState: THEME_STATE_A });
+  try {
+    session.window.addInputs([first]);
+    await session.flush(3);
+    await session.resolve("prepare_conversion", PLAN_ONE);
+
+    session.window.toggleExternalTheme("academic");
+    await session.flush(2);
+    assert.equal(session.callsOf("set_configs").length, 1, "the theme write is in flight");
+
+    session.window.runConvert();
+    await session.flush(3);
+
+    assert.equal(session.callsOf("prepare_conversion").length, 1,
+      "the run must not preflight while the selection is being persisted");
+    assert.equal(session.callsOf("convert").length, 0, "the run must not convert yet");
+    assert.equal(session.savePayloads().length, 1,
+      "the run must not persist its own settings before the theme write settled");
+
+    await session.resolve("set_configs", null);
+    await session.flush(3);
+    assert.equal(session.callsOf("prepare_conversion").length, 2,
+      "the run starts once the selection is confirmed");
+    assert.deepEqual(Object.keys(session.savePayloads()[0]), ["external_themes"],
+      "the theme write is the first thing that lands");
+
+    await session.resolve("prepare_conversion", PLAN_ONE);
+    await session.flush(2);
+    assert.ok(session.savePayloads()[1] && session.savePayloads()[1].template,
+      "the run persists its own settings only after the theme write settled");
+    await session.resolve("set_configs", null);
+    await session.flush(2);
+    await session.resolve("convert", CONVERT_OK);
+    await session.flush(2);
+    assert.equal(session.callsOf("convert").length, 1);
+  } finally { session.close(); }
+
+  // A selection that could not be persisted cancels the run: the choice the user just
+  // made is not in effect, so converting would silently use the old configuration.
+  const cancelled = await bootGui({ autoThemeState: false });
+  try {
+    await cancelled.resolve("get_theme_state", THEME_STATE_A);
+    cancelled.window.addInputs([first]);
+    await cancelled.flush(3);
+    await cancelled.resolve("prepare_conversion", PLAN_ONE);
+
+    cancelled.window.toggleExternalTheme("academic");
+    await cancelled.flush(2);
+    cancelled.window.runConvert();
+    await cancelled.flush(2);
+    await cancelled.reject("set_configs", new Error("boom"));
+    await cancelled.flush(2);
+    await cancelled.resolve("get_theme_state", THEME_STATE_A);
+    await cancelled.flush(3);
+
+    assert.equal(cancelled.callsOf("prepare_conversion").length, 1,
+      "a cancelled run must not preflight");
+    assert.equal(cancelled.callsOf("convert").length, 0, "a cancelled run must not convert");
+    assert.equal(cancelled.savePayloads().length, 1,
+      "a cancelled run must not persist its own settings");
+    assert.ok(cancelled.logErrorCount() >= 2,
+      "the refused save and the cancellation are both reported");
+    assert.equal(cancelled.doc.querySelector(".btn-run").disabled, false,
+      "the conversion lock is released when the run is cancelled");
+    assert.equal(cancelled.themeRow("academic").checked, false,
+      "the surface shows the bridge state again, not the assumption");
+
+    cancelled.window.toggleExternalTheme("zeta");
+    await cancelled.flush(2);
+    assert.equal(cancelled.callsOf("set_configs").length, 2,
+      "the surface stays usable after a cancelled run");
+    await cancelled.resolve("set_configs", null);
+  } finally { cancelled.close(); }
+});
+
+contract("GT16 summary: the selected count follows the working selection", "pass", async () => {
+  const session = await bootGui({ themeState: THEME_STATE_A });
+  try {
+    assert.deepEqual(session.themeSummary(), { selected: "1", missing: "1", invalid: "1" });
+
+    session.window.toggleExternalTheme("academic");
+    await session.flush(2);
+    assert.deepEqual(session.themeSummary(), { selected: "2", missing: "1", invalid: "1" },
+      "checking a theme is visible in the summary before the bridge answers");
+
+    await session.resolve("set_configs", null);
+    session.window.toggleExternalTheme("paper");
+    await session.flush(2);
+    assert.deepEqual(session.themeSummary(), { selected: "1", missing: "1", invalid: "1" },
+      "unchecking a theme is visible in the summary too");
+    await session.resolve("set_configs", null);
+  } finally { session.close(); }
+});
+
+contract("GT17 a refused save discards the queued intent and rebuilds from the bridge", "pass", async () => {
+  const session = await bootGui({ autoThemeState: false });
+  try {
+    await session.resolve("get_theme_state", THEME_STATE_A);
+    session.window.toggleExternalTheme("academic");
+    await session.flush(2);
+    session.window.toggleExternalTheme("zeta");
+    await session.flush(2);
+    assert.equal(session.callsOf("set_configs").length, 1,
+      "the second change is held back while the first write is in flight");
+
+    await session.reject("set_configs", new Error("boom"));
+    await session.flush(2);
+    assert.equal(session.callsOf("get_theme_state").length, 2,
+      "a refused save asks the bridge what is true");
+
+    await session.resolve("get_theme_state", THEME_STATE_EMPTY);
+    await session.flush(3);
+    assert.equal(session.callsOf("set_configs").length, 1,
+      "the queued intent is discarded rather than retried");
+    assert.deepEqual(themeIdList(session.themeRows()), [],
+      "the optimistic state is fully replaced by the bridge state");
+    await session.flush(3);
+    assert.equal(session.callsOf("set_configs").length, 1, "and nothing is sent afterwards");
+  } finally { session.close(); }
+});
+
+contract("GT18 a failed refetch falls back to the last persisted selection", "pass", async () => {
+  const session = await bootGui({ autoThemeState: false });
+  try {
+    await session.resolve("get_theme_state", THEME_STATE_B);
+    session.window.toggleExternalTheme("zeta");
+    await session.flush(2);
+    assert.deepEqual(Array.from(session.savePayloads()[0].external_themes),
+      ["paper", "academic", "ghost", "broken", "zeta"]);
+    await session.resolve("set_configs", null);
+    await session.flush(2);
+
+    session.window.toggleExternalTheme("academic");
+    await session.flush(2);
+    await session.reject("set_configs", new Error("boom"));
+    await session.flush(2);
+    await session.reject("get_theme_state", new Error("bridge down"));
+    await session.flush(3);
+
+    assert.deepEqual(themeIdList(session.themeRows()),
+      ["academic", "broken", "ghost", "paper", "zeta"]);
+    assert.equal(session.themeRow("academic").checked, true,
+      "academic came back: a save that succeeded had persisted it");
+    assert.equal(session.themeRow("zeta").checked, true, "so did zeta");
+    assert.ok(session.logErrorCount() >= 2, "both failures are reported");
+    assert.equal(session.callsOf("set_configs").length, 2, "no third write is attempted");
+    await session.flush(3);
+
+    session.window.toggleExternalTheme("academic");
+    await session.flush(2);
+    assert.equal(session.callsOf("set_configs").length, 3,
+      "the queue is not left stuck after a failed refetch");
+    await session.resolve("set_configs", null);
   } finally { session.close(); }
 });

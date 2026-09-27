@@ -220,6 +220,14 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
   `build.external_themes`，因此 `convert` 请求形状与 `gui/api.py` 均未改动；`get_templates()` 仍是 builtin-only
   （模板下拉 = 文档默认主题，外置主题 = 本次额外携带，AGENTS §17 的两件事）。设置页与设置入口整体属 9B。
 
+- Phase 9A follow-up（远端审计 9A-4/5/6 = FOLLOW-UP REQUIRED 的收口）：`runConvert()` 现在把「主题选择是否
+  已确认落盘」当作启动前提 —— `drainThemeSaves()` 返回 `true|false`，`waitForThemeSaves()` 把它交给转换，
+  写在途时 run 不发任何桥接请求，**写失败则取消本次转换**（避免用已被替换的旧配置生成文档）；「已选 N」摘要
+  改为从工作集 + `themeRowState()` 计算，不再读启动快照；`_themeConfirmed` 记录最近一次确认落盘的选择，
+  用于「save 失败 + reload 也失败」的双重失败回退（**不回退启动快照**），并消除该路径的 unhandled rejection。
+  契约 `GT15/GT16/GT18` 先红（`24 pass / 3 fail`）后绿（`27 of 27`），`GT13` 扩展为「运行中 direct 调用也不得
+  改变持久状态」，`GT17` 把「失败丢弃排队意图」锁成既有行为契约。仍未 push 终审，故不宣称 9A PASS。
+
 ## 命名与路径约定
 
 - 项目名、窗口标题与产物统一 `MarkdownReader`；npm 包标识为小写 `markdownreader-node-renderer`。

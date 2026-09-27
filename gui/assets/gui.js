@@ -29,6 +29,13 @@ var _themeState = null;
 var _themeSelection = [];
 var _themeSaveInFlight = false;
 var _themeSavePending = null;
+// The promise of the write currently draining. A run awaits it instead of guessing, and
+// its value is what the run gates on: "the queue stopped" is not "the selection is in
+// the file".
+var _themeSaveDrain = null;
+// The last selection known to be persisted. A failed write falls back to this, never to
+// the startup snapshot: a save may already have succeeded since the page loaded.
+var _themeConfirmed = [];
 
 function pathKey(value) {
     return String(value || "").replace(/\\/g, "/").toLowerCase();
@@ -366,7 +373,13 @@ function renderThemeSelection() {
     });
 
     if (summary) {
-        var selected = (state.selected || []).length;
+        // The count follows the working selection rather than the reply that started the
+        // page: otherwise the summary would contradict the checkboxes next to it until the
+        // bridge answers again. A remembered id that cannot be used today never counts.
+        var selected = 0;
+        rows.forEach(function (id) {
+            if (themeRowState(id) === "selected") selected += 1;
+        });
         var missing = (state.missing || []).length;
         var invalid = (state.invalid || []).length;
         summary.setAttribute("data-selected", String(selected));
@@ -420,10 +433,12 @@ function removeConfiguredTheme(id) {
 
 // One write at a time. The newest selection wins and is committed once the write in
 // flight settled, so the file can never end up holding a state older than the surface.
+// The drain reports whether the selection is now confirmed in the file, and a failure
+// discards every assumption rather than replaying it.
 function saveThemeSelection() {
     _themeSavePending = _themeSelection.slice();
-    if (_themeSaveInFlight) return;
-    drainThemeSaves();
+    if (!_themeSaveInFlight) _themeSaveDrain = drainThemeSaves();
+    return _themeSaveDrain;
 }
 
 async function drainThemeSaves() {
@@ -434,18 +449,40 @@ async function drainThemeSaves() {
             _themeSavePending = null;
             try {
                 await pywebview.api.set_configs({ external_themes: payload });
+                _themeConfirmed = payload.slice();
             } catch (error) {
                 // The surface may have assumed several changes by then, so it must not try
                 // to undo them one by one: ask the bridge what is true and rebuild from it.
                 _themeSavePending = null;
                 log("ERROR", "保存外置主题选择失败：" + error);
-                await reloadThemeState();
-                return;
+                try {
+                    await reloadThemeState();
+                } catch (reloadError) {
+                    // The bridge cannot say what is true either, so fall back to the last
+                    // selection that was actually persisted -- never to the startup
+                    // snapshot, which may predate a save that already succeeded.
+                    log("ERROR", "读取外置主题状态失败：" + reloadError);
+                    _themeSelection = _themeConfirmed.slice();
+                    renderThemeSelection();
+                }
+                return false;
             }
         }
+        return true;
     } finally {
         _themeSaveInFlight = false;
     }
+}
+
+// The run's gate. A run reads the selection back from config.json, so it must not start
+// while a theme write is on its way -- and it must not start at all when that write
+// failed, because then the choice the user just made is not in effect.
+async function waitForThemeSaves() {
+    while (_themeSaveInFlight || _themeSavePending !== null) {
+        if (!_themeSaveDrain) _themeSaveDrain = drainThemeSaves();
+        if ((await _themeSaveDrain) === false) return false;
+    }
+    return true;
 }
 
 // `configured` is the memory, so the working selection starts as a copy of it and the
@@ -454,6 +491,7 @@ async function drainThemeSaves() {
 function applyThemeState(state) {
     _themeState = state || {};
     _themeSelection = (_themeState.configured || []).slice();
+    _themeConfirmed = _themeSelection.slice();
     renderThemeSelection();
     (_themeState.warnings || []).forEach(function (message) { log("WARNING", message); });
 }
@@ -822,6 +860,13 @@ async function runConvert() {
     };
 
     try {
+        // The selection has to be persisted before the run reads it back, and a selection
+        // that could not be persisted cancels the run: converting would silently use the
+        // configuration the user just replaced.
+        if (!(await waitForThemeSaves())) {
+            log("ERROR", "外置主题选择未能保存，本次转换已取消。");
+            return;
+        }
         resetLogAttention();
         var plan = await refreshConversionPlan(false, snapshot);
         if (!plan || _planErrors.length || _conversionItems.length === 0) {

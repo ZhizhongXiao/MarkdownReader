@@ -677,6 +677,48 @@ GUI 契约 `GUI_CONTRACTS {"pass": 23, "xfail": 0, "xpass": 0, "fail": 0}`、`GU
 **未做**：设置页（9B）、主题导入/删除/导出模板的桥接方法与 UI、`remove-user-data` 流程（9B 先做 user-data ownership 侦察）、
 `docs/USAGE.md` 的存储位置收口、截图更新（记为 KNOWN STALE）、`_write_output(newline="\n")` 卫生债。
 
+## 落地记录（Phase 9A follow-up：确认持久化先于转换 —— 远端审计发现）
+
+远端审计（`cf7be38`）判定 **9A-4 / 9A-5 / 9A-6 = FOLLOW-UP REQUIRED**，原因是三处窄缺口；本 follow-up 全部收口
+（**尚未 push、尚无终审结论，因此不写 Phase 9A PASS**）：
+
+```text
+F1  主题保存与转换之间没有 happens-before：pywebview 的每个桥接调用各跑一个线程，而
+    set_configs 是 load→update→save（无跨调用锁），因此「主题写」与「run 自己的写」重叠会丢更新，
+    也可能出现「配置已新、本次转换仍读旧 selection」（convert 的 7 键请求不携带主题列表）。
+    修复：drainThemeSaves() 返回 true|false；waitForThemeSaves() 把「是否已确认落盘」交给 runConvert()，
+    run 在 setConversionRunning(true) 之后、任何桥接调用之前等待；false（写失败）→ ERROR +
+    取消本次转换（不再用旧配置继续生成）。「队列停了」不等于「选择已落盘」。
+F2  「已选 N」摘要读的是启动快照 state.selected，而 checkbox 来自工作集 _themeSelection，
+    勾选后摘要不动。修复：selected 计数 = themeRowState(id) === "selected" 的行数（missing/invalid 不计入）。
+F5  save 失败后 reload 也失败时，异常从「未被 await 的 drain」逃出（unhandled rejection），
+    界面还停留在未确认的 optimistic 状态。修复：新增 _themeConfirmed（最近一次确认落盘的选择，
+    由成功保存或桥接状态更新），reload 失败 → ERROR + 回到 _themeConfirmed（**不回退启动快照**，
+    它可能早于一次已经成功的保存）。
+```
+
+契约（红 → 绿；计数锁 23 → 27，GT13 只扩展不增记录）：
+
+```text
+GT15（红）conversion waits for confirmed theme persistence —— 双分支：写在途时 run 不发任何请求，
+           落定后才 prepare_conversion → run set_configs → convert；写被拒则三者都不发生、转换锁释放、
+           界面回到桥接状态、随后仍可用
+GT16（红）summary 跟随 working selection（1 → check → 2 → uncheck → 1）
+GT17（绿）A 在途、B 到达、A 被拒 → B 不再发出、发生 get_theme_state、optimistic 状态被完整替换
+           （既有行为的回归锁）
+GT18（红）save 成功建立 confirmed → 再改被拒 → reload 也失败 → 回到 last confirmed（不是启动快照）、
+           ERROR×2、无第三次写、队列随后仍可用
+GT13（扩展）运行中 direct toggleExternalTheme / removeConfiguredTheme → 行不变、无新写入
+```
+
+证据：红阶段 `GUI_CONTRACTS {"pass": 24, "xfail": 0, "xpass": 0, "fail": 3}`、`GUI_CONTRACT_RECORDS 27 of 27`，
+三条红分别停在对应缺失行为的断言上（`gui.test.js` `:747` / `:816` / `:870`，失败原因逐条确认为功能缺失，
+其中 GT17 初版曾因契约自身的 harness auto-resolve 误报，已按 GT8 的方式改为 `autoThemeState: false`）；
+实现后 `GUI_CONTRACTS {"pass": 27, "fail": 0}`、`27 of 27`；全套 `654 passed / 0 failed / 1 skipped`
+（契约增加不新增 pytest 函数 ⇒ 总数不变）；ruff 全绿。本次只动 `gui/assets/gui.js`、
+`tests/js/gui.test.js`、`tests/test_gui_state_contract.py`（+3 份文档）；`gui/assets/{index.html,gui.css}`、
+`gui/api.py`、`core/**`、`packaging/**`、`viewer/**`、`themes/**`、`samples/**` 均未改动。
+
 ---
 
 # Phase 10 — 剩余 user-storage 迁移与治理
