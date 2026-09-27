@@ -230,6 +230,21 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
   （对象 `9a7063a`）⇒ **Phase 9A overall PASS**；`654 passed / 1 skipped` 与 ruff 全绿只记**本地**证据
   （远端无 CI status）。
 
+- Phase 9B1（设置页：外置主题管理 + 存储信息 + 关于）：顶部新增设置入口（`#btn-settings`），设置页是整页
+  overlay（`#settings-page`，初始 hidden，返回按钮关闭），与右侧 workspace tab 互不干扰。它读的是**另一组
+  事实**：`get_theme_inventory()` 逐 id 给出「已安装 + 是否仍可用」，而不是主页的携带集合。四个管理动作
+  `import_theme` / `remove_theme` / `export_theme_template` / `open_theme_location` **一律不写 config** ——
+  卸载只删安装副本，`configured` 原样保留，主页随后把该 id 报成 `missing`（AGENTS §17 的两个状态机不互相
+  写入；静态守卫反向锁住「主页渲染函数里不得出现管理动作」）。转换在途时四个动作与主页控件一起冻结，直接调用
+  这些函数也不会触达桥接；返回主页会重读 `get_theme_state()`，不留刚被卸载的主题行。设置面按需加载（开页才
+  请求），所以启动路径与既有 27 条契约的调用计数都不变。
+  「存储信息」列出运行模式与 `core.paths` 的四条真实路径，`runtime_root` 的说明字段明写「日志与 WebView2 属
+  Phase 10」；在整份 ownership 收口前**不提供**「移除用户数据」（静态守卫反向断言 `remove_user_data` /
+  `removeUserData` / `btn-remove-user-data` / `user-data-countdown` 都不存在）。「关于」的版本来自唯一运行时
+  来源 `core.version.__version__`（`pyproject.toml` 不随包、本仓库也不可安装，`importlib.metadata` 无法作答），
+  `tests/test_version_contract.py` 把它绑定到 pyproject 的声明；主题清单的聚合落在
+  `core.external_themes.theme_inventory()`（桥接不自己读 registry，Phase 8C 的边界不变）。
+
 ## 命名与路径约定
 
 - 项目名、窗口标题与产物统一 `MarkdownReader`；npm 包标识为小写 `markdownreader-node-renderer`。

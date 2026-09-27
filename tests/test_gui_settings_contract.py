@@ -151,7 +151,6 @@ def test_storage_info_reports_the_real_paths_for_each_packaging_mode(monkeypatch
     monkeypatch.setattr(paths, "user_data_root", lambda: "U:/data")
     monkeypatch.setattr(paths, "config_path", lambda: "U:/data/profile/config.json")
     monkeypatch.setattr(paths, "runtime_root", lambda: "U:/data/runtime")
-    monkeypatch.setattr("core.external_themes.theme_root", lambda: "U:/data/assets/themes/external")
     monkeypatch.setattr(paths, "is_frozen", lambda: False)
     monkeypatch.setattr(paths, "is_onedir", lambda: False)
 
@@ -160,8 +159,13 @@ def test_storage_info_reports_the_real_paths_for_each_packaging_mode(monkeypatch
     assert info["mode"] == "source"
     assert info["user_data_root"] == "U:/data"
     assert info["config_path"] == "U:/data/profile/config.json"
-    assert info["external_themes_root"] == "U:/data/assets/themes/external"
     assert info["runtime_root"] == "U:/data/runtime"
+    # The theme directory follows the (patched) user data root, so the assertion can name the
+    # documented layout instead of a literal path. Which separator `core.paths` writes is its
+    # business, hence the normalization -- and note that `gui.api` imports `theme_root` by
+    # name, so patching `core.external_themes.theme_root` would only move the expectation,
+    # never the value under test.
+    assert str(info["external_themes_root"]).replace("\\", "/") == "U:/data/assets/themes/external"
     assert "Phase 10" in info["runtime_note"], (
         "the page must not imply that logs and WebView2 can be removed yet"
     )

@@ -8,6 +8,7 @@
    05. Shared controls
    06. Workspace tabs and pages
    07. Static template preview
+   08. Settings page
 
    Notes:
    - The GUI is independent from generated reader HTML.
@@ -883,3 +884,76 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 }
 .theme-empty { margin-top: 6px; color: var(--muted); font-size: 12px; }
 .theme-empty.hidden { display: none; }
+
+/* ============================================================
+   08. Settings page
+   ============================================================ */
+
+.settings-page {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    overflow: auto;
+    padding: 20px 24px 28px;
+    background: var(--bg);
+}
+
+.settings-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.settings-head h2 { margin: 0; font-size: 18px; color: var(--text); }
+
+.settings-body { display: flex; flex-direction: column; gap: 14px; }
+
+.settings-block {
+    padding: 14px 16px;
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    background: var(--panel);
+}
+
+.settings-block h3 { margin: 0 0 8px; font-size: 14px; color: var(--text-secondary); }
+
+.settings-hint { margin: 0 0 10px; font-size: 12px; color: var(--muted); }
+.settings-hint code { word-break: break-all; }
+
+.settings-theme-list { display: flex; flex-direction: column; gap: var(--gap-xs); }
+
+.settings-theme-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-sm);
+    background: var(--panel-alt);
+}
+
+.settings-theme-name { font-weight: 600; color: var(--text); }
+
+.settings-theme-reason {
+    flex: 1;
+    min-width: 0;
+    font-size: 12px;
+    color: var(--red);
+    word-break: break-word;
+}
+
+.settings-theme-row .theme-remove { margin-left: auto; }
+
+.settings-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+.settings-facts { display: flex; flex-direction: column; gap: 6px; }
+
+.fact-row { display: flex; gap: 10px; font-size: 13px; }
+
+.fact-label { flex: 0 0 110px; color: var(--muted); }
+
+.fact-value { flex: 1; min-width: 0; color: var(--text); word-break: break-all; }
+
+.settings-empty { margin: 0; font-size: 12px; color: var(--muted); }

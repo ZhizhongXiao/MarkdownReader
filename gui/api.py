@@ -14,12 +14,55 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from core.config import load_config, save_config
+from core import paths
+from core import version as core_version
+from core.config import PRODUCTION_RENDERER_VERSION, load_config, save_config
 from core.conversion_plan import build_conversion_plan, document_output_map
-from core.external_themes import theme_state
+from core.external_themes import (
+    ensure_theme_root,
+    export_template,
+    theme_inventory,
+    theme_root,
+    theme_state,
+)
+from core.external_themes import import_theme as install_theme
+from core.external_themes import remove_theme as uninstall_theme
 from core.viewer_assets import builtin_theme_ids, normalize_theme_id
 
 _logger = logging.getLogger("gui")
+
+# The exported template lands in a fixed child folder of the picked directory: the core
+# exporter refuses an existing target, so a stable name turns "already exported" into a
+# message the user can read instead of an overwrite or a silent no-op.
+EXPORTED_TEMPLATE_DIR_NAME = "markdownreader-theme-template"
+
+# `runtime_root()` has no production writer yet (logs and the WebView2 profile move there
+# in Phase 10). Until that ownership is closed, the storage section must not imply that a
+# "remove user data" action would cover them.
+RUNTIME_NOTE = (
+    "预留：日志与 WebView2 尚未迁入 runtime（Phase 10）。在整份 ownership 收口之前，"
+    "设置页不提供「移除用户数据」。"
+)
+
+
+def _pick_directory(title: str) -> str:
+    """Open a folder dialog and return the picked path, or "" when it was cancelled."""
+    from tkinter import Tk
+    from tkinter.filedialog import askdirectory
+
+    root = Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    path = askdirectory(title=title)
+    root.destroy()
+    return path if path else ""
+
+
+def _storage_mode() -> str:
+    """Return source / onedir / onefile, as `core.paths` answers it."""
+    if not paths.is_frozen():
+        return "source"
+    return "onedir" if paths.is_onedir() else "onefile"
 
 
 def _normalize_config_path(path: str) -> str:
@@ -235,6 +278,105 @@ class BridgeApi:
             "missing": state["missing"],
             "invalid": state["invalid"],
             "warnings": state["warnings"],
+        }
+
+    # ── External theme management (settings page) ────────────
+
+    def get_theme_inventory(self) -> dict:
+        """Return every installed user theme with its own validity verdict.
+
+        The settings page asks a different question than the main page: not "which theme
+        does this document carry", but "what is installed here, and does it still work".
+        That answer is a core rule (`core.external_themes.theme_inventory()`): the bridge
+        marshals it, it does not read the theme registry itself (Phase 8C).
+        """
+        return theme_inventory()
+
+    def import_theme(self, request: dict | None = None) -> dict:
+        """Install a user theme, asking for its folder when the request carries none.
+
+        The bridge owns the dialog so the page never has to know what a valid source looks
+        like: `core.external_themes.import_theme()` validates before it copies anything, so
+        a refused folder leaves no half-installed theme behind.
+        """
+        request = request or {}
+        source = str(request.get("source") or "")
+        if not source:
+            with self._one_dialog_at_a_time() as opened:
+                if not opened:
+                    return {"ok": False, "id": "", "error": "已有对话框打开，请稍后再试。"}
+                source = _pick_directory("选择要导入的主题目录")
+            if not source:
+                return {"ok": False, "id": "", "error": "未选择任何目录。"}
+        try:
+            theme_id = install_theme(source, replace=bool(request.get("replace", False)))
+        except Exception as error:
+            _logger.warning("导入外置主题失败：%s", error)
+            return {"ok": False, "id": "", "error": str(error)}
+        return {"ok": True, "id": theme_id, "error": ""}
+
+    def remove_theme(self, theme_id: str) -> dict:
+        """Delete an installed user theme. Packaged themes are never touched.
+
+        Only the installed copy goes away: the configuration keeps remembering the id, so
+        the main page reports it as `missing` afterwards. Uninstalling a theme is not the
+        same act as unchecking it (AGENTS section 17).
+        """
+        try:
+            uninstall_theme(theme_id)
+        except Exception as error:
+            _logger.warning("卸载外置主题失败：%s", error)
+            return {"ok": False, "id": str(theme_id), "error": str(error)}
+        return {"ok": True, "id": str(theme_id), "error": ""}
+
+    def export_theme_template(self, request: dict | None = None) -> dict:
+        """Copy the packaged theme template into a folder the user picks."""
+        request = request or {}
+        destination = str(request.get("destination") or "")
+        if not destination:
+            with self._one_dialog_at_a_time() as opened:
+                if not opened:
+                    return {"ok": False, "path": "", "error": "已有对话框打开，请稍后再试。"}
+                picked = _pick_directory("选择导出主题模板的位置")
+            if not picked:
+                return {"ok": False, "path": "", "error": "未选择任何目录。"}
+            destination = os.path.join(picked, EXPORTED_TEMPLATE_DIR_NAME)
+        try:
+            path = export_template(destination)
+        except Exception as error:
+            _logger.warning("导出主题模板失败：%s", error)
+            return {"ok": False, "path": "", "error": str(error)}
+        return {"ok": True, "path": path, "error": ""}
+
+    def open_theme_location(self) -> dict:
+        """Create the external theme directory if it is missing, then reveal it."""
+        try:
+            root = ensure_theme_root()
+        except Exception as error:
+            _logger.warning("创建外置主题目录失败：%s", error)
+            return {"ok": False, "path": "", "error": str(error)}
+        self.open_directory(root)
+        return {"ok": True, "path": root, "error": ""}
+
+    def get_storage_info(self) -> dict:
+        """Return where this build keeps its data, exactly as `core.paths` resolves it."""
+        return {
+            "mode": _storage_mode(),
+            "user_data_root": paths.user_data_root(),
+            "config_path": paths.config_path(),
+            "external_themes_root": theme_root(),
+            "runtime_root": paths.runtime_root(),
+            "runtime_note": RUNTIME_NOTE,
+        }
+
+    def get_about_info(self) -> dict:
+        """Return the facts the About panel is allowed to state."""
+        return {
+            "name": "MarkdownReader",
+            "version": core_version.__version__,
+            "renderer_version": PRODUCTION_RENDERER_VERSION,
+            "python": sys.version.split()[0],
+            "mode": _storage_mode(),
         }
 
     # ── Conversion ──────────────────────────────────────────

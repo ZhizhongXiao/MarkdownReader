@@ -648,8 +648,11 @@ Settings page
           主页面外置主题选择：GT1–GT14 + 静态守卫 2 项先红，桥接回归锁 3 项即时绿；follow-up 把
           GT15/GT16/GT18 由红转绿、GT13 扩展为「运行中 direct 调用也不改持久状态」、GT17 锁住
           「失败丢弃排队意图」；远端独立终审（对象 9a7063a）9A-1…9A-8 全 PASS
-9B  NOT STARTED  设置页：external theme management / import / remove / export theme template /
-                 open theme location / storage information / about / remove user data and exit
+9B1 PASS  设置页 + 外置主题管理 + 存储信息 + 关于（GS1–GS13 共 14 条契约；主页「携带集合」与设置页
+          「安装事实」两个状态机互不写入）
+9B2 NOT STARTED  9B closeout：`docs/USAGE.md` 存储位置收口、截图刷新、主页「坏但未配置主题仍可勾选」
+                 是否顺带修正
+Phase 10/11  移除用户数据：日志、WebView2 与 legacy config 三项治理完成后才提供（本轮明确不做）
 ```
 
 ## 落地记录（Phase 9A：主页面外置主题选择）
@@ -739,6 +742,61 @@ combined status 为空（本仓库没有 CI），因此不把 pytest / ruff 结�
 （拓扑、diff 面、契约与文档口径）。终审对象是 `9a7063a`（终审时的远端 HEAD）；其后 HEAD 前进到
 `7358b87`（`chore(lint): reach zero diagnostics under the agreed MCP and pyright gates`，22 文件的
 lint/类型口径收口，不改变 9A 语义，另行记录、不并入 9A 的改动面）。
+
+## 落地记录（Phase 9B1：设置页壳 + 外置主题管理 + 存储/关于）
+
+9B 先做了一轮只读的 user-data ownership 侦察，结论是**现在不能实现「移除用户数据并退出」**：日志仍在
+`application_dir()/MarkdownReader.log`（三种布局下位置各不相同，onefile 还会落在 EXE 旁边）、WebView2
+profile 仍是 `%LOCALAPPDATA%\MarkdownReader\WebView2`（破坏 onedir「删掉整个目录即完整移除」）、legacy
+`config.json` 会在删除 profile 之后被下一次启动重新读入（配置「复活」）。因此 9B 拆成 9B1（本次）与 9B2
+（closeout），并且**不做**「移除用户数据」的任何形式 —— 包括 disabled 占位按钮与 5 秒确认流程。
+
+```text
+设置面（本次交付）
+  设置入口        头部 dark/light 旁边；整页 overlay（默认 hidden，返回按钮关闭），workspace tab 状态不受影响
+  外置主题管理    installed 清单（逐 id 的 valid + reason）、导入、卸载、导出模板、打开主题目录
+  存储信息        运行模式 + user_data_root / config_path / external_themes_root / runtime_root
+  关于            应用名、版本（唯一运行时来源 core.version）、渲染器版本、Python、运行模式
+
+两个状态机（AGENTS §17，互不替代）
+  主页    get_theme_state()      「本文档携带哪些」：configured / selected / missing / invalid
+  设置页  get_theme_inventory()  「这里装了什么、是否仍可用」：installed[] + valid/reason
+  写入    设置页四个动作一律不写 config；卸载只删安装副本，configured 原样保留 → 主页随后报 missing
+  串行    转换在途时四个动作与主页控件一起冻结（direct 调用也不触达桥接）；返回主页重读 get_theme_state()
+```
+
+契约（GS1–GS13 共 14 条，红 → 绿）：
+
+```text
+GS1  settings shell：入口开页；返回后 workspace tab 与携带集合摘要不变
+GS2  inventory 逐 id 报有效性（fixture 里的坏主题故意不在 configured 中）
+GS2b inventory 只在开页时读取（启动路径与既有契约计数不变）
+GS3  导入走桥接、成功后重读 inventory、不改携带集合
+GS4  被拒/异常的导入如实报错且页面仍可用（不留未处理 rejection）
+GS5  卸载只发 remove_theme：configured 不动、无 set_configs
+GS6  导出报告写出的路径；被拒时报告而不是静默
+GS7  全新环境打开主题目录：走「创建后打开」，失败也报告
+GS8  存储信息逐字渲染桥接回复（页面不得写死路径）
+GS9  关于逐字渲染桥接回复（版本不得是页面字面量）
+GS10 运行中的转换冻结管理面（含 direct-handler guard）并在结束后解锁
+GS11 设置面任何动作都不写携带集合（set_configs 计数为 0）
+GS12 返回主页重读 get_theme_state()，刚卸载的主题显示为 missing
+GS13 联合契约：import_theme / export_theme_template 必须是 (self, request)
+```
+
+证据：红阶段 `GUI_CONTRACTS {"pass": 27, "xfail": 0, "xpass": 0, "fail": 14}`、`GUI_CONTRACT_RECORDS 41 of 41`，
+全套 `10 failed / 654 passed / 1 skipped`（失败逐条确认为功能未实现：缺 `#settings-page`、缺 7 个桥接方法、
+缺 `core.version`）；实现后 41/41 全绿（无 fail/xfail/xpass）、全套 **664 passed / 0 failed / 1 skipped**、
+ruff 全绿、pyright（项目 standard）81 文件 0 error。
+改动面：`core/version.py`（新）、`core/external_themes.py`（+`ensure_theme_root` / `theme_inventory`）、
+`gui/api.py`（+7 个桥接方法）、`gui/assets/{index.html,gui.js,gui.css}`、6 个测试文件（2 个新增）与三份文档；
+`viewer/**`、`themes/**`、`renderer/**`、`packaging/**`、`samples/**` 均未改动。
+**未做**：`remove user data` 流程（含占位与倒计时）、日志迁移、WebView2 迁移、legacy config 治理、
+Phase 10 filesystem cleanup、`core/user_data.py`、`docs/USAGE.md` 存储位置与截图（归 9B2）。
+
+**9B 新发现 follow-up**：`theme_state()["invalid"]` 只分类 configured 的 id，因此「已安装、被手工改坏、又从未
+被选中」的主题在主页仍显示为可选，要到下一次转换才 hard fail。设置页不受影响（逐 id 跑 use-time gate）；
+是否顺带修正主页留给 9B2，不改写 Phase 8/9A 的历史语义。
 
 ---
 

@@ -253,6 +253,19 @@ def theme_root() -> str:
     return viewer_assets.external_themes_root()
 
 
+def ensure_theme_root() -> str:
+    """Create the external theme directory when it is missing, and return it.
+
+    Resolving a location has no side effects (`core.paths` is a pure contract), so
+    creating the directory is an action and belongs here. A fresh installation has never
+    installed a theme, which means the directory does not exist yet -- and "open the theme
+    location" is the user asking for it, not a request to be silently ignored.
+    """
+    root = theme_root()
+    os.makedirs(root, exist_ok=True)
+    return root
+
+
 def import_theme(source: str, *, replace: bool = False) -> str:
     """Validate ``source`` and install it as an external theme, returning its id.
 
@@ -440,6 +453,35 @@ def theme_state(configured: list[str] | None = None, *, default: str | None = No
         "selected": selected,
         "missing": missing,
         "invalid": invalid,
+        "warnings": warnings,
+    }
+
+
+def theme_inventory() -> dict:
+    """Return every installed user theme with its own validity verdict (Phase 9B1).
+
+    `theme_state()` answers what a reader can restore *from the configuration*, so it only
+    classifies the ids the configuration remembers. The settings page needs the other
+    question -- "what is installed here, and does it still work" -- and an installed theme
+    that was broken by hand and never selected is invisible to `theme_state()`. The answer
+    is built here, next to the other registry rules, so the bridge keeps reading facts
+    instead of the registry itself (Phase 8C).
+    """
+    installed: list[dict] = []
+    warnings: list[str] = []
+    for theme_id in sorted(viewer_assets.external_theme_ids()):
+        try:
+            validate_installed_theme(theme_id)
+        except Exception as error:
+            # Any refusal is a fact about this theme, never a failure of the caller.
+            installed.append({"id": theme_id, "valid": False, "reason": str(error)})
+            warnings.append(str(error))
+        else:
+            installed.append({"id": theme_id, "valid": True, "reason": None})
+    return {
+        "installed": installed,
+        "root": theme_root(),
+        "template_root": viewer_assets.theme_template_root(),
         "warnings": warnings,
     }
 

@@ -721,9 +721,15 @@ contract("GT14 main page: theme selection never becomes theme management", "pass
       .map(function (node) { return node.getAttribute("data-theme-action"); });
     assert.deepEqual(Array.from(new Set(actions)), ["remove"],
       "the only theme action on the main page is dropping one remembered id");
-    assert.equal(session.list("btn-settings"), null,
-      "installing and removing themes belongs to the settings page and to phase 9B");
-    assert.equal(session.list("settings-page"), null);
+    // Phase 9B1: the settings page exists now, and installing or removing a theme lives
+    // there. It stays out of the way until the user asks for it, and nothing on the main
+    // page's own theme surface manages anything.
+    assert.ok(session.list("btn-settings"), "the settings entry exists");
+    assert.equal(session.settingsVisible(), false, "the settings page is not shown at boot");
+    const mainList = session.list("external-theme-list");
+    const management = Array.from(mainList.querySelectorAll("[data-theme-action]"))
+      .filter(function (node) { return node.getAttribute("data-theme-action") !== "remove"; });
+    assert.deepEqual(management, [], "the main page's theme list carries no management action");
   } finally { session.close(); }
 });
 
@@ -996,7 +1002,9 @@ contract("GS3 importing a theme goes through the bridge and never rewrites the c
     session.window.importTheme();
     await session.flush(3);
     assert.equal(session.callsOf("import_theme").length, 1, "the import goes through the bridge");
-    assert.deepEqual(session.callsOf("import_theme")[0].args, [{}],
+    // The request is compared as JSON: the answer's args are objects from the page's own
+    // realm, so a strict deep-equal against a Node literal would compare prototypes.
+    assert.equal(JSON.stringify(session.callsOf("import_theme")[0].args), "[{}]",
       "the bridge owns the source dialog, so the page sends an empty request");
 
     await session.resolve("import_theme", { ok: true, id: "damaged", error: "" });
@@ -1066,7 +1074,7 @@ contract("GS6 exporting the template reports the path and surfaces a refusal", "
 
     session.window.exportThemeTemplate();
     await session.flush(3);
-    assert.deepEqual(session.callsOf("export_theme_template")[0].args, [{}],
+    assert.equal(JSON.stringify(session.callsOf("export_theme_template")[0].args), "[{}]",
       "the bridge owns the destination dialog");
     await session.resolve("export_theme_template",
       { ok: true, path: "C:\\out\\markdownreader-theme-template", error: "" });

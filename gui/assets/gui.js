@@ -107,7 +107,8 @@ function setConversionRunning(running) {
     });
     updateInputSummary();      // keeps the clear button in step with the inputs
     renderConversionList();    // the remove buttons are recreated, so they read _conversionRunning
-    applyThemeControlLock();   // the theme controls freeze with everything else
+    applyThemeControlLock();     // the theme controls freeze with everything else
+    applySettingsControlLock();  // and so does the settings page's management surface
 }
 
 // The dialog controls are disabled while one is open. This is a state lock, not
@@ -499,6 +500,228 @@ function applyThemeState(state) {
 async function reloadThemeState() {
     var state = await pywebview.api.get_theme_state();
     applyThemeState(state);
+}
+
+// ── Settings surface (phase 9B1) ──────────────────────────────────────────────
+//
+// The settings page owns a different fact than the main page (AGENTS section 17). The main
+// page answers "which themes does this document carry"; this page answers "what is
+// installed here, and does it still work" through get_theme_inventory(). Neither surface
+// writes the other's fact: nothing here calls set_configs, and the main page never installs
+// or removes a theme.
+//
+// The page loads lazily -- opening it is what asks the bridge -- so it costs nothing at
+// startup and cannot change what the main page does while it stays closed.
+
+var _themeInventory = null;
+
+var STORAGE_FACT_LABELS = [
+    ["mode", "运行模式"],
+    ["user_data_root", "用户数据目录"],
+    ["config_path", "配置文件"],
+    ["external_themes_root", "外置主题目录"],
+    ["runtime_root", "runtime 目录"],
+    ["runtime_note", "说明"]
+];
+
+var ABOUT_FACT_LABELS = [
+    ["name", "应用"],
+    ["version", "版本"],
+    ["renderer_version", "渲染器"],
+    ["python", "Python"],
+    ["mode", "运行模式"]
+];
+
+function openSettings() {
+    var page = document.getElementById("settings-page");
+    if (!page) return;
+    page.classList.remove("hidden");
+    applySettingsControlLock();
+    loadSettingsFacts();
+}
+
+function closeSettings() {
+    var page = document.getElementById("settings-page");
+    if (page) page.classList.add("hidden");
+    // A visit may have changed what is installed, so the main page re-reads its own state
+    // instead of keeping a row for a theme the user just uninstalled.
+    reloadThemeState().catch(function (error) {
+        log("ERROR", "读取外置主题状态失败：" + error);
+    });
+}
+
+async function loadSettingsFacts() {
+    await refreshInventory();
+    await loadFacts("settings-storage", function () { return pywebview.api.get_storage_info(); },
+        STORAGE_FACT_LABELS, "读取存储信息失败：");
+    await loadFacts("settings-about", function () { return pywebview.api.get_about_info(); },
+        ABOUT_FACT_LABELS, "读取版本信息失败：");
+}
+
+async function loadFacts(rootId, request, labels, failure) {
+    try {
+        renderFacts(rootId, await request(), labels);
+    } catch (error) {
+        log("ERROR", failure + error);
+    }
+}
+
+// Every fact is rendered from the reply, never from a constant: the page must not be able
+// to show a path this build does not actually use.
+function renderFacts(rootId, facts, labels) {
+    var root = document.getElementById(rootId);
+    if (!root) return;
+    root.innerHTML = "";
+    labels.forEach(function (entry) {
+        var key = entry[0];
+        var row = document.createElement("div");
+        row.className = "fact-row";
+        row.setAttribute("data-fact", key);
+
+        var label = document.createElement("span");
+        label.className = "fact-label";
+        label.textContent = entry[1];
+
+        var value = document.createElement("span");
+        value.className = "fact-value";
+        value.setAttribute("data-fact-value", "");
+        var raw = facts ? facts[key] : null;
+        value.textContent = raw === null || raw === undefined || raw === "" ? "—" : String(raw);
+
+        row.appendChild(label);
+        row.appendChild(value);
+        root.appendChild(row);
+    });
+}
+
+// The installed list answers "what is here", while the main page answers "what does the
+// document carry": the settings page renders without consulting the carry set, and shows
+// the bridge's own verdict per row instead of guessing it from a selection state.
+async function refreshInventory() {
+    try {
+        applyThemeInventory(await pywebview.api.get_theme_inventory());
+    } catch (error) {
+        log("ERROR", "读取已安装主题失败：" + error);
+    }
+}
+
+function applyThemeInventory(inventory) {
+    _themeInventory = inventory || {};
+    var root = document.getElementById("settings-theme-root");
+    if (root) root.textContent = _themeInventory.root || "—";
+    renderThemeInventory();
+}
+
+function renderThemeInventory() {
+    var list = document.getElementById("settings-theme-list");
+    if (!list) return;
+    var rows = (_themeInventory && _themeInventory.installed) || [];
+    list.innerHTML = "";
+    rows.forEach(function (entry) {
+        var row = document.createElement("div");
+        row.className = "settings-theme-row";
+        row.setAttribute("data-theme-id", entry.id);
+        row.setAttribute("data-theme-valid", entry.valid ? "true" : "false");
+
+        var name = document.createElement("span");
+        name.className = "settings-theme-name";
+        name.textContent = entry.id;
+        row.appendChild(name);
+
+        var badge = document.createElement("span");
+        badge.className = "theme-state theme-state-" + (entry.valid ? "selected" : "invalid");
+        badge.textContent = entry.valid ? "可用" : "不可用";
+        row.appendChild(badge);
+
+        if (!entry.valid && entry.reason) {
+            var reason = document.createElement("span");
+            reason.className = "settings-theme-reason";
+            reason.setAttribute("data-theme-reason", "");
+            reason.textContent = entry.reason;
+            row.appendChild(reason);
+        }
+
+        var remove = document.createElement("button");
+        remove.className = "theme-remove";
+        remove.setAttribute("data-theme-action", "remove");
+        remove.textContent = "移除";
+        remove.title = "卸载 " + entry.id;
+        remove.addEventListener("click", function () { removeInstalledTheme(entry.id); });
+        row.appendChild(remove);
+        list.appendChild(row);
+    });
+
+    var empty = document.getElementById("settings-theme-empty");
+    if (empty) empty.classList.toggle("hidden", rows.length !== 0);
+    applySettingsControlLock();
+}
+
+// The management actions freeze with the rest of the page while a run is in flight: the run
+// resolves themes when it starts, and a theme that vanishes underneath it would turn a
+// healthy conversion into a failure.
+function applySettingsControlLock() {
+    ["btn-import-theme", "btn-export-theme-template", "btn-open-theme-location"]
+        .forEach(function (id) {
+            var button = document.getElementById(id);
+            if (button) button.disabled = _conversionRunning;
+        });
+    var list = document.getElementById("settings-theme-list");
+    if (!list) return;
+    for (var i = 0; i < list.children.length; i += 1) {
+        var remove = list.children[i].querySelector('[data-theme-action="remove"]');
+        if (remove) remove.disabled = _conversionRunning;
+    }
+}
+
+// A refusal is a normal outcome, not an exception: every management call answers with
+// {ok, error}, and a rejected promise is reported through the same path, so no failure can
+// leave the page waiting for an answer that will never arrive.
+async function runSettingsAction(request, describe) {
+    try {
+        var result = await request();
+        if (result && result.ok === false) {
+            log("ERROR", describe + "失败：" + (result.error || "未知原因"));
+            return null;
+        }
+        return result || {};
+    } catch (error) {
+        log("ERROR", describe + "失败：" + error);
+        return null;
+    }
+}
+
+async function importTheme() {
+    if (_conversionRunning) return;
+    var result = await runSettingsAction(
+        function () { return pywebview.api.import_theme({}); }, "导入外置主题");
+    if (!result) return;
+    log("INFO", "已安装外置主题：" + (result.id || ""));
+    await refreshInventory();
+}
+
+async function removeInstalledTheme(id) {
+    if (_conversionRunning) return;
+    var result = await runSettingsAction(
+        function () { return pywebview.api.remove_theme(id); }, "卸载外置主题");
+    if (!result) return;
+    log("INFO", "已卸载外置主题：" + id);
+    await refreshInventory();
+}
+
+async function exportThemeTemplate() {
+    if (_conversionRunning) return;
+    var result = await runSettingsAction(
+        function () { return pywebview.api.export_theme_template({}); }, "导出主题模板");
+    if (!result) return;
+    log("INFO", "主题模板已导出：" + (result.path || ""));
+}
+
+async function openThemeLocation() {
+    if (_conversionRunning) return;
+    var result = await runSettingsAction(
+        function () { return pywebview.api.open_theme_location(); }, "打开主题目录");
+    if (!result) return;
+    log("INFO", "主题目录：" + (result.path || ""));
 }
 
 // Input collection and preflight plan

@@ -12,6 +12,7 @@
         <h1>MarkdownReader</h1>
         <div class="header-right">
             <button class="theme-btn" id="themeToggleBtn" title="切换深色/浅色模式">☾</button>
+            <button class="theme-btn" id="btn-settings" onclick="openSettings()" title="设置">⚙</button>
             <span class="version">Markdown 到离线 HTML 阅读器</span>
         </div>
     </header>
@@ -162,6 +163,35 @@
         </section>
     </main>
 </div>
+<div class="settings-page hidden" id="settings-page">
+    <div class="settings-head">
+        <h2>设置</h2>
+        <button class="btn-blue" id="btn-settings-back" onclick="closeSettings()">返回主页面</button>
+    </div>
+    <div class="settings-body">
+        <section class="settings-block">
+            <h3>外置主题</h3>
+            <p class="settings-hint">安装位置：<code id="settings-theme-root">—</code></p>
+            <p class="settings-hint">「移除」只删除安装副本；文档里记住的选择不会因此被清掉，它会显示为「缺失」。</p>
+            <div class="settings-theme-list" id="settings-theme-list"></div>
+            <p class="settings-empty hidden" id="settings-theme-empty">尚未安装外置主题。导入一份主题模板后即可在此管理。</p>
+            <div class="settings-actions">
+                <button class="btn-primary" id="btn-import-theme" onclick="importTheme()">导入主题…</button>
+                <button class="btn-blue" id="btn-export-theme-template" onclick="exportThemeTemplate()">导出主题模板…</button>
+                <button class="btn-blue" id="btn-open-theme-location" onclick="openThemeLocation()">打开主题目录</button>
+            </div>
+        </section>
+        <section class="settings-block">
+            <h3>存储信息</h3>
+            <div class="settings-facts" id="settings-storage"></div>
+        </section>
+        <section class="settings-block">
+            <h3>关于</h3>
+            <div class="settings-facts" id="settings-about"></div>
+        </section>
+    </div>
+</div>
+
 <div class="drop-overlay hidden" id="drop-overlay">
     <div class="drop-overlay-card">
         <strong>松开鼠标，加入转换清单</strong>

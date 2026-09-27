@@ -505,6 +505,31 @@ samples/demo.html                         → 未改动，快照契约仍成立
   contract coverage / scope discipline 均 PASS ⇒ **Phase 9A overall PASS**（终审时的远端 HEAD；其后 HEAD 前进到
   `7358b87` 的零诊断 lint 提交，另记，不改 9A 语义）。9B（设置页 + user-data ownership 侦察）仍未开始。
 
+- 2026-09-27（Phase 9B1：设置页壳 + 外置主题管理 + 存储/关于）：9B 拆成 9B1（本次）与 9B2（closeout），并按
+  ownership 侦察结论**不做**「移除用户数据」。设置页读的是安装事实，主页读的是携带集合，两者不互相写入。
+  * **两个状态机**：`get_theme_state()`（主页）回答「本文档携带哪些」；`get_theme_inventory()`（设置页）回答
+    「这里装了什么、是否仍可用」。设置页不写配置：import / remove / export / open 四个动作跑完，`set_configs`
+    调用数为 0；主页不装不卸。转换在途时四个动作与主页控件一起冻结（直接调用也不触达桥接），返回主页重读
+    `get_theme_state()`。
+  * **9B 新发现 follow-up（installed ≠ valid）**：`theme_state()["invalid"]` 只分类 configured 的 id，因此一个
+    已安装、被手工改坏、又从未被选中的主题在那里既不是 `invalid`、也不会出现在任何列表里。设置页不重用它：
+    `core.external_themes.theme_inventory()` 对每个 installed id 单独跑 `validate_installed_theme()`，返回
+    `valid` + `reason`。这是一条**新增记录**，不改写 Phase 8/9A 的历史语义（主页仍把这种主题显示为可选；是否
+    顺带修正留作 9B2 的 follow-up，不并入本阶段）。
+  * **打开主题目录**：`core.paths` 只解析位置、不产生副作用，所以新环境里该目录并不存在；新增
+    `external_themes.ensure_theme_root()` 负责「创建后打开」，`open_theme_location()` 因此不再是一个静默
+    no-op（旧的 `open_directory()` 只在目录已存在时动作）。
+  * **版本来源**：About 的版本取自 `core/version.py::__version__`；`pyproject.toml` 不随包、本仓库也不是可安装
+    包（`importlib.metadata` 无法作答），所以用一条契约把它与 pyproject 的声明绑定，避免两处漂移。
+  * **不做**（与 ownership 侦察结论一致）：`remove user data`（含 disabled/占位按钮与 5 秒倒计时）、日志迁移、
+    WebView2 迁移、legacy config 治理、Phase 10 filesystem cleanup、`core/user_data.py`。
+  证据：红阶段 `GUI_CONTRACTS {"pass": 27, "xfail": 0, "xpass": 0, "fail": 14}`、`GUI_CONTRACT_RECORDS 41 of 41`，
+  全套 `uv run pytest -q` = **10 failed / 654 passed / 1 skipped**（失败逐条确认为「功能未实现」：缺 `#settings-page`、
+  缺 `BridgeApi.get_theme_inventory/import_theme/remove_theme/export_theme_template/open_theme_location/
+  get_storage_info/get_about_info`、缺 `core.version`）；实现后 `CONTRACT pass × 41`（无 fail / xfail / xpass）、
+  `GUI_CONTRACT_RECORDS 41 of 41`，全套 **664 passed / 0 failed / 1 skipped**，ruff 全绿，pyright（项目 standard）
+  81 文件 0 error；`samples/`、`viewer/`、`themes/`、`renderer/`、`packaging/` 均未进入 diff。
+
 ## texmath 审计记录（Phase 4B，为什么不复用 `markdown-it-texmath`）
 
 `markdown-it-texmath@1.0.0` 的注册方式是固定的：
