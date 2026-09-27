@@ -174,22 +174,53 @@ def test_the_runtime_document_carries_the_theme_selection_surface():
     assert "function renderThemeSelection()" in document
 
 
-def test_the_main_page_selects_themes_and_does_not_manage_them():
+def test_the_settings_surface_exists_and_the_main_page_still_does_not_manage_themes():
     """AGENTS §17：安装 / 删除 / 导出模板 / 打开主题目录属于设置页，主页只管「本次携带哪些」。
 
-    Phase 9A 故意不引入设置入口，设置页整体属于 9B；因此这条守卫同时锁住两件事：
-    主页不得出现管理动作，也不得提前出现一个尚无功能的设置按钮。
+    Phase 9A 冻结了这条边界（当时整条反向断言：设置面必须不存在）。Phase 9B1 落地设置面
+    之后，守卫锁的仍是同一件事，只是换成正面 + 体抽取：设置面必须存在，而主页的主题渲染
+    函数里不得出现任何管理动作 —— 主页读到的是「携带集合」，不是「安装清单」。
     """
     html = (ROOT / "gui" / "assets" / "index.html").read_text(encoding="utf-8")
     javascript = (ROOT / "gui" / "assets" / "gui.js").read_text(encoding="utf-8")
 
+    assert 'id="btn-settings"' in html
+    assert 'id="settings-page"' in html
+    assert "function renderThemeSelection()" in javascript
+
+    management = ("import_theme", "remove_theme", "export_theme_template", "open_theme_location")
+    for token in management:
+        assert token in javascript, token + " is the settings page's own bridge call"
+
+    renderer = javascript.split("function renderThemeSelection()", 1)[1].split(
+        "\nfunction applyThemeControlLock", 1
+    )[0]
+    for token in management:
+        assert token not in renderer, (
+            token + " must not run from the main page: installing a theme is not selecting it"
+        )
+
+    assert 'data-active="settings"' not in html, "the settings page is not a workspace tab"
+
+
+def test_removing_user_data_is_not_promised_before_the_ownership_is_complete():
+    """9B 的 ownership 侦察结论：日志、WebView2 与 legacy config 三项治理（Phase 10）之前，
+    不实现、也不占位「移除 MarkdownReader 用户数据」。
+
+    一个名字承诺完整删除、实现却明知不完整的按钮，比没有按钮更糟：它把「删除」变成一个
+    用户再也无法核实真假的承诺。"""
+    sources = {
+        "index.html": (ROOT / "gui" / "assets" / "index.html").read_text(encoding="utf-8"),
+        "gui.js": (ROOT / "gui" / "assets" / "gui.js").read_text(encoding="utf-8"),
+        "gui/api.py": (ROOT / "gui" / "api.py").read_text(encoding="utf-8"),
+    }
     for token in (
-        "btn-settings",
-        "settings-page",
-        "import_theme",
-        "remove_theme",
-        "export_theme_template",
-        "open_theme_location",
+        "remove_user_data",
+        "removeUserData",
+        "btn-remove-user-data",
+        "user-data-countdown",
     ):
-        assert token not in html, token + " belongs to the settings page (phase 9B)"
-        assert token not in javascript, token + " belongs to the settings page (phase 9B)"
+        for name, text in sources.items():
+            assert token not in text, (
+                token + " must not exist before Phase 10 owns the whole deletion (" + name + ")"
+            )

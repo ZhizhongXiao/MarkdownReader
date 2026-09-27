@@ -8,10 +8,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { bootGui } from "./gui_harness.mjs";
+import { bootGui, EMPTY_THEME_INVENTORY } from "./gui_harness.mjs";
 
 const PREPARE_SINGLE = process.env.MR_PREPARE_SINGLE_REQUEST;
 const CONVERT_SINGLE = process.env.MR_CONVERT_SINGLE_REQUEST;
+const IMPORT_SINGLE = process.env.MR_IMPORT_SINGLE_REQUEST;
+const EXPORT_SINGLE = process.env.MR_EXPORT_SINGLE_REQUEST;
 
 const PLAN_ONE = {
   inputs: ["C:\\docs\\a.md"],
@@ -885,4 +887,364 @@ contract("GT18 a failed refetch falls back to the last persisted selection", "pa
       "the queue is not left stuck after a failed refetch");
     await session.resolve("set_configs", null);
   } finally { session.close(); }
+});
+
+// ── Phase 9B1: the settings surface (GS1-GS13) ────────────────────────────────
+//
+// The settings page owns a different fact than the main page (AGENTS section 17): the
+// main page reads which installed themes a document carries, the settings page reads
+// what is installed and whether it still works. The two must never stand in for each
+// other, so the fixtures below deliberately separate them.
+
+const THEME_INVENTORY = {
+  installed: [
+    { id: "paper", valid: true, reason: null },
+    { id: "zeta", valid: true, reason: null },
+    // Installed and broken, but *not* a configured id, so it cannot appear in
+    // THEME_STATE_A.invalid - that list only covers what the configuration remembers.
+    { id: "damaged", valid: false, reason: "外置主题 CSS 不合法：damaged" },
+  ],
+  root: "C:\\data\\assets\\themes\\external",
+  template_root: "C:\\app\\themes\\template",
+  warnings: [],
+};
+
+const STORAGE_INFO = {
+  mode: "onedir",
+  user_data_root: "C:\\data",
+  config_path: "C:\\data\\profile\\config.json",
+  external_themes_root: "C:\\data\\assets\\themes\\external",
+  runtime_root: "C:\\data\\runtime",
+  runtime_note: "预留：日志与 WebView2 尚未迁入。",
+};
+
+const ABOUT_INFO = {
+  name: "MarkdownReader",
+  version: "1.0.0rc1",
+  renderer_version: "v2",
+  python: "3.12.10",
+  mode: "onedir",
+};
+
+// What the bridge reports after `zeta` was uninstalled: the memory keeps the id, so the
+// main page must show it as missing instead of keeping it selectable.
+const THEME_STATE_AFTER_REMOVE = Object.assign({}, THEME_STATE_A, {
+  installed: ["academic", "broken", "paper"],
+  configured: ["paper", "ghost", "broken", "zeta"],
+  missing: ["ghost", "zeta"],
+  warnings: ["外置主题当前未安装：ghost", "外置主题当前未安装：zeta"],
+});
+
+contract("GS1 settings shell: the entry opens the page and back returns intact", "pass", async () => {
+  const session = await bootGui({ themeState: THEME_STATE_A, themeInventory: THEME_INVENTORY });
+  try {
+    assert.equal(session.settingsVisible(), false, "the settings page starts hidden");
+    const summaryBefore = session.themeSummary();
+    const tabBefore = session.doc.querySelector(".workspace-tab.active").id;
+
+    session.window.openSettings();
+    await session.flush(4);
+    assert.equal(session.settingsVisible(), true, "the entry opens the settings page");
+
+    session.window.closeSettings();
+    await session.flush(4);
+    assert.equal(session.settingsVisible(), false, "back returns to the main page");
+    assert.equal(session.doc.querySelector(".workspace-tab.active").id, tabBefore,
+      "the workspace tab the user was on survives the trip");
+    assert.deepEqual(session.themeSummary(), summaryBefore,
+      "the carry-set summary is the same after a settings visit");
+  } finally { session.close(); }
+});
+
+contract("GS2 the settings inventory reports validity per installed theme", "pass", async () => {
+  const session = await bootGui({ themeState: THEME_STATE_A, themeInventory: THEME_INVENTORY });
+  try {
+    assert.equal(THEME_STATE_A.invalid.indexOf("damaged"), -1,
+      "fixture: damaged is installed but is not a configured id");
+
+    session.window.openSettings();
+    await session.flush(4);
+
+    assert.deepEqual(session.inventoryIds(), ["damaged", "paper", "zeta"],
+      "every installed theme is listed, healthy or not");
+    assert.equal(session.inventoryRow("paper").valid, true);
+    assert.equal(session.inventoryRow("damaged").valid, false,
+      "an installed theme that fails validation must not be reported as healthy");
+    assert.ok(session.inventoryRow("damaged").reason.indexOf("damaged") !== -1,
+      "the refusal is shown on the row instead of being swallowed");
+  } finally { session.close(); }
+});
+
+contract("GS2b the settings inventory is read from the bridge, not from the carry set", "pass", async () => {
+  const session = await bootGui({ themeState: THEME_STATE_A, themeInventory: THEME_INVENTORY });
+  try {
+    assert.equal(session.callsOf("get_theme_inventory").length, 0,
+      "the inventory is not fetched before the settings page is opened");
+    session.window.openSettings();
+    await session.flush(4);
+    assert.equal(session.callsOf("get_theme_inventory").length, 1,
+      "opening the settings page asks the bridge for the installation facts");
+  } finally { session.close(); }
+});
+
+contract("GS3 importing a theme goes through the bridge and never rewrites the carry set", "pass", async () => {
+  const session = await bootGui({ themeState: THEME_STATE_A, themeInventory: THEME_INVENTORY });
+  try {
+    session.window.openSettings();
+    await session.flush(4);
+
+    session.window.importTheme();
+    await session.flush(3);
+    assert.equal(session.callsOf("import_theme").length, 1, "the import goes through the bridge");
+    assert.deepEqual(session.callsOf("import_theme")[0].args, [{}],
+      "the bridge owns the source dialog, so the page sends an empty request");
+
+    await session.resolve("import_theme", { ok: true, id: "damaged", error: "" });
+    await session.flush(3);
+    assert.equal(session.callsOf("get_theme_inventory").length, 2,
+      "a successful import re-reads the inventory instead of guessing");
+    assert.equal(session.callsOf("set_configs").length, 0,
+      "installing a theme is not a selection change");
+  } finally { session.close(); }
+});
+
+contract("GS4 a refused import is reported and leaves the page usable", "pass", async () => {
+  const session = await bootGui({ themeState: THEME_STATE_A, themeInventory: THEME_INVENTORY });
+  try {
+    session.window.openSettings();
+    await session.flush(4);
+    const issuesBefore = session.logIssues();
+
+    session.window.importTheme();
+    await session.flush(3);
+    await session.resolve("import_theme",
+      { ok: false, id: "", error: "主题模板缺失：C:\\app\\themes\\template" });
+    await session.flush(3);
+    assert.ok(session.logIssues() > issuesBefore, "the refusal is reported to the user");
+    assert.equal(session.callsOf("get_theme_inventory").length, 1,
+      "a refusal must not pretend the inventory changed");
+    assert.deepEqual(session.inventoryIds(), ["damaged", "paper", "zeta"], "the list is unchanged");
+
+    // A bridge that fails instead of answering must not leave the page stuck either.
+    session.window.importTheme();
+    await session.flush(3);
+    await session.reject("import_theme", new Error("bridge down"));
+    await session.flush(3);
+    assert.ok(session.logIssues() > issuesBefore, "a failed import is reported too");
+
+    session.window.importTheme();
+    await session.flush(3);
+    assert.equal(session.callsOf("import_theme").length, 3, "the page is still usable afterwards");
+    await session.resolve("import_theme", { ok: true, id: "paper", error: "" });
+  } finally { session.close(); }
+});
+
+contract("GS5 removing an installed theme never rewrites the carry set", "pass", async () => {
+  const session = await bootGui({ themeState: THEME_STATE_A, themeInventory: THEME_INVENTORY });
+  try {
+    session.window.openSettings();
+    await session.flush(4);
+
+    session.window.removeInstalledTheme("zeta");
+    await session.flush(3);
+    assert.deepEqual(session.callsOf("remove_theme")[0].args, ["zeta"], "the row's own id is sent");
+
+    await session.resolve("remove_theme", { ok: true, id: "zeta", error: "" });
+    await session.flush(3);
+    assert.equal(session.callsOf("get_theme_inventory").length, 2, "the list is re-read after a removal");
+    assert.equal(session.callsOf("set_configs").length, 0,
+      "uninstalling is not unchecking: the memory keeps the id and the main page says missing");
+  } finally { session.close(); }
+});
+
+contract("GS6 exporting the template reports the path and surfaces a refusal", "pass", async () => {
+  const session = await bootGui({ themeState: THEME_STATE_A, themeInventory: THEME_INVENTORY });
+  try {
+    session.window.openSettings();
+    await session.flush(4);
+    const linesBefore = session.logLines();
+
+    session.window.exportThemeTemplate();
+    await session.flush(3);
+    assert.deepEqual(session.callsOf("export_theme_template")[0].args, [{}],
+      "the bridge owns the destination dialog");
+    await session.resolve("export_theme_template",
+      { ok: true, path: "C:\\out\\markdownreader-theme-template", error: "" });
+    await session.flush(3);
+    assert.ok(session.logLines() > linesBefore, "the written path is reported");
+
+    const issuesAfterSuccess = session.logIssues();
+    session.window.exportThemeTemplate();
+    await session.flush(3);
+    await session.resolve("export_theme_template",
+      { ok: false, path: "", error: "导出目标已存在：C:\\out\\markdownreader-theme-template" });
+    await session.flush(3);
+    assert.ok(session.logIssues() > issuesAfterSuccess,
+      "a refused export is reported instead of looking like a success");
+  } finally { session.close(); }
+});
+
+contract("GS7 opening the theme location works on a fresh installation", "pass", async () => {
+  const session = await bootGui({
+    themeState: THEME_STATE_EMPTY, themeInventory: EMPTY_THEME_INVENTORY,
+  });
+  try {
+    session.window.openSettings();
+    await session.flush(4);
+    assert.equal(session.settingsVisible(), true);
+    assert.deepEqual(session.inventoryIds(), [], "a fresh installation has nothing installed");
+
+    session.window.openThemeLocation();
+    await session.flush(3);
+    assert.equal(session.callsOf("open_theme_location").length, 1,
+      "the page asks the bridge to create-and-open, not the system to reveal a bare path");
+
+    const issuesBefore = session.logIssues();
+    await session.resolve("open_theme_location",
+      { ok: false, path: "", error: "无法创建主题目录：C:\\data" });
+    await session.flush(3);
+    assert.ok(session.logIssues() > issuesBefore,
+      "a directory that cannot be created is reported instead of silently doing nothing");
+  } finally { session.close(); }
+});
+
+contract("GS8 storage information renders the bridge facts verbatim", "pass", async () => {
+  const session = await bootGui({
+    themeState: THEME_STATE_A, themeInventory: THEME_INVENTORY, storageInfo: STORAGE_INFO,
+  });
+  try {
+    session.window.openSettings();
+    await session.flush(4);
+
+    const facts = session.facts("settings-storage");
+    assert.ok(facts, "the settings page carries a storage section");
+    assert.equal(facts.mode, STORAGE_INFO.mode);
+    assert.equal(facts.user_data_root, STORAGE_INFO.user_data_root);
+    assert.equal(facts.config_path, STORAGE_INFO.config_path);
+    assert.equal(facts.external_themes_root, STORAGE_INFO.external_themes_root);
+    assert.equal(facts.runtime_root, STORAGE_INFO.runtime_root);
+  } finally { session.close(); }
+});
+
+contract("GS9 about renders the bridge facts verbatim", "pass", async () => {
+  const session = await bootGui({ themeState: THEME_STATE_A, aboutInfo: ABOUT_INFO });
+  try {
+    session.window.openSettings();
+    await session.flush(4);
+
+    const facts = session.facts("settings-about");
+    assert.ok(facts, "the settings page carries an about section");
+    assert.equal(facts.name, ABOUT_INFO.name);
+    assert.equal(facts.version, ABOUT_INFO.version,
+      "the version is the bridge's fact, not a number baked into the page");
+    assert.equal(facts.renderer_version, ABOUT_INFO.renderer_version);
+  } finally { session.close(); }
+});
+
+contract("GS10 theme management is locked while a conversion runs", "pass", async () => {
+  const session = await bootGui({ themeState: THEME_STATE_A, themeInventory: THEME_INVENTORY });
+  try {
+    session.window.addInputs([PLAN_ONE.items[0].source_path]);
+    await session.flush(3);
+    await session.resolve("prepare_conversion", PLAN_ONE);
+    session.window.openSettings();
+    await session.flush(4);
+    assert.equal(session.list("btn-import-theme").disabled, false, "management works while idle");
+
+    session.window.runConvert();
+    await session.flush(3);
+    assert.equal(session.list("btn-import-theme").disabled, true, "a run locks the management actions");
+    assert.equal(session.list("btn-export-theme-template").disabled, true);
+    assert.equal(session.list("btn-open-theme-location").disabled, true);
+    assert.equal(session.inventoryRow("paper").removeDisabled, true);
+
+    const frozen = JSON.stringify(session.inventoryRows());
+    session.window.importTheme();
+    session.window.removeInstalledTheme("paper");
+    session.window.exportThemeTemplate();
+    session.window.openThemeLocation();
+    await session.flush(3);
+    assert.equal(session.callsOf("import_theme").length, 0,
+      "a direct call must not reach the bridge while a run is in flight");
+    assert.equal(session.callsOf("remove_theme").length, 0);
+    assert.equal(session.callsOf("export_theme_template").length, 0);
+    assert.equal(session.callsOf("open_theme_location").length, 0);
+    assert.equal(JSON.stringify(session.inventoryRows()), frozen, "and nothing moves on the page");
+
+    await session.resolve("prepare_conversion", PLAN_ONE);
+    await session.flush(2);
+    await session.resolve("set_configs", null);
+    await session.flush(2);
+    await session.resolve("convert", CONVERT_OK);
+    await session.flush(3);
+    assert.equal(session.list("btn-import-theme").disabled, false,
+      "the run must not leave the management surface locked");
+  } finally { session.close(); }
+});
+
+contract("GS11 no settings action ever writes the carry set", "pass", async () => {
+  const session = await bootGui({ themeState: THEME_STATE_A, themeInventory: THEME_INVENTORY });
+  try {
+    session.window.openSettings();
+    await session.flush(4);
+
+    session.window.importTheme();
+    await session.flush(2);
+    await session.resolve("import_theme", { ok: true, id: "paper", error: "" });
+    session.window.removeInstalledTheme("zeta");
+    await session.flush(2);
+    await session.resolve("remove_theme", { ok: true, id: "zeta", error: "" });
+    session.window.exportThemeTemplate();
+    await session.flush(2);
+    await session.resolve("export_theme_template", { ok: true, path: "C:\\out\\t", error: "" });
+    session.window.openThemeLocation();
+    await session.flush(2);
+    await session.resolve("open_theme_location", { ok: true, path: "C:\\data", error: "" });
+    await session.flush(3);
+
+    assert.equal(session.callsOf("set_configs").length, 0,
+      "the settings surface never persists: that write belongs to the main page");
+    assert.deepEqual(session.savePayloads(), []);
+  } finally { session.close(); }
+});
+
+contract("GS12 returning from settings re-reads the main-page selection state", "pass", async () => {
+  const session = await bootGui({ autoThemeState: false, themeInventory: THEME_INVENTORY });
+  try {
+    await session.resolve("get_theme_state", THEME_STATE_A);
+    await session.flush(3);
+    assert.equal(session.themeRow("zeta").state, "available", "fixture: zeta starts selectable");
+
+    // Remembering zeta is what makes its later disappearance visible as `missing`.
+    session.window.toggleExternalTheme("zeta");
+    await session.flush(2);
+    await session.resolve("set_configs", null);
+    await session.flush(2);
+
+    session.window.openSettings();
+    await session.flush(4);
+    session.window.removeInstalledTheme("zeta");
+    await session.flush(2);
+    await session.resolve("remove_theme", { ok: true, id: "zeta", error: "" });
+    await session.flush(3);
+
+    session.window.closeSettings();
+    await session.flush(3);
+    assert.equal(session.callsOf("get_theme_state").length, 2,
+      "leaving the settings page re-reads what a document can carry");
+
+    await session.resolve("get_theme_state", THEME_STATE_AFTER_REMOVE);
+    await session.flush(3);
+    assert.equal(session.themeRow("zeta").state, "missing",
+      "the row follows the bridge instead of keeping an uninstalled theme selectable");
+  } finally { session.close(); }
+});
+
+contract("GS13 the settings bridge calls keep the single-request shape", "pass", async () => {
+  // The joint half of the shape contract: the JS call and the Python signature are
+  // measured in different places (pytest measures the signature and hands the answer in).
+  assert.equal(IMPORT_SINGLE, "1",
+    "BridgeApi.import_theme must be (self, request) so the bridge owns the source dialog");
+  assert.equal(EXPORT_SINGLE, "1",
+    "BridgeApi.export_theme_template must be (self, request) as well");
 });

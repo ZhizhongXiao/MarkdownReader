@@ -41,9 +41,11 @@ API_PY = ROOT / "gui" / "api.py"
 # reducing coverage. Phase 9A adds GT1-GT18 (the external theme selection surface and
 # the persistence-before-conversion ordering) to GU0-GU8, which is where 9 + 18 comes
 # from; the GT13 freeze contract grew a second half without adding a record.
-EXPECTED_PASS = 27
+# Phase 9B1 adds GS1-GS14 (the settings surface: inventory, import/remove/export/open,
+# storage and about facts, the run lock and the joint call shapes).
+EXPECTED_PASS = 41
 EXPECTED_XFAIL = 0
-EXPECTED_CONTRACTS = 27
+EXPECTED_CONTRACTS = 41
 
 
 def _single_request_shape(method: str) -> int:
@@ -96,6 +98,10 @@ def test_gui_state_contracts():
             "MR_GUI_JS": str(GUI_JS),
             "MR_PREPARE_SINGLE_REQUEST": str(_single_request_shape("prepare_conversion")),
             "MR_CONVERT_SINGLE_REQUEST": str(_single_request_shape("convert")),
+            # Phase 9B1: the settings page sends one request dict for the two actions
+            # whose target the bridge itself has to ask for.
+            "MR_IMPORT_SINGLE_REQUEST": str(_single_request_shape("import_theme")),
+            "MR_EXPORT_SINGLE_REQUEST": str(_single_request_shape("export_theme_template")),
         }
     )
     completed = subprocess.run(

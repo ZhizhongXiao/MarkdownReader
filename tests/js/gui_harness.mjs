@@ -39,6 +39,34 @@ export const EMPTY_THEME_STATE = {
   warnings: [],
 };
 
+// Phase 9B1: the settings surface reads three other facts. They are requested lazily
+// (only when the settings page opens), so the samples below exist to keep that page
+// renderable, not to describe a real machine - a contract that cares about the values
+// hands its own fixture in.
+export const EMPTY_THEME_INVENTORY = {
+  installed: [],
+  root: "",
+  template_root: "",
+  warnings: [],
+};
+
+export const STORAGE_INFO_SAMPLE = {
+  mode: "source",
+  user_data_root: "",
+  config_path: "",
+  external_themes_root: "",
+  runtime_root: "",
+  runtime_note: "",
+};
+
+export const ABOUT_INFO_SAMPLE = {
+  name: "MarkdownReader",
+  version: "0.0.0-test",
+  renderer_version: "v2",
+  python: "3.12",
+  mode: "source",
+};
+
 function deferred() {
   let resolve;
   let reject;
@@ -238,6 +266,63 @@ export class GuiSession {
     };
   }
 
+  // ── settings surface probes (DOM only, like every probe above) ────────────
+  settingsVisible() {
+    const node = this.list("settings-page");
+    if (!node) return null;
+    return !node.classList.contains("hidden");
+  }
+
+  // Installed themes as the settings page renders them. `valid` is a fact about the
+  // installation and is deliberately separate from the carry set's row states.
+  inventoryRows() {
+    const list = this.list("settings-theme-list");
+    if (!list) return null;
+    const rows = [];
+    for (let i = 0; i < list.children.length; i += 1) {
+      const row = list.children[i];
+      const id = row.getAttribute ? row.getAttribute("data-theme-id") : null;
+      if (!id) continue;
+      const reason = row.querySelector("[data-theme-reason]");
+      const remove = row.querySelector('[data-theme-action="remove"]');
+      rows.push({
+        id: id,
+        valid: row.getAttribute("data-theme-valid") === "true",
+        reason: reason ? reason.textContent.trim() : null,
+        removeDisabled: remove ? remove.disabled : null,
+      });
+    }
+    return rows;
+  }
+
+  inventoryRow(id) {
+    const rows = this.inventoryRows() || [];
+    for (let i = 0; i < rows.length; i += 1) {
+      if (rows[i].id === id) return rows[i];
+    }
+    return null;
+  }
+
+  inventoryIds() {
+    return (this.inventoryRows() || []).map(function (row) { return row.id; }).sort();
+  }
+
+  // Facts are read from the rendered value, never from a JS constant: a page that
+  // hard-codes a path would render nothing here.
+  facts(rootId) {
+    const root = this.list(rootId);
+    if (!root) return null;
+    const out = {};
+    for (let i = 0; i < root.children.length; i += 1) {
+      const row = root.children[i];
+      const key = row.getAttribute ? row.getAttribute("data-fact") : null;
+      if (!key) continue;
+      const value = row.querySelector("[data-fact-value]");
+      out[key] = value ? value.textContent.trim() : null;
+    }
+    return out;
+  }
+
   close() { this.window.close(); }
 }
 
@@ -259,7 +344,13 @@ export async function bootGui(options) {
   const methods = ["get_templates", "get_config", "set_configs", "get_theme_state",
     "prepare_conversion", "convert",
     "select_input_files", "select_input_directory", "select_output_directory",
-    "open_file", "open_directory"];
+    "open_file", "open_directory",
+    // Phase 9B1: the settings surface has its own calls. The three readers are asked
+    // for lazily when the page opens, so giving them a default reply cannot change any
+    // existing contract's startup path; the four management actions stay pending and
+    // are resolved (or rejected) by the contract that drives them.
+    "get_theme_inventory", "import_theme", "remove_theme", "export_theme_template",
+    "open_theme_location", "get_storage_info", "get_about_info"];
   methods.forEach(function (name) {
     calls[name] = [];
     api[name] = function () {
@@ -278,6 +369,23 @@ export async function bootGui(options) {
         entry.settled = true;
         const state = settings.themeState || EMPTY_THEME_STATE;
         entry.deferred.resolve(JSON.parse(JSON.stringify(state)));
+      }
+      // The settings facts behave the same way: default replies unless a contract
+      // answers them itself (autoSettings: false).
+      if (name === "get_theme_inventory" && settings.autoSettings !== false) {
+        entry.settled = true;
+        const inventory = settings.themeInventory || EMPTY_THEME_INVENTORY;
+        entry.deferred.resolve(JSON.parse(JSON.stringify(inventory)));
+      }
+      if (name === "get_storage_info" && settings.autoSettings !== false) {
+        entry.settled = true;
+        const storage = settings.storageInfo || STORAGE_INFO_SAMPLE;
+        entry.deferred.resolve(JSON.parse(JSON.stringify(storage)));
+      }
+      if (name === "get_about_info" && settings.autoSettings !== false) {
+        entry.settled = true;
+        const about = settings.aboutInfo || ABOUT_INFO_SAMPLE;
+        entry.deferred.resolve(JSON.parse(JSON.stringify(about)));
       }
       return entry.deferred.promise;
     };
