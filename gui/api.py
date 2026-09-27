@@ -36,12 +36,12 @@ _logger = logging.getLogger("gui")
 # message the user can read instead of an overwrite or a silent no-op.
 EXPORTED_TEMPLATE_DIR_NAME = "markdownreader-theme-template"
 
-# `runtime_root()` has no production writer yet (logs and the WebView2 profile move there
-# in Phase 10). Until that ownership is closed, the storage section must not imply that a
-# "remove user data" action would cover them.
+# `runtime_root()` now owns the log and the WebView2 profile (Phase 10), so the note states
+# what is still missing rather than implying that a "remove user data" action exists: that
+# lifecycle is Phase 11.
 RUNTIME_NOTE = (
-    "预留：日志与 WebView2 尚未迁入 runtime（Phase 10）。在整份 ownership 收口之前，"
-    "设置页不提供「移除用户数据」。"
+    "日志与 WebView2 profile 已随 Phase 10 迁入 runtime（三种布局下都在用户数据目录内）；"
+    "「移除用户数据」仍未提供 —— 它属于 Phase 11 的 terminal removal lifecycle。"
 )
 
 

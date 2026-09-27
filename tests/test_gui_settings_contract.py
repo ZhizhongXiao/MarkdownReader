@@ -166,8 +166,8 @@ def test_storage_info_reports_the_real_paths_for_each_packaging_mode(monkeypatch
     # name, so patching `core.external_themes.theme_root` would only move the expectation,
     # never the value under test.
     assert str(info["external_themes_root"]).replace("\\", "/") == "U:/data/assets/themes/external"
-    assert "Phase 10" in info["runtime_note"], (
-        "the page must not imply that logs and WebView2 can be removed yet"
+    assert "Phase 11" in info["runtime_note"], (
+        "the page must not imply that removing user data exists yet"
     )
 
     monkeypatch.setattr(paths, "is_frozen", lambda: True)

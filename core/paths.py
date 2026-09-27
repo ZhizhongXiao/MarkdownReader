@@ -13,11 +13,11 @@ Why they differ: onedir already owns a directory, so keeping user data inside it
 makes "delete the folder" a complete removal; onefile is a single read-only EXE, so
 persistent data has to live under `%LOCALAPPDATA%` and survives moving the EXE.
 
-Phase 7A publishes this module because external themes need a writable, persistent
-home (`assets/themes/external/`). The rest of the layout -- moving `config.json` into
-`profile/`, the log into `runtime/`, and the "remove user data" flow -- belongs to
-Phase 10/11, so `config_path()` is available here while `core/config.py` keeps
-resolving the existing file until that phase moves it.
+Phase 7A published this module because external themes need a writable, persistent home
+(`assets/themes/external/`). Phase 10 finished the classification: `config.json` lives in
+`profile/`, the log and the WebView2 profile live in `runtime/`, and the legacy
+configuration beside the executable is only an upgrade input. The "remove user data" flow
+is Phase 11.
 
 Everything here is pure: resolving a path never creates a directory.
 """
@@ -27,6 +27,8 @@ import sys
 
 _PROJECT_NAME = "MarkdownReader"
 CONFIG_FILENAME = "config.json"
+LOG_FILENAME = "MarkdownReader.log"
+WEBVIEW_DIRNAME = "WebView2"
 
 
 def source_root() -> str:
@@ -97,6 +99,26 @@ def assets_root() -> str:
 def runtime_root() -> str:
     """Return the directory for reproducible runtime data (logs, caches)."""
     return os.path.join(user_data_root(), "runtime")
+
+
+def log_path() -> str:
+    """Return the application log file, inside the runtime root.
+
+    Phase 9B found the log sitting in `application_dir()`, which for onefile means "beside the
+    EXE -- wherever the user put it" and for onedir a stray file inside a folder that is meant
+    to be self-contained. It is runtime data, so it belongs with the rest of it (Phase 10).
+    """
+    return os.path.join(runtime_root(), LOG_FILENAME)
+
+
+def webview_storage_root() -> str:
+    """Return the WebView2 profile directory, inside the runtime root.
+
+    The engine's profile is runtime data like the log, and its name is an implementation
+    detail of the GUI. Keeping it here is what finally makes onedir's "delete the folder and
+    the removal is complete" true, while onefile keeps everything under `%LOCALAPPDATA%`.
+    """
+    return os.path.join(runtime_root(), WEBVIEW_DIRNAME)
 
 
 def external_themes_root() -> str:

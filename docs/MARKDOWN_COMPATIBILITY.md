@@ -530,6 +530,30 @@ samples/demo.html                         → 未改动，快照契约仍成立
   `GUI_CONTRACT_RECORDS 41 of 41`，全套 **664 passed / 0 failed / 1 skipped**，ruff 全绿，pyright（项目 standard）
   81 文件 0 error；`samples/`、`viewer/`、`themes/`、`renderer/`、`packaging/` 均未进入 diff。
 
+- 2026-09-27（Phase 10：storage ownership 收口 —— log / WebView2 / legacy config）：三笔在 9B 侦察中被点名的
+  storage 债一次收口；生产面只动 `core/paths.py`、`core/logger.py`、`core/config.py`、`gui/app.py`。
+  * **P10-A 日志进 `runtime/`**：原先 `core/logger.py` 写 `application_dir()/MarkdownReader.log` —— onefile 下就是
+    「EXE 旁边，用户把它放哪儿日志就散在哪儿」。现在写 `paths.log_path()` = `runtime_root()/MarkdownReader.log`；
+    创建目录属于 `setup_logging()` 时刻（路径解析保持无副作用），只读位置仍然只丢文件 handler、不影响启动。
+  * **P10-B WebView2 profile 进 `runtime/`**：原先恒为 `%LOCALAPPDATA%/MarkdownReader/WebView2`，这破坏了 onedir 的
+    「删掉整个目录即完整移除」。现在 `paths.webview_storage_root()` = `runtime_root()/WebView2`；`gui/app.py` 删除
+    自行拼路径的 `get_webview_storage_path()`，只把 resolver 的结果交给 `webview.start(storage_path=…)`。静态守卫把
+    `LOCALAPPDATA` / `APPDATA` 的 ownership 收回 `core/paths.py`。
+  * **P10-C legacy config 成为一次性升级输入**：原先 profile 缺失时每次回落 legacy，于是删除 profile 会让旧配置
+    「复活」（用户点了「移除我的数据」，设置却回来了）。现在 `load_config()` 在**未传显式路径**时先跑一次迁移：
+    严格解析 legacy → `save_config(_parse_config_object(legacy_data))`（**同一份 snapshot**，legacy 只读一次；
+    写的是 **flat config**；sectioning / normalization / 原子写仍只由 `save_config()` 负责）→ **成功后才**
+    `os.remove(legacy)`。`_find_config()` 保持查询性质，迁移只在私有
+    helper 里发生；「合法空对象 `{}`」与「解析失败」由私有 `_read_config_object()` 区分。
+  * **失败语义（冻结，无 tombstone）**：写 profile 失败 → 本次仍用已解析的 legacy 内容、保留文件、warning（下次可
+    重试），**绝不先删 legacy**；删 legacy 失败 → warning，profile 已是权威故永不复活；legacy 不可解析 → defaults +
+    warning，不写 profile、不删 legacy。
+  证据：红阶段 16 failed / 31 passed —— P10-9 的红签名 `assert 'office' == 'modern'` 就是复活的实证，P10-14 的红签名
+  只有「失败必须被报告」这条不成立；实现后契约 47/47 全绿、全套 **692 passed / 0 failed / 1 skipped**、ruff 全绿、
+  pyright（项目 standard）82 文件 0 error、MCP `python_review` 11/11 批 `batch_ok` 且末批 `scope_complete`。三种布局的
+  最终形态见 `REFACTOR_ROADMAP.md` 的 Phase 10 落地记录；`gui/api.py::get_storage_info()` 的 shape 未变，设置页因此
+  自动显示新的 runtime truth。
+
 ## texmath 审计记录（Phase 4B，为什么不复用 `markdown-it-texmath`）
 
 `markdown-it-texmath@1.0.0` 的注册方式是固定的：

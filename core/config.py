@@ -201,6 +201,79 @@ def save_config(cfg: dict, config_path: str | None = None) -> str:
     return path
 
 
+def _legacy_config_path() -> str:
+    """Return the legacy configuration location beside the executable."""
+    return os.path.join(PROJECT_ROOT, CONFIG_FILENAME)
+
+
+def _read_config_object(filepath: str) -> dict | None:
+    """Return the parsed JSON object, or None when it is unreadable or not an object.
+
+    This is the one place a configuration file becomes JSON: `_parse_json()` builds on it, so a
+    file is read once per consumer and the two paths cannot disagree about what it contains. The
+    `None` answer is what lets migration tell a valid empty object (`{}`) from an unreadable
+    file -- `_parse_json()` collapses both into "nothing to contribute".
+    """
+    try:
+        with open(filepath, encoding="utf-8") as file:
+            data = json.load(file)
+    except Exception as error:
+        _logger.warning("解析配置文件失败：%s；原因：%s", filepath, error)
+        return None
+    if not isinstance(data, dict):
+        _logger.warning("配置文件根节点不是对象：%s", filepath)
+        return None
+    return data
+
+
+def _migrate_legacy_config_if_needed() -> None:
+    """Upgrade a legacy configuration once, and only while no profile exists.
+
+    The legacy file beside the executable is an *upgrade input*, not a permanent fallback: while
+    it stayed readable forever, deleting `profile/config.json` made an old configuration come
+    back -- the user asks for "remove my data" and their settings reappear.
+
+    The order below is the contract (Phase 10):
+
+        parse the legacy file successfully
+            -> save the parsed configuration through the one atomic writer
+               (a failure keeps the file, and this run still uses the parsed values)
+            -> only then remove the legacy file
+               (a failure is reported; the profile is authoritative from then on)
+
+    `_find_config()` stays a query. This is the single place that changes the storage layout, and
+    it is reached only from `load_config()` when no explicit path was given.
+    """
+    profile_path = paths.config_path()
+    if os.path.isfile(profile_path):
+        return
+    legacy_path = _legacy_config_path()
+    if not os.path.isfile(legacy_path):
+        return
+
+    legacy_data = _read_config_object(legacy_path)
+    if legacy_data is None:
+        # Unreadable or not an object; the read above already said why. Defaults for this run,
+        # nothing written, and the file stays for a retry or a Phase 11 cleanup.
+        return
+
+    try:
+        # One snapshot, one writer: the flat configuration is built from the object read above,
+        # never by reading the file again. A second read could see an edit that happened in
+        # between and silently replace the data this migration has just confirmed.
+        save_config(_parse_config_object(legacy_data))
+    except Exception as error:
+        _logger.warning("迁移旧版配置失败，保留原文件：%s（%s）", legacy_path, error)
+        return
+
+    try:
+        os.remove(legacy_path)
+    except OSError as error:
+        _logger.warning("旧版配置未能删除，profile 已生效：%s（%s）", legacy_path, error)
+        return
+    _logger.info("旧版配置已迁移并退场：%s", legacy_path)
+
+
 def _find_config(config_path: str | None = None) -> str | None:
     """Return the configuration file to read.
 
@@ -220,19 +293,12 @@ def _find_config(config_path: str | None = None) -> str | None:
     return None
 
 
-def _parse_json(filepath: str) -> dict:
-    """Parse a JSON configuration file into a flat dict."""
-    try:
-        with open(filepath, encoding="utf-8") as f:
-            data = json.load(f)
-    except Exception as e:
-        _logger.warning("解析配置文件失败：%s；原因：%s", filepath, e)
-        return {}
+def _parse_config_object(data: dict) -> dict:
+    """Return the flat configuration one parsed JSON object contributes.
 
-    if not isinstance(data, dict):
-        _logger.warning("配置文件根节点不是对象：%s", filepath)
-        return {}
-
+    Both shapes are accepted: the canonical sectioned one this module writes, and the flat one
+    hand-written files (and the legacy configuration) use.
+    """
     result: dict = {}
     section_map = {
         ("build", "input"): "input",
@@ -257,12 +323,23 @@ def _parse_json(filepath: str) -> dict:
     return result
 
 
+def _parse_json(filepath: str) -> dict:
+    """Parse a JSON configuration file into a flat dict (warning when it cannot help)."""
+    data = _read_config_object(filepath)
+    return {} if data is None else _parse_config_object(data)
+
+
 def load_config(
     config_path: str | None = None,
     runtime_overrides: dict | None = None,
 ) -> dict:
     """Load configuration with priority: runtime overrides > config.json > defaults."""
     cfg = dict(_DEFAULTS)
+    if not config_path:
+        # An explicit path is a one-off input: it must not rewrite the user's storage. Without
+        # one, a legacy install gets upgraded before the read, so the rest of this function sees
+        # the profile like every other run does.
+        _migrate_legacy_config_if_needed()
     path = _find_config(config_path)
     if path:
         _logger.debug("正在加载配置：%s", path)

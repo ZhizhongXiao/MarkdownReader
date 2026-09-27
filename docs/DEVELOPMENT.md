@@ -205,8 +205,13 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
 - Config 持久化（Phase 8A–8D）：`core/config.py` 自己拥有规范化与**原子写**（`normalize_config()` /
   `save_config()`：目标目录内的临时文件 + `os.replace`，失败清理且旧文件逐字节保留，`_DEFAULTS` 不整体落盘）。
   `gui/api.py::set_configs()` 只做 GUI 特有的输入/输出路径规范化，然后委托 core。读取顺序为
-  **显式路径 > `paths.config_path()`（profile）> `PROJECT_ROOT/config.json`（legacy）> defaults**；profile 一旦存在
-  即权威（损坏时 warning + defaults，不回落 legacy），写入只走 profile，不搬迁 legacy。
+  **显式路径 > `paths.config_path()`（profile）> defaults**；profile 一旦存在即权威（损坏时 warning + defaults，
+  不回落 legacy）。legacy `PROJECT_ROOT/config.json` 自 Phase 10 起是**一次性升级输入**：profile 缺失且 legacy 可解析时，
+  先对**同一份 snapshot** 调 `save_config(_parse_config_object(legacy_data))`（写的是 flat config；
+  sectioning / normalization / 原子写仍只由 `save_config()` 负责；legacy 只读一次，不存在 TOCTOU 重读）
+  把内容写进 profile，**成功后才** `os.remove(legacy)`；写失败则本次继续用已解析的 legacy
+  内容并保留文件（下次可重试），删除失败只记 warning（profile 已是权威，永不复活）。`_find_config()` 保持查询性质，
+  迁移只在 `_migrate_legacy_config_if_needed()` 里发生，且**显式路径不触发迁移**。
   `build.template`（文档默认主题）与 `build.external_themes`（额外携带列表）是两个独立概念，只写 id、永不写路径；
   `BridgeApi.get_theme_state()` 区分 `configured` / `selected` / `missing` / `invalid`（后两者分别是「不在 registry」与「在
   registry 但过不了 use-time gate」），判定与转换同源于 `external_themes._classify_configured_theme()`；GUI 控件属 Phase 9。
@@ -238,8 +243,8 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
   写入；静态守卫反向锁住「主页渲染函数里不得出现管理动作」）。转换在途时四个动作与主页控件一起冻结，直接调用
   这些函数也不会触达桥接；返回主页会重读 `get_theme_state()`，不留刚被卸载的主题行。设置面按需加载（开页才
   请求），所以启动路径与既有 27 条契约的调用计数都不变。
-  「存储信息」列出运行模式与 `core.paths` 的四条真实路径，`runtime_root` 的说明字段明写「日志与 WebView2 属
-  Phase 10」；在整份 ownership 收口前**不提供**「移除用户数据」（静态守卫反向断言 `remove_user_data` /
+  「存储信息」列出运行模式与 `core.paths` 的四条真实路径，`runtime_root` 的说明字段明写「日志与 WebView2 已随
+  Phase 10 迁入 runtime，「移除用户数据」属 Phase 11」；**不提供**「移除用户数据」（静态守卫反向断言 `remove_user_data` /
   `removeUserData` / `btn-remove-user-data` / `user-data-countdown` 都不存在）。「关于」的版本来自唯一运行时
   来源 `core.version.__version__`（`pyproject.toml` 不随包、本仓库也不可安装，`importlib.metadata` 无法作答），
   `tests/test_version_contract.py` 把它绑定到 pyproject 的声明；主题清单的聚合落在
@@ -250,10 +255,14 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
 - 项目名、窗口标题与产物统一 `MarkdownReader`；npm 包标识为小写 `markdownreader-node-renderer`。
 - 主题目录按实际路径写 `themes/builtin/modern|office|vscode/`，目录名即配置里的主题 ID（`modern|office|vscode`），也是 `metadata.json` 的 `id`；契约见 [Viewer 契约](VIEWER_CONTRACT.md)。
 - 浏览器存储键统一 `markdownreader-*`；配置文件为 `config.json`（仓库只保留 `config.example.json`）。仓库里的
-  `config.json` 是 legacy 位置，真实位置由 `core/paths.py::config_path()` 给出（source `.runtime/profile/`、onedir
-  `data/profile/`、onefile `%LOCALAPPDATA%/MarkdownReader/profile/`）；Phase 8B 起读写只走它，优先级为
-  显式路径 > profile > legacy > defaults。
-- WebView2 数据目录为 `%LOCALAPPDATA%\MarkdownReader\WebView2`。
+  `config.json` 是 legacy 位置（Phase 10 起只作为一次性升级输入），真实位置由 `core/paths.py::config_path()` 给出
+  （source `.runtime/profile/`、onedir `data/profile/`、onefile `%LOCALAPPDATA%/MarkdownReader/profile/`）；
+  优先级为 显式路径 > profile > defaults。
+- 日志与 WebView2 profile 都是 runtime 数据，位置同样只由 `core/paths.py` 给出：`log_path()` =
+  `<runtime_root>/MarkdownReader.log`、`webview_storage_root()` = `<runtime_root>/WebView2`，于是 source
+  `<repo>/.runtime/runtime/…`、onedir `<app>/data/runtime/…`、onefile `%LOCALAPPDATA%/MarkdownReader/runtime/…`。
+  `setup_logging()` 负责创建 runtime 目录（路径解析保持无副作用），GUI 把 `paths.webview_storage_root()` 交给
+  `webview.start(storage_path=…)`，不再自行读取 `%LOCALAPPDATA%` / `APPDATA`（静态守卫收回该 ownership）。
 
 ## 构建与发布
 

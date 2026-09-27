@@ -17,6 +17,7 @@ if PROJECT_ROOT not in sys.path:
 import webview  # noqa: E402
 from webview.dom import DOMEventHandler  # noqa: E402
 
+from core import paths  # noqa: E402
 from core.config import BUNDLE_ROOT, PRODUCTION_RENDERER_VERSION  # noqa: E402
 from gui.api import BridgeApi  # noqa: E402
 
@@ -75,14 +76,6 @@ class WebViewLogHandler(logging.Handler):
             self.window.evaluate_js(f"appendLog({level_json},{message_json})")
         except Exception:
             pass
-
-
-def get_webview_storage_path() -> str:
-    """Return a persistent per-user WebView2 cache directory."""
-    base = os.environ.get("LOCALAPPDATA")
-    if not base:
-        base = os.path.join(os.path.expanduser("~"), "AppData", "Local")
-    return os.path.join(base, "MarkdownReader", "WebView2")
 
 
 def close_splash():
@@ -251,7 +244,7 @@ def main():
         webview.start(
             gui="edgechromium",
             private_mode=False,
-            storage_path=get_webview_storage_path(),
+            storage_path=paths.webview_storage_root(),
         )
     finally:
         close_splash()

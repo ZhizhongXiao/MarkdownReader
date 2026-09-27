@@ -470,7 +470,8 @@ VS Code
              samples/demo.html 逐字节不变（BFD53709…，1,574,223 B）；531 passed / 0 xfailed
 Phase 6 封板：6A 9bde750 / 6B d5b6b1b / 6C b7c372b + cc1bff9 / 6D 2a9f1c5
 7A  PASS    core/paths.py：source .runtime/、onedir data/、onefile %LOCALAPPDATA%/MarkdownReader
-             sys.frozen / _MEIPASS 只此一处（静态守卫）；config.json 的位置策略在 Phase 8B 落地（写 profile、不搬 legacy），日志搬迁仍留给 Phase 10/11
+             sys.frozen / _MEIPASS 只此一处（静态守卫）；config.json 的位置策略在 Phase 8B 落地（写 profile、不搬 legacy），
+日志搬迁与 legacy 姿态在 Phase 10 收口（日志进 `runtime/`；legacy 成为一次性升级输入）
 7B  PASS    统一 Theme Registry：builtin + assets/themes/external；builtin 优先、保留 ID 不可 shadow
              theme_ids()=已安装；builtin_theme_ids()=打包集；selectable_theme_ids(选中)；metadata files 声明
 7C  PASS    契约先行（红）：校验规则 / 安装 / 删除 / 导出模板 / 资源内嵌 / 与 checker 的策略一致性
@@ -561,7 +562,8 @@ gui/api.py      set_configs() 只做 GUI 特有的路径规范化，然后委托
                  > defaults
 ```
 
-- 只写 profile；**不搬迁、不删除 legacy**（剩余 user-storage 治理见 Phase 10）。
+- 只写 profile；**不搬迁、不删除 legacy**（Phase 10 起 legacy 成为一次性升级输入：迁移成功即退场，
+  见 Phase 10 落地记录）。
 - profile 文件一旦存在就是权威：损坏时 warning + defaults，**不**回落 legacy。
 - 落盘字段只限已有持久化语义的那些 + `build.external_themes`（`title` / `overwrite` 仍是运行期覆盖）。
 
@@ -652,7 +654,10 @@ Settings page
           「安装事实」两个状态机互不写入；返回主页先重读再显示）
 9B2 NOT STARTED  9B closeout：`docs/USAGE.md` 存储位置收口、截图刷新、主页「坏但未配置主题仍可勾选」
                  是否顺带修正
-Phase 10/11  移除用户数据：日志、WebView2 与 legacy config 三项治理完成后才提供（本轮明确不做）
+Phase 10 PASS    storage ownership 收口：log 与 WebView2 profile 进 `runtime/`；legacy config 变成
+                 一次性升级输入（写完 profile 即退场，不再复活）
+Phase 11 NOT STARTED  用户数据移除 lifecycle（terminal removal state：停写 → 关窗口 → 删 profile/assets/
+                 runtime → 退出；`core/user_data.py` 仍不预建）
 ```
 
 ## 落地记录（Phase 9A：主页面外置主题选择）
@@ -860,6 +865,67 @@ assets/themes/external/
 onefile 移动 EXE 后，配置和主题仍然存在。
 
 onedir 删除整个目录即可完全清除。
+
+---
+
+## 落地记录（Phase 10：storage ownership 收口）
+
+Phase 9B 的 ownership 侦察留下三笔债，本次一次收口。生产面只动 `core/paths.py`、`core/logger.py`、
+`core/config.py`、`gui/app.py`。
+
+```text
+P10-A  log           application_dir()/MarkdownReader.log → paths.log_path() = runtime_root()/MarkdownReader.log
+P10-B  WebView2      %LOCALAPPDATA%/MarkdownReader/WebView2 → paths.webview_storage_root() = runtime_root()/WebView2
+P10-C  legacy config 永久 fallback → 一次性升级输入（parse → save(profile) → 只有成功才 remove legacy）
+```
+
+三种布局的最终形态（`core/paths.py` 是唯一来源）：
+
+```text
+source   <repo>/.runtime/{profile/config.json, assets/themes/external/, runtime/{MarkdownReader.log, WebView2/}}
+onedir   <app>/data/{profile,assets,runtime{log,WebView2}}
+onefile  %LOCALAPPDATA%/MarkdownReader/{profile,assets,runtime{log,WebView2}}
+```
+
+legacy 的冻结语义（无 tombstone；「一次性」由 profile 的存在承担）：
+
+```text
+profile 存在                  → 只读 profile；legacy 连解析都不做
+profile 缺失 + legacy 缺失     → defaults
+profile 缺失 + legacy 可解析   → 迁移：对**一次读取**得到的 snapshot 调 save_config(_parse_config_object(...))
+                              → 成功后才 os.remove(legacy)
+profile 缺失 + legacy 不可解析  → defaults + warning；不写 profile、不删 legacy
+写 profile 失败（P10-14）      → 本次仍用已解析的 legacy 内容；保留 legacy；不 remove；warning；下次可重试
+删除 legacy 失败（P10-12）     → warning；profile 已是权威，永不复活
+```
+
+实现要点（对应复审的五件事）：
+
+```text
+save_config 失败绝不 retire   save(parsed) 先于 os.remove；失败即 return，legacy 原样保留
+retire 失败后 profile 永久优先 删除失败只 warning；profile 已存在 ⇒ _find_config 永不回落到 legacy
+_find_config 仍是查询        一次性迁移在私有 _migrate_legacy_config_if_needed()，只由 load_config() 在
+                              未传显式路径时调用（显式路径是一次性输入，不得改写用户数据）
+logger/WebView2 三布局进 runtime  两个 resolver 都建在 runtime_root() 之下；logger 在 setup_logging()
+                              时刻创建目录（解析保持无副作用），GUI 只把 resolver 的结果交给 webview.start()
+gui/app.py 失去自行判断能力     删除 get_webview_storage_path()；静态守卫把 LOCALAPPDATA/APPDATA 的
+                              ownership 收回 core/paths.py
+```
+
+配置只读一次：私有 `_read_config_object()` 是**唯一**把配置文件变成 JSON 的地方（区分「合法空对象 `{}`」与
+「解析失败」），`_parse_config_object(data)` 把已解析对象转成 flat config，`_parse_json()` 只是二者之和。
+迁移因此使用**同一份 snapshot**（不再重读 legacy），消掉「两次读取之间文件被改坏 → 把 defaults 写进 profile
+再删掉可迁移文件」的 TOCTOU 窗口；sectioning / normalization / 原子写继续只由 `save_config()` 一处负责，
+不新增第二套 writer。
+
+证据：红阶段 16 failed / 31 passed（P10-9 的红签名 = `assert 'office' == 'modern'`，即删掉 profile 后旧值复活的
+实证；P10-14 的红签名只有「失败必须被报告」这条不成立）；实现后契约 47/47 全绿、全套 **692 passed / 0 failed /
+1 skipped**、ruff 全绿、pyright（项目 standard）82 文件 0 error、MCP `python_review` 11/11 批 `batch_ok` 且末批
+`scope_complete`。`gui/api.py::get_storage_info()` 的 shape 未变（它本来就取 `core.paths` 事实，设置页因此自动
+显示新的 runtime truth）。
+
+**未做**（按阶段顺序）：`remove user data` 按钮与 5 秒倒计时、terminal deletion、`core/user_data.py`、
+9B2 截图刷新、未 configured 坏主题的主页修复、`_write_output` newline 债。
 
 ---
 
