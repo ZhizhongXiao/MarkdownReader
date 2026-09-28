@@ -1521,3 +1521,42 @@ contract("GR6 removing user data uses no other bridge call", "pass", async () =>
       "the request carries no target: the backend decides what user data means");
   } finally { session.close(); }
 });
+
+contract("GR7 an explicit refusal reopens the page instead of locking it", "pass", async () => {
+  // The backend is the authority, and it may answer `{ok: false}` -- something was still in
+  // flight. The page holds a provisional lock while the reply travels, but a structured refusal
+  // has to hand the session back: otherwise the user is locked out of a window that will never
+  // close, which is the opposite of what the refusal means.
+  const session = await bootRemoval(STORAGE_INFO_ONEFILE);
+  try {
+    session.window.addInputs([PLAN_ONE.items[0].source_path]);
+    await session.flush(3);
+    await session.resolve("prepare_conversion", PLAN_ONE);
+
+    openRemovalConfirmation(session);
+    await session.flush(4);
+    await session.advance(5000);
+    session.window.confirmUserDataRemoval();
+    await session.flush(4);
+    assert.equal(session.callsOf("request_user_data_removal").length, 1,
+      "the first confirmation asks once");
+    assert.equal(session.list("btn-import-theme").disabled, true,
+      "the provisional lock holds while the reply is pending");
+
+    await session.resolve("request_user_data_removal", { ok: false, error: "operation in flight" });
+    await session.flush(4);
+
+    assert.equal(session.list("user-data-confirm").classList.contains("hidden"), false,
+      "a refusal keeps the confirmation visible");
+    assert.equal(session.list("btn-import-theme").disabled, false,
+      "the page works again once the backend refuses");
+    assert.equal(session.list("btn-settings-back").disabled, false);
+    assert.equal(session.list("btn-user-data-confirm").disabled, false,
+      "no second countdown is needed: the confirmation gate was already passed");
+
+    session.window.confirmUserDataRemoval();
+    await session.flush(4);
+    assert.equal(session.callsOf("request_user_data_removal").length, 2,
+      "the retry really asks the backend again");
+  } finally { session.close(); }
+});

@@ -709,13 +709,23 @@ function cancelUserDataRemoval() {
 async function confirmUserDataRemoval() {
     var confirm = document.getElementById("btn-user-data-confirm");
     if (_removalConfirmed || !_removalAvailable || (confirm && confirm.disabled)) return;
+    // The lock is provisional: it keeps the page from starting new work while the backend decides,
+    // and an explicit refusal hands the session straight back.
     _removalConfirmed = true;
     _removalTerminal = true;
     applySettingsControlLock();
     try {
-        // One request, and no business waiting for its reply: once the backend accepts it, the
-        // window is about to disappear, because the deletion happens after the GUI loop returns.
-        await pywebview.api.request_user_data_removal();
+        var reply = await pywebview.api.request_user_data_removal();
+        if (reply && reply.ok === false) {
+            // The backend is the authority and it said no -- something was still in flight. Only a
+            // structured refusal reopens the page: a rejected promise usually means the accepted
+            // request already destroyed the window, and reopening write access after that would
+            // misread a torn-down session as a refusal.
+            log("ERROR", "移除用户数据被拒绝：" + (reply.error || "未知原因"));
+            _removalConfirmed = false;
+            _removalTerminal = false;
+            applySettingsControlLock();
+        }
     } catch (error) {
         log("ERROR", "移除用户数据请求失败：" + error);
     }

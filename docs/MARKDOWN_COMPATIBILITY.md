@@ -585,6 +585,11 @@ samples/demo.html                         → 未改动，快照契约仍成立
     （config / external-themes / runtime 三项），页面据此渲染入口与清单，前端不猜 `sys.frozen`。
   * **logger 终止态**：`close_file_logging()` 幂等，关闭后 `setup_logging()` 不得再打开文件，
     「确认后禁止日志写入」因此严格成立。
+  * **refusal recovery（follow-up）**：`request_user_data_removal()` 可能正常返回 `{ok:false}`（仍有操作在
+    gate 里），因此前端把 terminal 视为 provisional：收到**结构化拒绝**时回滚、弹窗保持、可直接再次确认
+    （第二次真的发出第 2 个请求，且不需要重新倒计时）；**Promise rejection 不回滚**，因为 accepted 请求本就会
+    销毁窗口。`core.user_data.remove_user_data()` 也在第一行检查 `removal_available()`：source / onedir 上
+    直接调用一次删除都不做，只返回 `{ok:false, …, error}`。
   证据：红阶段 28 failed / 692 passed / 1 skipped（27 条新/翻转契约红 + JS wrapper），JS `tests 47 / pass 41 / fail 6`
   ——红签名都是能力断言（`No module named 'core.user_data'`、`BridgeApi must offer request_user_data_removal()`、
   `core.logger must offer close_file_logging()`、`KeyError: 'removal_available'`、`id="btn-remove-user-data" must exist`）；

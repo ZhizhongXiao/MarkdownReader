@@ -75,7 +75,20 @@ def remove_user_data() -> dict:
     Missing targets are no-ops. A path that cannot be removed is named in `failed` and makes
     `ok` false -- including the user data root, because Phase 11's acceptance is "the root is
     gone or empty", and a root kept alive by an unrecognised leftover is neither.
+    The guard is the first thing here on purpose: onefile-only is this module's precondition, not
+    something a caller is trusted to check. A source tree or an onedir install must be left alone
+    even when the request arrives directly.
     """
+    if not removal_available():
+        _logger.warning("当前布局不提供用户数据移除，未做任何删除：%s", paths.user_data_root())
+        return {
+            "ok": False,
+            "removed": [],
+            "failed": [],
+            "user_data_root_removed": False,
+            "error": "只有 onefile 构建提供用户数据移除。",
+        }
+
     removed: list[str] = []
     failed: list[dict] = []
 

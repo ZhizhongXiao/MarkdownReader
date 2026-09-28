@@ -261,7 +261,9 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
   root 本身。桥接与页面都不删文件；`core.user_data` 只从 `core.paths` 与 `core.config.legacy_config_path()`
   取路径，因此 `LOCALAPPDATA` / `sys.frozen` 仍然只出现在 `core/paths.py`。失败语义：删不掉就进报告并让
   `ok=false`（root 非空同理），重试有界（约 2s / 200ms）后上报；`core.logger.close_file_logging()` 让
-  `setup_logging()` 之后不能再打开日志文件（AGENTS §23）。
+  `setup_logging()` 之后不能再打开日志文件（AGENTS §23）。`request_user_data_removal()` 的拒绝是**可恢复**的：
+  收到结构化 `{ok:false}` 时页面回滚 provisional terminal lock 并允许再次确认（Promise rejection 不回滚，
+  因为 accepted 请求本就会销毁窗口）；`core.user_data.remove_user_data()` 自身也拒绝非 onefile 布局。
 
 ## 命名与路径约定
 

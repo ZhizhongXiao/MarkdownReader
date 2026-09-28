@@ -318,6 +318,60 @@ def test_a_missing_target_is_a_no_op_not_a_failure(onefile_tree):
     assert not onefile_tree["data"].exists()
 
 
+def build_layout(monkeypatch, tmp_path, mode: str) -> Path:
+    """Build a user data tree for `mode` so a deletion attempt would have something to delete."""
+    if mode == "source":
+        root = tmp_path
+        monkeypatch.delattr(sys, "frozen", raising=False)
+        monkeypatch.delattr(sys, "_MEIPASS", raising=False)
+        monkeypatch.setattr(paths, "source_root", lambda: str(tmp_path))
+        monkeypatch.setattr(core_config, "PROJECT_ROOT", str(tmp_path))
+        data = tmp_path / ".runtime"
+    else:
+        app = tmp_path / "MarkdownReader"
+        (app / "_internal").mkdir(parents=True)
+        monkeypatch.setattr(sys, "frozen", True, raising=False)
+        monkeypatch.setattr(sys, "_MEIPASS", str(app / "_internal"), raising=False)
+        monkeypatch.setattr(sys, "executable", str(app / "MarkdownReader.exe"), raising=False)
+        monkeypatch.setattr(core_config, "PROJECT_ROOT", str(app))
+        root = app
+        data = app / "data"
+
+    for name in ("profile", "assets", "runtime"):
+        (data / name).mkdir(parents=True)
+        (data / name / "content.txt").write_text("user data", encoding="utf-8")
+    (root / "config.json").write_text('{"build": {"template": "office"}}', encoding="utf-8")
+    return data
+
+
+@pytest.mark.parametrize("mode", ["source", "onedir"])
+def test_the_deletion_refuses_a_layout_it_does_not_offer(monkeypatch, tmp_path, mode):
+    """onefile-only 是 core 自己的安全前提，不是调用者的责任。
+
+    The bridge already refuses outside onefile, which is why nothing broke: the point is that a
+    destructive owner must not delegate its most important precondition upward. A source tree or an
+    onedir install is left completely alone, even when the caller asks directly.
+    """
+    module = user_data()
+    build_layout(monkeypatch, tmp_path, mode)
+    calls: list[str] = []
+
+    def spy(*_args, **_kwargs):
+        calls.append("called")
+
+    monkeypatch.setattr(shutil, "rmtree", spy)
+    monkeypatch.setattr(os, "remove", spy)
+    monkeypatch.setattr(os, "unlink", spy)
+    monkeypatch.setattr(os, "rmdir", spy)
+
+    report = module.remove_user_data()
+
+    assert report["ok"] is False, report
+    assert report.get("error"), report
+    assert report["removed"] == []
+    assert calls == [], "an unsupported layout must not touch the filesystem: " + mode
+
+
 def test_a_successful_removal_leaves_nothing_behind(onefile_tree):
     """P11-6/P11-7：profile / assets / runtime 与 legacy 残留都消失，空 root 也一并消失。"""
     module = user_data()

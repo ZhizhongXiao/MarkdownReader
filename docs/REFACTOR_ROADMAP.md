@@ -1006,6 +1006,8 @@ EXE 本身保留。
             user_data_root 只 rmdir（绝不当递归目标）；缺失目标 = no-op，不记 failure
 失败语义    某路径删不掉 → failed=[{path,error}] 且 ok=false；root 非空同样记 failure
             重试有界（约 2s deadline / 200ms），耗尽即上报，绝不谎报、绝不重建
+非 onefile   `remove_user_data()` 第一行自己拒绝：source / onedir 一次删除都不做，报告
+            ok=false + error（onefile-only 是 core 的前提，不是调用者必须记得的责任）
 日志        `close_file_logging()` 幂等，并把 logger 置为终止态：之后 `setup_logging()`
             不得再打开文件（AGENTS §23「确认后禁止日志写入」因此严格成立）
 桥接        public surface 只新增 `request_user_data_removal()`；它只结束会话、不删文件，
@@ -1017,7 +1019,9 @@ EXE 本身保留。
 capability  `get_storage_info()` 追加 `removal_available` / `removal_items`（config /
             external-themes / runtime 三项事实），页面据此渲染入口与清单，不猜 frozen 布局
 UI          onefile 才显示入口；确认弹窗列三项 + 5 秒倒计时（Confirm 初始 disabled、
-            Cancel 全程可用、重开重新计满）；确认后 terminal UI lock
+            Cancel 全程可用、重开重新计满）；确认后 terminal UI lock；backend 显式返回
+            `{ok:false}` 时回滚 provisional lock（弹窗保持、无需二次倒计时、可直接重试），
+            只有结构化拒绝回滚 —— Promise rejection 不回滚（accepted 请求本就会销毁窗口）
 ```
 
 实现细节：`core/config.py` 把 `_legacy_config_path()` 提升为公共 `legacy_config_path()`（删除残留
@@ -1028,6 +1032,20 @@ UI          onefile 才显示入口；确认弹窗列三项 + 5 秒倒计时（C
 JS `tests 47 / pass 41 / fail 6`；实现后 JS **47/47**、聚焦契约 **54 passed**、全套
 **726 passed / 1 skipped / 0 failed**、ruff（项目闸 + MCP 规则集）全绿、pyright（项目 standard）
 0 error、MCP `python_review` 分页 `batch_ok` 至 `scope_complete`。
+
+**audit follow-up（远端终审对象 `e7a71ed`）**：主架构 PASS，但两处窄缺口被点名，均已在本地修好（待复审）：
+（1）**显式拒绝后的 UI 死锁**：backend 完全可能正常返回 `{ok:false, error:"仍有操作在执行"}`（例如某个
+`prepare_conversion` 还在 gate 里），而前端此前把 `_removalTerminal` 置位后不看 reply —— 窗口不会销毁、
+删除不会发生，用户却被永久锁死，违反「backend 才是 authority」。现在 `confirmUserDataRemoval()` 在收到
+**结构化 `{ok:false}`** 时回滚 provisional lock（弹窗保持可见、无需二次倒计时、可直接再次 Confirm，第二次
+确实发出第 2 个请求）；**Promise rejection 不回滚**，因为 accepted 请求本来就会销毁窗口。
+（2）**core 破坏性守卫**：`remove_user_data()` 自身此前不检查 `removal_available()`，source/onedir 上被直接
+调用会去删 `<repo>/.runtime/**` 与仓库根 legacy config。现在第一行就拒绝并返回
+`{ok:false, removed:[], failed:[], user_data_root_removed:false, error:…}`，**任何 filesystem deletion 都不发生**。
+判别契约（先红后绿）：`test_the_deletion_refuses_a_layout_it_does_not_offer[source|onedir]` 红签名是
+`{'ok': True, 'removed': [...], 'user_data_root_removed': True}`（旧实现真的触达 deletion spy）；`GR7` 红签名是
+`the page works again once the backend refuses`（`tests 48 / pass 47 / fail 1`）。修复后聚焦契约 **56 passed**、
+JS **48/48**。
 
 **未做**（9B2 分界）：`docs/USAGE.md` 存储位置与截图刷新、主页「坏但未配置主题仍可勾选」、
 `open_theme_location` 的返回值形状清理、`_write_output` newline 债。
