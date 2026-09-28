@@ -189,6 +189,26 @@
             <h3>关于</h3>
             <div class="settings-facts" id="settings-about"></div>
         </section>
+        <section class="settings-block">
+            <h3>用户数据</h3>
+            <p class="settings-hint">「移除 MarkdownReader 用户数据并退出」只在 onefile 构建提供。确认后会立即停止日志写入、关闭窗口，然后删除下列内容；EXE 本身不会被删除。</p>
+            <div class="settings-actions">
+                <button class="btn-danger hidden" id="btn-remove-user-data" onclick="openUserDataConfirmation()">移除 MarkdownReader 用户数据并退出…</button>
+            </div>
+        </section>
+    </div>
+</div>
+
+<div class="settings-page hidden" id="user-data-confirm">
+    <div class="settings-confirm">
+        <h2>移除 MarkdownReader 用户数据</h2>
+        <p class="settings-hint">以下内容会被永久删除，且无法恢复：</p>
+        <div class="settings-facts" id="user-data-items"></div>
+        <p class="settings-hint">确认后立即停止日志写入、关闭窗口，随后删除上述内容并退出程序。遗留的旧版 config.json 也会一并清理。</p>
+        <div class="settings-actions">
+            <button class="btn-blue" id="btn-user-data-cancel" onclick="cancelUserDataRemoval()">取消</button>
+            <button class="btn-danger" id="btn-user-data-confirm" onclick="confirmUserDataRemoval()" disabled>确认移除（<span id="user-data-countdown">5</span> 秒）</button>
+        </div>
     </div>
 </div>
 

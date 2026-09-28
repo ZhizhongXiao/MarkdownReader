@@ -74,14 +74,71 @@ function deferred() {
   return { promise: promise, resolve: resolve, reject: reject };
 }
 
+// ── Controllable clock (opt-in through bootGui({ clock: true })) ─────────────────
+// A five second countdown must be testable without waiting five seconds, and it must be
+// testable *behaviourally*: the page may use setTimeout, setInterval or Date.now, so the
+// harness freezes all three and lets a contract move time by hand.
+//
+// Only the page sees the frozen clock. `flush()` and `ready()` keep using the real timer
+// captured here, otherwise the harness would deadlock on its own frozen queue -- and the
+// real `Date` is the one the harness itself runs on, because that is Node's, not the
+// window's.
+function installFakeClock(window, errors) {
+  const realSetTimeout = window.setTimeout.bind(window);
+  let now = 0;
+  let nextId = 1;
+  const timers = new Map();
+
+  function schedule(fn, delay, repeating) {
+    const id = nextId;
+    nextId += 1;
+    const wait = typeof delay === "number" && delay > 0 ? delay : 0;
+    timers.set(id, { id: id, at: now + wait, fn: fn, every: repeating ? Math.max(wait, 1) : 0 });
+    return id;
+  }
+
+  window.setTimeout = function (fn, delay) { return schedule(fn, delay, false); };
+  window.setInterval = function (fn, delay) { return schedule(fn, delay, true); };
+  window.clearTimeout = function (id) { timers.delete(id); };
+  window.clearInterval = window.clearTimeout;
+  window.Date.now = function () { return now; };
+
+  async function tick() {
+    await new Promise(function (resolve) { realSetTimeout(resolve, 0); });
+  }
+
+  // Move the frozen clock forward and run every timer that becomes due, in order,
+  // letting each callback schedule more work (which is how a countdown is written).
+  async function advance(ms) {
+    const target = now + (typeof ms === "number" && ms > 0 ? ms : 0);
+    for (;;) {
+      let due = null;
+      timers.forEach(function (timer) { if (timer.at <= target && (due === null || timer.at < due.at)) due = timer; });
+      if (due === null) break;
+      now = due.at;
+      if (due.every) due.at = now + due.every; else timers.delete(due.id);
+      try { due.fn(); } catch (error) { errors.push(String(error)); }
+      await tick();
+    }
+    if (target > now) now = target;
+    await tick();
+  }
+
+  return { realSetTimeout: realSetTimeout, advance: advance, time: function () { return now; } };
+}
+
 export class GuiSession {
-  constructor(dom, window, calls, errors, options) {
+  constructor(dom, window, calls, errors, options, clock) {
     this.dom = dom;
     this.window = window;
     this.doc = window.document;
     this.calls = calls;
     this.errors = errors;
     this.options = options || {};
+    // The page may run on a frozen clock; the harness never does, or `flush()` would wait
+    // for a timer that only a contract can release.
+    this.clock = clock || null;
+    this.realSetTimeout = clock ? clock.realSetTimeout : window.setTimeout.bind(window);
   }
 
   // ── stub accounting ──────────────────────────────────────────────
@@ -120,8 +177,18 @@ export class GuiSession {
   async flush(ticks) {
     const count = ticks || 1;
     for (let i = 0; i < count; i += 1) {
-      await new Promise((resolve) => this.window.setTimeout(resolve, 0));
+      await new Promise((resolve) => this.realSetTimeout(resolve, 0));
     }
+  }
+
+  // ── controlled time (only with bootGui({ clock: true })) ──────────────────
+  advance(ms) {
+    if (!this.clock) throw new Error("gui harness: this session runs on the real clock");
+    return this.clock.advance(ms);
+  }
+
+  clockTime() {
+    return this.clock ? this.clock.time() : null;
   }
 
   // init() ends after the configuration *and* the theme state reply, because the theme
@@ -339,6 +406,10 @@ export async function bootGui(options) {
     errors.push(Array.prototype.map.call(arguments, String).join(" "));
   };
 
+  // Opt-in: a contract that needs to move time installs it before the page is evaluated,
+  // and every other contract keeps the real clock it has always used.
+  const clock = settings.clock ? installFakeClock(window, errors) : null;
+
   const calls = {};
   const api = {};
   const methods = ["get_templates", "get_config", "set_configs", "get_theme_state",
@@ -350,7 +421,10 @@ export async function bootGui(options) {
     // existing contract's startup path; the four management actions stay pending and
     // are resolved (or rejected) by the contract that drives them.
     "get_theme_inventory", "import_theme", "remove_theme", "export_theme_template",
-    "open_theme_location", "get_storage_info", "get_about_info"];
+    "open_theme_location", "get_storage_info", "get_about_info",
+    // Phase 11: the removal request is one more bridge call, and it stays pending by default
+    // so a contract can observe the page before (and without) any reply.
+    "request_user_data_removal"];
   methods.forEach(function (name) {
     calls[name] = [];
     api[name] = function () {
@@ -398,7 +472,7 @@ export async function bootGui(options) {
   });
 
   window.eval(GUI_SOURCE);
-  const session = new GuiSession(dom, window, calls, errors, settings);
+  const session = new GuiSession(dom, window, calls, errors, settings, clock);
   await session.ready();
   return session;
 }

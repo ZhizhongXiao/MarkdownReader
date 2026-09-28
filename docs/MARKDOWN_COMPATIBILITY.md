@@ -569,6 +569,30 @@ samples/demo.html                         → 未改动，快照契约仍成立
   `_find_config` 保持查询性质、public API 未变、scope 纪律 PASS ⇒ **Phase 10 overall PASS**（对象 `04c30c2`；
   `54 passed` / `693 passed / 1 skipped` / ruff / pyright / MCP 仍只记**本地**证据，远端 combined status 为空）。
 
+- 2026-09-28（Phase 11：onefile 用户数据移除 lifecycle）：AGENTS §23 的「移除 onefile 用户数据并退出」落地。
+  它不是清理按钮，而是一次不可逆的终止转换：入口只在 onefile 出现，确认弹窗列明会删掉什么，5 秒倒计时走完才允许确认。
+  * **顺序（冻结）**：request accepted → terminal flag → `close_file_logging()` → `window.destroy()` →
+    `webview.start()` 返回 → `remove_user_data()` → `main` 返回。删除绝不能发生在活着的 WebView2 里：
+    WebView2 profile 就在 `runtime/WebView2`，而 root logger 持有 `runtime/MarkdownReader.log`。
+  * **删除集合**：`profile/`、`assets/`、`runtime/` 递归删除 + legacy `config.json` 单文件（Phase 10 留下的两类残留：
+    corrupt 与 retire 失败）；`user_data_root` 只在为空时 `rmdir`，永远不是递归目标；EXE 与 bundle 永不进入集合。
+  * **失败语义**：删不掉就把 `{path, error}` 记进 `failed` 并让 `ok=false`（root 非空同理）；重试有界
+    （约 2s / 200ms）后上报，绝不谎报，失败后不重建任何 storage。
+  * **原子 gate**：一把 `threading.Lock` 同时保护终止标志与在途计数；`set_configs` / 主题管理 / 转换 / 预检 /
+    三个 native dialog / 读 owned storage 的读取都先过 `_operation()`，dialog 先过 gate 再取 dialog 锁，
+    因此不存在「先查 dialog 未开、再被 dialog 抢占」的窗口。
+  * **capability 由后端事实驱动**：`get_storage_info()` 追加 `removal_available` 与 `removal_items`
+    （config / external-themes / runtime 三项），页面据此渲染入口与清单，前端不猜 `sys.frozen`。
+  * **logger 终止态**：`close_file_logging()` 幂等，关闭后 `setup_logging()` 不得再打开文件，
+    「确认后禁止日志写入」因此严格成立。
+  证据：红阶段 28 failed / 692 passed / 1 skipped（27 条新/翻转契约红 + JS wrapper），JS `tests 47 / pass 41 / fail 6`
+  ——红签名都是能力断言（`No module named 'core.user_data'`、`BridgeApi must offer request_user_data_removal()`、
+  `core.logger must offer close_file_logging()`、`KeyError: 'removal_available'`、`id="btn-remove-user-data" must exist`）；
+  实现后 JS **47/47**、聚焦契约 **54 passed**、全套 **726 passed / 1 skipped / 0 failed**，ruff / pyright / MCP 全 0。
+  改动面：`core/user_data.py`（新）、`core/config.py`、`core/logger.py`、`gui/api.py`、`gui/app.py`、
+  `gui/assets/{index.html,gui.js,gui.css}`、7 个测试/契约文件与三份文档；`viewer/`、`themes/`、`renderer/`、
+  `packaging/`、`samples/` 未进入 diff。9B2 的四项仍未做。
+
 ## texmath 审计记录（Phase 4B，为什么不复用 `markdown-it-texmath`）
 
 `markdown-it-texmath@1.0.0` 的注册方式是固定的：

@@ -14,7 +14,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from core import paths
+from core import paths, user_data
 from core import version as core_version
 from core.config import PRODUCTION_RENDERER_VERSION, load_config, save_config
 from core.conversion_plan import build_conversion_plan, document_output_map
@@ -27,6 +27,7 @@ from core.external_themes import (
 )
 from core.external_themes import import_theme as install_theme
 from core.external_themes import remove_theme as uninstall_theme
+from core.logger import close_file_logging
 from core.viewer_assets import builtin_theme_ids, normalize_theme_id
 
 _logger = logging.getLogger("gui")
@@ -36,13 +37,46 @@ _logger = logging.getLogger("gui")
 # message the user can read instead of an overwrite or a silent no-op.
 EXPORTED_TEMPLATE_DIR_NAME = "markdownreader-theme-template"
 
-# `runtime_root()` now owns the log and the WebView2 profile (Phase 10), so the note states
-# what is still missing rather than implying that a "remove user data" action exists: that
-# lifecycle is Phase 11.
+# Phase 10 moved the log and the WebView2 profile into `runtime/`, and Phase 11 added the
+# removal action -- so the note states the real boundary instead of promising that something is
+# missing: the action exists for onefile, it stops the log first, and the deletion happens after
+# the window is gone.
 RUNTIME_NOTE = (
-    "日志与 WebView2 profile 已随 Phase 10 迁入 runtime（三种布局下都在用户数据目录内）；"
-    "「移除用户数据」仍未提供 —— 它属于 Phase 11 的 terminal removal lifecycle。"
+    "日志与 WebView2 profile 都在 runtime 内（三种布局都在用户数据目录下）；"
+    "「移除 MarkdownReader 用户数据」仅 onefile 提供：确认后立即停止日志写入，"
+    "窗口关闭后再删除 profile / assets / runtime 与遗留的旧配置。"
 )
+
+# Every entry that may still be writing returns this when the removal has already been accepted.
+REMOVAL_REFUSAL = "移除用户数据已开始，本次操作被拒绝。"
+
+
+def _refused_theme() -> dict:
+    """Refuse a management call that also names a theme id."""
+    return {"ok": False, "id": "", "error": REMOVAL_REFUSAL}
+
+
+def _refused_path() -> dict:
+    """Refuse a management call that also names a path."""
+    return {"ok": False, "path": "", "error": REMOVAL_REFUSAL}
+
+
+def _refused_conversion() -> dict:
+    """Refuse a conversion request."""
+    return {"success": False, "files": [], "errors": [REMOVAL_REFUSAL]}
+
+
+def _refused_plan() -> dict:
+    """Refuse a preflight plan, in the shape the page already knows how to read."""
+    return {
+        "inputs": [],
+        "items": [],
+        "source_root": "",
+        "output_dir": "",
+        "warnings": [],
+        "errors": [REMOVAL_REFUSAL],
+        "counts": {"selected": 0, "directory": 0, "dependency": 0, "total": 0},
+    }
 
 
 def _pick_directory(title: str) -> str:
@@ -108,6 +142,12 @@ class BridgeApi:
         # "main thread is not in main loop". An overlap is therefore refused
         # rather than queued: the caller gets an empty answer, like a cancel.
         self._dialog_lock = threading.Lock()
+        # Phase 11: the removal is terminal, so what is still running and what may still start
+        # have to be decided in one place. One lock guards both facts; a check that a second
+        # thread can overtake would let a dialog open after the request was accepted.
+        self._state_lock = threading.Lock()
+        self._operations_in_flight = 0
+        self._removal_requested = False
 
     @contextmanager
     def _one_dialog_at_a_time(self) -> Iterator[bool]:
@@ -119,6 +159,27 @@ class BridgeApi:
             yield True
         finally:
             self._dialog_lock.release()
+
+    @contextmanager
+    def _operation(self) -> Iterator[bool]:
+        """Yield True when this bridge entry may run, False once the removal was accepted.
+
+        This is the only place that reads or changes the terminal flag or the in-flight count,
+        and the dialog entries go through it *before* they take the dialog lock -- so a dialog
+        cannot start between "nothing is running" and "the removal is accepted" any more. The
+        entries below wrap their bodies in it; `convert()` delegates to `_convert()` for the
+        same reason, since its body is too long to wrap readably.
+        """
+        with self._state_lock:
+            if self._removal_requested:
+                yield False
+                return
+            self._operations_in_flight += 1
+        try:
+            yield True
+        finally:
+            with self._state_lock:
+                self._operations_in_flight -= 1
 
     def attach_window(self, window) -> None:
         """Attach the created webview window for conversion progress events."""
@@ -149,48 +210,57 @@ class BridgeApi:
         from tkinter import Tk
         from tkinter.filedialog import askopenfilenames
 
-        with self._one_dialog_at_a_time() as opened:
-            if not opened:
+        with self._operation() as allowed:
+            if not allowed:
                 return []
-            root = Tk()
-            root.withdraw()
-            root.attributes("-topmost", True)
-            paths = askopenfilenames(
-                title="选择一个或多个 Markdown 文件",
-                filetypes=[("Markdown", "*.md *.markdown"), ("All Files", "*.*")],
-            )
-            root.destroy()
-            return list(paths) if paths else []
+            with self._one_dialog_at_a_time() as opened:
+                if not opened:
+                    return []
+                root = Tk()
+                root.withdraw()
+                root.attributes("-topmost", True)
+                paths = askopenfilenames(
+                    title="选择一个或多个 Markdown 文件",
+                    filetypes=[("Markdown", "*.md *.markdown"), ("All Files", "*.*")],
+                )
+                root.destroy()
+                return list(paths) if paths else []
 
     def select_input_directory(self) -> str:
         """Open a folder dialog to select a directory of .md files."""
         from tkinter import Tk
         from tkinter.filedialog import askdirectory
 
-        with self._one_dialog_at_a_time() as opened:
-            if not opened:
+        with self._operation() as allowed:
+            if not allowed:
                 return ""
-            root = Tk()
-            root.withdraw()
-            root.attributes("-topmost", True)
-            path = askdirectory(title="选择包含 Markdown 文件的目录")
-            root.destroy()
-            return path if path else ""
+            with self._one_dialog_at_a_time() as opened:
+                if not opened:
+                    return ""
+                root = Tk()
+                root.withdraw()
+                root.attributes("-topmost", True)
+                path = askdirectory(title="选择包含 Markdown 文件的目录")
+                root.destroy()
+                return path if path else ""
 
     def select_output_directory(self) -> str:
         """Open a folder dialog for output directory."""
         from tkinter import Tk
         from tkinter.filedialog import askdirectory
 
-        with self._one_dialog_at_a_time() as opened:
-            if not opened:
+        with self._operation() as allowed:
+            if not allowed:
                 return ""
-            root = Tk()
-            root.withdraw()
-            root.attributes("-topmost", True)
-            path = askdirectory(title="选择输出目录")
-            root.destroy()
-            return path if path else ""
+            with self._one_dialog_at_a_time() as opened:
+                if not opened:
+                    return ""
+                root = Tk()
+                root.withdraw()
+                root.attributes("-topmost", True)
+                path = askdirectory(title="选择输出目录")
+                root.destroy()
+                return path if path else ""
 
     def prepare_conversion(self, request: dict | None = None) -> dict:
         """Expand inputs and return a read-only conversion plan for the GUI.
@@ -198,27 +268,30 @@ class BridgeApi:
         The GUI sends one structured request, so ``inputs`` is a real list here
         rather than a JSON string: the bridge has a single protocol.
         """
-        request = request or {}
-        try:
-            paths = request.get("inputs", [])
-            if not isinstance(paths, list):
-                raise ValueError("输入路径必须是数组。")
-            output_dir = request.get("output_dir", "")
-            preserve_structure = bool(request.get("preserve_structure", False))
-            if not output_dir:
-                output_dir = load_config().get("output", "output")
-            return build_conversion_plan(paths, output_dir, preserve_structure)
-        except Exception as exc:
-            _logger.exception("生成转换预检清单失败")
-            return {
-                "inputs": [],
-                "items": [],
-                "source_root": "",
-                "output_dir": request.get("output_dir", "") or "output",
-                "warnings": [],
-                "errors": [str(exc)],
-                "counts": {"selected": 0, "directory": 0, "dependency": 0, "total": 0},
-            }
+        with self._operation() as allowed:
+            if not allowed:
+                return _refused_plan()
+            request = request or {}
+            try:
+                paths = request.get("inputs", [])
+                if not isinstance(paths, list):
+                    raise ValueError("输入路径必须是数组。")
+                output_dir = request.get("output_dir", "")
+                preserve_structure = bool(request.get("preserve_structure", False))
+                if not output_dir:
+                    output_dir = load_config().get("output", "output")
+                return build_conversion_plan(paths, output_dir, preserve_structure)
+            except Exception as exc:
+                _logger.exception("生成转换预检清单失败")
+                return {
+                    "inputs": [],
+                    "items": [],
+                    "source_root": "",
+                    "output_dir": request.get("output_dir", "") or "output",
+                    "warnings": [],
+                    "errors": [str(exc)],
+                    "counts": {"selected": 0, "directory": 0, "dependency": 0, "total": 0},
+                }
 
     # ── Template ────────────────────────────────────────────
 
@@ -234,7 +307,10 @@ class BridgeApi:
 
     def get_config(self) -> dict:
         """Return full merged configuration."""
-        return load_config()
+        with self._operation() as allowed:
+            if not allowed:
+                return {}
+            return load_config()
 
     def set_configs(self, overrides: dict) -> None:
         """Update multiple config keys and persist them through the core writer.
@@ -244,13 +320,16 @@ class BridgeApi:
         shape, the theme fields, the atomic write) belongs to `core.config`, so the GUI,
         the tests and any future CLI cannot drift apart.
         """
-        cfg = load_config()
-        cfg.update(overrides)
-        if "input" in cfg:
-            cfg["input"] = _normalize_input_root(cfg["input"])
-        if "output" in cfg:
-            cfg["output"] = _normalize_config_path(str(cfg["output"]))
-        save_config(cfg)
+        with self._operation() as allowed:
+            if not allowed:
+                return
+            cfg = load_config()
+            cfg.update(overrides)
+            if "input" in cfg:
+                cfg["input"] = _normalize_input_root(cfg["input"])
+            if "output" in cfg:
+                cfg["output"] = _normalize_config_path(str(cfg["output"]))
+            save_config(cfg)
 
     def get_theme_state(self) -> dict:
         """Return the remembered, selectable, missing and unusable user themes.
@@ -266,19 +345,22 @@ class BridgeApi:
         its rules with the conversion path; this bridge only merges it with what the
         configuration remembers.
         """
-        cfg = load_config()
-        configured = list(cfg.get("external_themes") or [])
-        default = str(cfg.get("template") or "")
-        state = theme_state(configured, default=default)
-        return {
-            "default": default,
-            "installed": state["installed"],
-            "configured": configured,
-            "selected": state["selected"],
-            "missing": state["missing"],
-            "invalid": state["invalid"],
-            "warnings": state["warnings"],
-        }
+        with self._operation() as allowed:
+            if not allowed:
+                return {}
+            cfg = load_config()
+            configured = list(cfg.get("external_themes") or [])
+            default = str(cfg.get("template") or "")
+            state = theme_state(configured, default=default)
+            return {
+                "default": default,
+                "installed": state["installed"],
+                "configured": configured,
+                "selected": state["selected"],
+                "missing": state["missing"],
+                "invalid": state["invalid"],
+                "warnings": state["warnings"],
+            }
 
     # ── External theme management (settings page) ────────────
 
@@ -290,7 +372,10 @@ class BridgeApi:
         That answer is a core rule (`core.external_themes.theme_inventory()`): the bridge
         marshals it, it does not read the theme registry itself (Phase 8C).
         """
-        return theme_inventory()
+        with self._operation() as allowed:
+            if not allowed:
+                return {}
+            return theme_inventory()
 
     def import_theme(self, request: dict | None = None) -> dict:
         """Install a user theme, asking for its folder when the request carries none.
@@ -299,21 +384,24 @@ class BridgeApi:
         like: `core.external_themes.import_theme()` validates before it copies anything, so
         a refused folder leaves no half-installed theme behind.
         """
-        request = request or {}
-        source = str(request.get("source") or "")
-        if not source:
-            with self._one_dialog_at_a_time() as opened:
-                if not opened:
-                    return {"ok": False, "id": "", "error": "已有对话框打开，请稍后再试。"}
-                source = _pick_directory("选择要导入的主题目录")
+        with self._operation() as allowed:
+            if not allowed:
+                return _refused_theme()
+            request = request or {}
+            source = str(request.get("source") or "")
             if not source:
-                return {"ok": False, "id": "", "error": "未选择任何目录。"}
-        try:
-            theme_id = install_theme(source, replace=bool(request.get("replace", False)))
-        except Exception as error:
-            _logger.warning("导入外置主题失败：%s", error)
-            return {"ok": False, "id": "", "error": str(error)}
-        return {"ok": True, "id": theme_id, "error": ""}
+                with self._one_dialog_at_a_time() as opened:
+                    if not opened:
+                        return {"ok": False, "id": "", "error": "已有对话框打开，请稍后再试。"}
+                    source = _pick_directory("选择要导入的主题目录")
+                if not source:
+                    return {"ok": False, "id": "", "error": "未选择任何目录。"}
+            try:
+                theme_id = install_theme(source, replace=bool(request.get("replace", False)))
+            except Exception as error:
+                _logger.warning("导入外置主题失败：%s", error)
+                return {"ok": False, "id": "", "error": str(error)}
+            return {"ok": True, "id": theme_id, "error": ""}
 
     def remove_theme(self, theme_id: str) -> dict:
         """Delete an installed user theme. Packaged themes are never touched.
@@ -322,41 +410,50 @@ class BridgeApi:
         the main page reports it as `missing` afterwards. Uninstalling a theme is not the
         same act as unchecking it (AGENTS section 17).
         """
-        try:
-            uninstall_theme(theme_id)
-        except Exception as error:
-            _logger.warning("卸载外置主题失败：%s", error)
-            return {"ok": False, "id": str(theme_id), "error": str(error)}
-        return {"ok": True, "id": str(theme_id), "error": ""}
+        with self._operation() as allowed:
+            if not allowed:
+                return _refused_theme()
+            try:
+                uninstall_theme(theme_id)
+            except Exception as error:
+                _logger.warning("卸载外置主题失败：%s", error)
+                return {"ok": False, "id": str(theme_id), "error": str(error)}
+            return {"ok": True, "id": str(theme_id), "error": ""}
 
     def export_theme_template(self, request: dict | None = None) -> dict:
         """Copy the packaged theme template into a folder the user picks."""
-        request = request or {}
-        destination = str(request.get("destination") or "")
-        if not destination:
-            with self._one_dialog_at_a_time() as opened:
-                if not opened:
-                    return {"ok": False, "path": "", "error": "已有对话框打开，请稍后再试。"}
-                picked = _pick_directory("选择导出主题模板的位置")
-            if not picked:
-                return {"ok": False, "path": "", "error": "未选择任何目录。"}
-            destination = os.path.join(picked, EXPORTED_TEMPLATE_DIR_NAME)
-        try:
-            path = export_template(destination)
-        except Exception as error:
-            _logger.warning("导出主题模板失败：%s", error)
-            return {"ok": False, "path": "", "error": str(error)}
-        return {"ok": True, "path": path, "error": ""}
+        with self._operation() as allowed:
+            if not allowed:
+                return _refused_path()
+            request = request or {}
+            destination = str(request.get("destination") or "")
+            if not destination:
+                with self._one_dialog_at_a_time() as opened:
+                    if not opened:
+                        return {"ok": False, "path": "", "error": "已有对话框打开，请稍后再试。"}
+                    picked = _pick_directory("选择导出主题模板的位置")
+                if not picked:
+                    return {"ok": False, "path": "", "error": "未选择任何目录。"}
+                destination = os.path.join(picked, EXPORTED_TEMPLATE_DIR_NAME)
+            try:
+                path = export_template(destination)
+            except Exception as error:
+                _logger.warning("导出主题模板失败：%s", error)
+                return {"ok": False, "path": "", "error": str(error)}
+            return {"ok": True, "path": path, "error": ""}
 
     def open_theme_location(self) -> dict:
         """Create the external theme directory if it is missing, then reveal it."""
-        try:
-            root = ensure_theme_root()
-        except Exception as error:
-            _logger.warning("创建外置主题目录失败：%s", error)
-            return {"ok": False, "path": "", "error": str(error)}
-        self.open_directory(root)
-        return {"ok": True, "path": root, "error": ""}
+        with self._operation() as allowed:
+            if not allowed:
+                return _refused_path()
+            try:
+                root = ensure_theme_root()
+            except Exception as error:
+                _logger.warning("创建外置主题目录失败：%s", error)
+                return {"ok": False, "path": "", "error": str(error)}
+            self.open_directory(root)
+            return {"ok": True, "path": root, "error": ""}
 
     def get_storage_info(self) -> dict:
         """Return where this build keeps its data, exactly as `core.paths` resolves it."""
@@ -367,6 +464,10 @@ class BridgeApi:
             "external_themes_root": theme_root(),
             "runtime_root": paths.runtime_root(),
             "runtime_note": RUNTIME_NOTE,
+            # Phase 11 capability facts: the page renders the removal entry from these, so it
+            # never has to work out how the build was packaged.
+            "removal_available": user_data.removal_available(),
+            "removal_items": user_data.removal_items(),
         }
 
     def get_about_info(self) -> dict:
@@ -392,6 +493,13 @@ class BridgeApi:
         Returns:
             {"success": bool, "files": [...], "errors": [...]}
         """
+        with self._operation() as allowed:
+            if not allowed:
+                return _refused_conversion()
+            return self._convert(request)
+
+    def _convert(self, request: dict | None = None) -> dict:
+        """Convert one structured request; reached only through `convert()`."""
         try:
             from core.converter import process_batch, process_single
             from core.index_builder import make_index_filename
@@ -544,3 +652,48 @@ class BridgeApi:
                 os.system(f'open "{path}"')
             else:
                 os.system(f'xdg-open "{path}"')
+
+    # ── Terminal removal (Phase 11) ─────────────────────────
+
+    def request_user_data_removal(self) -> dict:
+        """Ask to end the session and remove the user data. It never deletes anything.
+
+        Accepted: the terminal flag is set once, the file log is closed immediately (AGENTS
+        section 23 forbids configuration and log writes after the confirmation), and the window
+        is destroyed so the GUI loop returns. The deletion itself belongs to `gui/app.py`, after
+        `webview.start()` returned -- the WebView2 profile lives in `runtime/`, so deleting it
+        while the browser is still alive would fight a running process for its own files.
+
+        Refused: anywhere but onefile, while another entry is still running, or when the request
+        was already accepted. The reply is a courtesy -- the page must not depend on it, because
+        the window may disappear before it arrives.
+        """
+        if not user_data.removal_available():
+            return {"ok": False, "error": "只有 onefile 构建提供「移除 MarkdownReader 用户数据」。"}
+        with self._state_lock:
+            if self._removal_requested:
+                return {"ok": False, "error": "移除用户数据的请求已经发出。"}
+            if self._operations_in_flight:
+                return {"ok": False, "error": "仍有操作在执行，请稍后再试。"}
+            self._removal_requested = True
+        close_file_logging()
+        self._destroy_window()
+        return {"ok": True, "error": ""}
+
+    def _destroy_window(self) -> None:
+        """End the window, which is what makes `webview.start()` return."""
+        if self._window is None:
+            return
+        try:
+            self._window.destroy()
+        except Exception:
+            _logger.warning("销毁窗口失败，退出流程仍将继续。", exc_info=True)
+
+    def _should_remove_user_data_on_exit(self) -> bool:
+        """Return True when an accepted request still has to be carried out.
+
+        Internal on purpose: this is the seam between `gui.api` (which ends the session) and
+        `gui.app` (which deletes afterwards). The page has no business reading it.
+        """
+        with self._state_lock:
+            return self._removal_requested

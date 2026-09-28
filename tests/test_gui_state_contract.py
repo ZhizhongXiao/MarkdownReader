@@ -43,9 +43,13 @@ API_PY = ROOT / "gui" / "api.py"
 # from; the GT13 freeze contract grew a second half without adding a record.
 # Phase 9B1 adds 14 settings records (GS1-GS13 plus GS2b: inventory, import/remove/export/open,
 # storage and about facts, the run lock and the joint call shapes).
-EXPECTED_PASS = 41
+# Phase 11 adds 6 records (GR1-GR6: the onefile-only entry, the promised items, the five
+# second countdown on frozen time, cancel, the terminal lock and the single request). During
+# the red phase the suite reports the failures instead of the passes below -- these two
+# numbers are the green target the lock enforces.
+EXPECTED_PASS = 47
 EXPECTED_XFAIL = 0
-EXPECTED_CONTRACTS = 41
+EXPECTED_CONTRACTS = 47
 
 
 def _single_request_shape(method: str) -> int:

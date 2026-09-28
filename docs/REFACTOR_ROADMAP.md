@@ -660,8 +660,10 @@ Phase 10 PASS（remote seal = 04c30c2）
                  P10-C success path PASS / P10-C failed-save + corrupt single-read FOLLOW-UP REQUIRED
                  ⇒ 本地 follow-up 红→绿完成（2 failed / 18 passed → 20 passed）；远端独立终审对象 `04c30c2`
                  （failure-path snapshot / single-read / scope discipline 均 PASS）⇒ **Phase 10 overall PASS**。
-Phase 11 NOT STARTED  用户数据移除 lifecycle（terminal removal state：停写 → 关窗口 → 删 profile/assets/
-                 runtime → 退出；`core/user_data.py` 仍不预建）
+Phase 11 实现完成（待远端复审）  用户数据移除 lifecycle：onefile-only 入口 + 5 秒确认 + terminal 状态
+                 （单锁 operation gate，accepted 即关闭 file log 并 `window.destroy()`）+
+                 `webview.start()` 返回后删 profile/assets/runtime/legacy 并 rmdir 空 root；
+                 `core/user_data.py` 已落地
 ```
 
 ## 落地记录（Phase 9A：主页面外置主题选择）
@@ -986,6 +988,49 @@ FOLLOW-UP REQUIRED —— 冻结语「写失败时本次仍用已解析的 legac
 MarkdownReader 已退出。
 
 EXE 本身保留。
+
+---
+
+## 落地记录（Phase 11：onefile 用户数据移除）
+
+只有 onefile 需要这个动作：onedir 的承诺仍是「删掉整个目录即完整移除」，source 是工作树。生产面在
+`core/user_data.py`（新）、`core/config.py`、`core/logger.py`、`gui/api.py`、`gui/app.py` 与
+`gui/assets/{index.html,gui.js,gui.css}`。
+
+冻结语义（P11-1…P11-11 的落地形态）：
+
+```text
+顺序        request accepted → terminal flag（单锁内，只置一次）→ close_file_logging()
+            → window.destroy() → webview.start() 返回 → remove_user_data() → main 返回
+删除集合    profile_root / assets_root / runtime_root 递归删除 + legacy config 单文件
+            user_data_root 只 rmdir（绝不当递归目标）；缺失目标 = no-op，不记 failure
+失败语义    某路径删不掉 → failed=[{path,error}] 且 ok=false；root 非空同样记 failure
+            重试有界（约 2s deadline / 200ms），耗尽即上报，绝不谎报、绝不重建
+日志        `close_file_logging()` 幂等，并把 logger 置为终止态：之后 `setup_logging()`
+            不得再打开文件（AGENTS §23「确认后禁止日志写入」因此严格成立）
+桥接        public surface 只新增 `request_user_data_removal()`；它只结束会话、不删文件，
+            内部 `_should_remove_user_data_on_exit()` 是 gui.api → gui.app 的生命周期 seam
+原子 gate   一把 `threading.Lock` 同时保护 `_removal_requested` 与 `_operations_in_flight`；
+            每个入口（set_configs / import / remove / export / open_theme_location / convert /
+            prepare_conversion / 三个 native dialog / 读 owned storage 的 get_config 等）
+            都先过 `_operation()`，dialog 先过 gate 再取 dialog 锁（消除 check-then-act 窗口）
+capability  `get_storage_info()` 追加 `removal_available` / `removal_items`（config /
+            external-themes / runtime 三项事实），页面据此渲染入口与清单，不猜 frozen 布局
+UI          onefile 才显示入口；确认弹窗列三项 + 5 秒倒计时（Confirm 初始 disabled、
+            Cancel 全程可用、重开重新计满）；确认后 terminal UI lock
+```
+
+实现细节：`core/config.py` 把 `_legacy_config_path()` 提升为公共 `legacy_config_path()`（删除残留
+不重新推导路径，`PROJECT_ROOT` 仍是它的 seam）；`core/logger.py` 的终止态是模块级事实；
+`gui/api.py` 的 `convert()` 拆出 `_convert()`，让 gate 保持在入口而不是埋在长方法体里。
+
+证据：红阶段 28 failed / 692 passed / 1 skipped（27 条新/翻转契约红 + JS wrapper 因 6 条 GR 红），
+JS `tests 47 / pass 41 / fail 6`；实现后 JS **47/47**、聚焦契约 **54 passed**、全套
+**726 passed / 1 skipped / 0 failed**、ruff（项目闸 + MCP 规则集）全绿、pyright（项目 standard）
+0 error、MCP `python_review` 分页 `batch_ok` 至 `scope_complete`。
+
+**未做**（9B2 分界）：`docs/USAGE.md` 存储位置与截图刷新、主页「坏但未配置主题仍可勾选」、
+`open_theme_location` 的返回值形状清理、`_write_output` newline 债。
 
 ---
 

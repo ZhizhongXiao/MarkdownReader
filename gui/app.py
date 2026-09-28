@@ -17,7 +17,7 @@ if PROJECT_ROOT not in sys.path:
 import webview  # noqa: E402
 from webview.dom import DOMEventHandler  # noqa: E402
 
-from core import paths  # noqa: E402
+from core import paths, user_data  # noqa: E402
 from core.config import BUNDLE_ROOT, PRODUCTION_RENDERER_VERSION  # noqa: E402
 from gui.api import BridgeApi  # noqa: E402
 
@@ -248,6 +248,18 @@ def main():
         )
     finally:
         close_splash()
+
+    # Phase 11: the window is gone, so the WebView2 profile and the log file are no longer held
+    # open, and this is the only place where deleting the user data is safe. The bridge already
+    # closed the file log when it accepted the request, so nothing here can write it back.
+    if api._should_remove_user_data_on_exit():
+        report = user_data.remove_user_data()
+        _logger.info(
+            "用户数据移除结果：ok=%s，removed=%s，failed=%s",
+            report["ok"],
+            report["removed"],
+            report["failed"],
+        )
 
 
 if __name__ == "__main__":

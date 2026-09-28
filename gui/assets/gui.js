@@ -518,6 +518,17 @@ var _themeInventory = null;
 // of its own: a second Back press must not start a second read, and the main page must not
 // appear while the rows it would show are known to be stale.
 var _settingsClosing = false;
+// Phase 11: the removal is terminal, so the page keeps two mirrors of the backend state -- one
+// management action in flight, and the terminal flag the confirmation sets. The backend stays
+// the authority; these only decide what the page keeps clickable.
+var _settingsActionInFlight = 0;
+var _removalAvailable = false;
+var _removalItems = [];
+var _removalTerminal = false;
+var _removalConfirmed = false;
+var _removalTimer = null;
+var _removalDeadline = 0;
+var REMOVAL_SECONDS = 5;
 
 var STORAGE_FACT_LABELS = [
     ["mode", "运行模式"],
@@ -567,8 +578,15 @@ async function closeSettings() {
 
 async function loadSettingsFacts() {
     await refreshInventory();
-    await loadFacts("settings-storage", function () { return pywebview.api.get_storage_info(); },
-        STORAGE_FACT_LABELS, "读取存储信息失败：");
+    // The storage reply is read once and used twice: the fact rows are rendered from it, and
+    // the removal surface takes its capability and its promises from the same reply.
+    try {
+        var storage = await pywebview.api.get_storage_info();
+        renderFacts("settings-storage", storage, STORAGE_FACT_LABELS);
+        applyStorageFacts(storage);
+    } catch (error) {
+        log("ERROR", "读取存储信息失败：" + error);
+    }
     await loadFacts("settings-about", function () { return pywebview.api.get_about_info(); },
         ABOUT_FACT_LABELS, "读取版本信息失败：");
 }
@@ -607,6 +625,100 @@ function renderFacts(rootId, facts, labels) {
         row.appendChild(value);
         root.appendChild(row);
     });
+}
+
+// Phase 11: the removal surface. The page only presents and asks -- it never deletes, and it
+// does not decide whether this build may remove anything: `removal_available` and
+// `removal_items` are bridge facts, and the confirmation sends exactly one request.
+function applyStorageFacts(storage) {
+    _removalAvailable = !!(storage && storage.removal_available);
+    _removalItems = storage && Array.isArray(storage.removal_items)
+        ? storage.removal_items.slice() : [];
+    var entry = document.getElementById("btn-remove-user-data");
+    if (entry) entry.classList.toggle("hidden", !_removalAvailable);
+    renderRemovalItems();
+    applySettingsControlLock();
+}
+
+function renderRemovalItems() {
+    var root = document.getElementById("user-data-items");
+    if (!root) return;
+    root.innerHTML = "";
+    _removalItems.forEach(function (item) {
+        var row = document.createElement("div");
+        row.className = "fact-row";
+        row.setAttribute("data-removal-item", String(item.key || ""));
+
+        var label = document.createElement("span");
+        label.className = "fact-label";
+        label.textContent = String(item.label || item.key || "");
+
+        var value = document.createElement("span");
+        value.className = "fact-value";
+        value.textContent = String(item.path || "");
+
+        row.appendChild(label);
+        row.appendChild(value);
+        root.appendChild(row);
+    });
+}
+
+function openUserDataConfirmation() {
+    if (!_removalAvailable || _removalTerminal) return;
+    renderRemovalItems();
+    var modal = document.getElementById("user-data-confirm");
+    if (modal) modal.classList.remove("hidden");
+    startRemovalCountdown();
+}
+
+// Five seconds, always from scratch: the confirmation is a gate rather than a decoration, so
+// closing and reopening it must not carry a finished countdown over.
+function startRemovalCountdown() {
+    var confirm = document.getElementById("btn-user-data-confirm");
+    var label = document.getElementById("user-data-countdown");
+    if (_removalTimer !== null) clearInterval(_removalTimer);
+    _removalDeadline = Date.now() + REMOVAL_SECONDS * 1000;
+    if (confirm) confirm.disabled = true;
+    if (label) label.textContent = String(REMOVAL_SECONDS);
+    _removalTimer = setInterval(function () {
+        var left = Math.ceil((_removalDeadline - Date.now()) / 1000);
+        if (left <= 0) {
+            clearInterval(_removalTimer);
+            _removalTimer = null;
+            if (label) label.textContent = "0";
+            if (confirm) confirm.disabled = false;
+            return;
+        }
+        if (label) label.textContent = String(left);
+    }, 250);
+}
+
+function cancelUserDataRemoval() {
+    if (_removalTimer !== null) {
+        clearInterval(_removalTimer);
+        _removalTimer = null;
+    }
+    var modal = document.getElementById("user-data-confirm");
+    if (modal) modal.classList.add("hidden");
+    var confirm = document.getElementById("btn-user-data-confirm");
+    if (confirm) confirm.disabled = true;
+    var label = document.getElementById("user-data-countdown");
+    if (label) label.textContent = String(REMOVAL_SECONDS);
+}
+
+async function confirmUserDataRemoval() {
+    var confirm = document.getElementById("btn-user-data-confirm");
+    if (_removalConfirmed || !_removalAvailable || (confirm && confirm.disabled)) return;
+    _removalConfirmed = true;
+    _removalTerminal = true;
+    applySettingsControlLock();
+    try {
+        // One request, and no business waiting for its reply: once the backend accepts it, the
+        // window is about to disappear, because the deletion happens after the GUI loop returns.
+        await pywebview.api.request_user_data_removal();
+    } catch (error) {
+        log("ERROR", "移除用户数据请求失败：" + error);
+    }
 }
 
 // The installed list answers "what is here", while the main page answers "what does the
@@ -677,14 +789,18 @@ function renderThemeInventory() {
 // The closing state also gates the actions themselves, because a disabled button is a hint,
 // not a rule: a direct call must not slip past it either.
 function applySettingsControlLock() {
-    var locked = _conversionRunning || _settingsClosing;
+    var locked = _conversionRunning || _settingsClosing || _removalTerminal;
     ["btn-import-theme", "btn-export-theme-template", "btn-open-theme-location"]
         .forEach(function (id) {
             var button = document.getElementById(id);
             if (button) button.disabled = locked;
         });
     var back = document.getElementById("btn-settings-back");
-    if (back) back.disabled = _settingsClosing;
+    if (back) back.disabled = _settingsClosing || _removalTerminal;
+    // The removal entry waits for a quieter moment than the rest: an action that is still
+    // writing has to finish before the confirmation may even be opened.
+    var entry = document.getElementById("btn-remove-user-data");
+    if (entry) entry.disabled = locked || _settingsActionInFlight !== 0;
     var list = document.getElementById("settings-theme-list");
     if (!list) return;
     for (var i = 0; i < list.children.length; i += 1) {
@@ -697,6 +813,8 @@ function applySettingsControlLock() {
 // {ok, error}, and a rejected promise is reported through the same path, so no failure can
 // leave the page waiting for an answer that will never arrive.
 async function runSettingsAction(request, describe) {
+    _settingsActionInFlight += 1;
+    applySettingsControlLock();
     try {
         var result = await request();
         if (result && result.ok === false) {
@@ -707,11 +825,16 @@ async function runSettingsAction(request, describe) {
     } catch (error) {
         log("ERROR", describe + "失败：" + error);
         return null;
+    } finally {
+        // The removal entry stays disabled while an action is writing: "nothing is in flight"
+        // is what the backend checks too, and this is its UI mirror.
+        _settingsActionInFlight -= 1;
+        applySettingsControlLock();
     }
 }
 
 async function importTheme() {
-    if (_conversionRunning || _settingsClosing) return;
+    if (_conversionRunning || _settingsClosing || _removalTerminal) return;
     var result = await runSettingsAction(
         function () { return pywebview.api.import_theme({}); }, "导入外置主题");
     if (!result) return;
@@ -720,7 +843,7 @@ async function importTheme() {
 }
 
 async function removeInstalledTheme(id) {
-    if (_conversionRunning || _settingsClosing) return;
+    if (_conversionRunning || _settingsClosing || _removalTerminal) return;
     var result = await runSettingsAction(
         function () { return pywebview.api.remove_theme(id); }, "卸载外置主题");
     if (!result) return;
@@ -729,7 +852,7 @@ async function removeInstalledTheme(id) {
 }
 
 async function exportThemeTemplate() {
-    if (_conversionRunning || _settingsClosing) return;
+    if (_conversionRunning || _settingsClosing || _removalTerminal) return;
     var result = await runSettingsAction(
         function () { return pywebview.api.export_theme_template({}); }, "导出主题模板");
     if (!result) return;
@@ -737,7 +860,7 @@ async function exportThemeTemplate() {
 }
 
 async function openThemeLocation() {
-    if (_conversionRunning || _settingsClosing) return;
+    if (_conversionRunning || _settingsClosing || _removalTerminal) return;
     var result = await runSettingsAction(
         function () { return pywebview.api.open_theme_location(); }, "打开主题目录");
     if (!result) return;
@@ -1078,7 +1201,7 @@ function updateConversionStatus(sourcePath, status, warnings, outputPath) {
 
 // Conversion
 async function runConvert() {
-    if (!_apiReady) return;
+    if (!_apiReady || _removalTerminal) return;
     if (_inputSources.length === 0) {
         log("WARNING", "请选择或拖入 Markdown 文件或目录。");
         showConversionTab();

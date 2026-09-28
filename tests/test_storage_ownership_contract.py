@@ -38,7 +38,12 @@ def test_setup_logging_writes_inside_runtime_root(monkeypatch, tmp_path):
     logger still asks `application_dir()` -- cannot write `MarkdownReader.log` into the
     repository it is complaining about.
     """
+    from core import logger as core_logger
     from core.logger import setup_logging
+
+    # Closing the file log is terminal and process wide (Phase 11), so a test that needs a
+    # writable logger says so instead of depending on the order the files ran in.
+    monkeypatch.setattr(core_logger, "_file_logging_closed", False)
 
     monkeypatch.delattr(sys, "frozen", raising=False)
     monkeypatch.delattr(sys, "_MEIPASS", raising=False)
@@ -90,3 +95,70 @@ def test_the_webview_profile_is_a_runtime_subdirectory():
 
     assert resolved.endswith(os.sep + "WebView2"), resolved
     assert resolved != paths.runtime_root()
+
+
+# ── Phase 11: the file log is closed before the deletion, and never reopened ─────────
+
+
+def test_closing_the_file_log_is_terminal(monkeypatch, tmp_path):
+    """删除前必须先脱离并关闭 FileHandler，之后任何日志都不得再打开文件。
+
+    顺序由 `tests/test_user_data_contract.py` 的 app 级契约锁（close 早于 delete）；这里锁的是
+    这件事本身：关闭是幂等的，而且关闭之后 `setup_logging()` 不能再把它打开。
+    """
+    from core import logger as core_logger
+    from core.logger import setup_logging
+
+    close = getattr(core_logger, "close_file_logging", None)
+    assert close is not None, "core.logger must offer close_file_logging()"
+
+    # Same as the contract above: the terminal state is process wide, so start from a live log.
+    monkeypatch.setattr(core_logger, "_file_logging_closed", False)
+
+    monkeypatch.delattr(sys, "frozen", raising=False)
+    monkeypatch.delattr(sys, "_MEIPASS", raising=False)
+    monkeypatch.setattr(paths, "source_root", lambda: str(tmp_path))
+
+    root = logging.getLogger()
+    previous_handlers = root.handlers[:]
+    previous_level = root.level
+    try:
+        setup_logging(verbose=True)
+        target = tmp_path / ".runtime" / "runtime" / "MarkdownReader.log"
+        assert target.is_file(), target
+
+        closed = close()
+
+        assert closed == str(target), closed
+        assert not [
+            handler for handler in root.handlers if isinstance(handler, logging.FileHandler)
+        ], "the file handler must be detached, not merely silenced"
+        size_before = target.stat().st_size
+        logging.getLogger("core.config").warning("written after the file log was closed")
+        assert target.stat().st_size == size_before, "nothing may be appended any more"
+
+        assert close() is None, "closing twice is not an error"
+
+        setup_logging(verbose=True)
+        assert not [
+            handler for handler in root.handlers if isinstance(handler, logging.FileHandler)
+        ], "the logger is terminal once the file log has been closed"
+        assert target.stat().st_size == size_before, "and it must not reopen the file either"
+    finally:
+        for handler in root.handlers:
+            handler.close()
+        root.handlers[:] = previous_handlers
+        root.setLevel(previous_level)
+
+
+def test_only_the_logger_module_creates_a_file_handler():
+    """创建权与关闭权同属 `core/logger.py`：别的模块不得自己开文件 handler。"""
+    offenders = []
+    for base in ("core", "gui", "tools"):
+        for path in sorted((ROOT / base).rglob("*.py")):
+            if path == ROOT / "core" / "logger.py":
+                continue
+            text = path.read_text(encoding="utf-8")
+            if "FileHandler" in text:
+                offenders.append(path.as_posix())
+    assert offenders == [], offenders

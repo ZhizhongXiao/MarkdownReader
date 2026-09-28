@@ -201,8 +201,13 @@ def save_config(cfg: dict, config_path: str | None = None) -> str:
     return path
 
 
-def _legacy_config_path() -> str:
-    """Return the legacy configuration location beside the executable."""
+def legacy_config_path() -> str:
+    """Return the legacy configuration location beside the executable.
+
+    Public because Phase 11 has to remove that file whenever a migration never completed (an
+    unreadable legacy file, or a retirement that failed). Whoever removes it must not re-derive
+    the location: `PROJECT_ROOT` is this module's seam, and a second copy would drift from it.
+    """
     return os.path.join(PROJECT_ROOT, CONFIG_FILENAME)
 
 
@@ -262,7 +267,7 @@ def _migrate_legacy_config_if_needed() -> tuple[bool, dict | None]:
     profile_path = paths.config_path()
     if os.path.isfile(profile_path):
         return False, None
-    legacy_path = _legacy_config_path()
+    legacy_path = legacy_config_path()
     if not os.path.isfile(legacy_path):
         return False, None
 

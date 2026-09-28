@@ -245,12 +245,23 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
   写入；静态守卫反向锁住「主页渲染函数里不得出现管理动作」）。转换在途时四个动作与主页控件一起冻结，直接调用
   这些函数也不会触达桥接；返回主页会重读 `get_theme_state()`，不留刚被卸载的主题行。设置面按需加载（开页才
   请求），所以启动路径与既有 27 条契约的调用计数都不变。
-  「存储信息」列出运行模式与 `core.paths` 的四条真实路径，`runtime_root` 的说明字段明写「日志与 WebView2 已随
-  Phase 10 迁入 runtime，「移除用户数据」属 Phase 11」；**不提供**「移除用户数据」（静态守卫反向断言 `remove_user_data` /
-  `removeUserData` / `btn-remove-user-data` / `user-data-countdown` 都不存在）。「关于」的版本来自唯一运行时
+  「存储信息」列出运行模式与 `core.paths` 的四条真实路径，`runtime_root` 的说明字段描述真实边界：日志与 WebView2
+  都在 runtime 内；「移除用户数据」仅 onefile 提供（确认后立即停止日志写入，窗口关闭后才删除，清单与控制流见下条）
+  ——静态守卫因此改为**正向**断言。「关于」的版本来自唯一运行时
   来源 `core.version.__version__`（`pyproject.toml` 不随包、本仓库也不可安装，`importlib.metadata` 无法作答），
   `tests/test_version_contract.py` 把它绑定到 pyproject 的声明；主题清单的聚合落在
   `core.external_themes.theme_inventory()`（桥接不自己读 registry，Phase 8C 的边界不变）。
+
+- 用户数据移除（Phase 11，仅 onefile）：设置页新增「移除 MarkdownReader 用户数据并退出」。入口是否出现由
+  `get_storage_info()` 的 `removal_available` 决定（页面不猜 frozen 布局），确认弹窗列出 `removal_items` 的三项事实
+  （config / external themes / runtime data），5 秒倒计时走完才能确认，Cancel 全程可用。确认后
+  `BridgeApi.request_user_data_removal()` 在一把 `threading.Lock` 内检查在途动作、置终止标志、关闭 file log
+  并销毁窗口；`webview.start()` 返回后 `gui/app.py` 调 `core.user_data.remove_user_data()` 删 `profile/`、
+  `assets/`、`runtime/` 与 legacy 残留（Phase 10 的 corrupt / retire 失败两种残留），最后在 root 为空时删掉
+  root 本身。桥接与页面都不删文件；`core.user_data` 只从 `core.paths` 与 `core.config.legacy_config_path()`
+  取路径，因此 `LOCALAPPDATA` / `sys.frozen` 仍然只出现在 `core/paths.py`。失败语义：删不掉就进报告并让
+  `ok=false`（root 非空同理），重试有界（约 2s / 200ms）后上报；`core.logger.close_file_logging()` 让
+  `setup_logging()` 之后不能再打开日志文件（AGENTS §23）。
 
 ## 命名与路径约定
 

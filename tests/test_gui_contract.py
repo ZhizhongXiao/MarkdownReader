@@ -203,24 +203,32 @@ def test_the_settings_surface_exists_and_the_main_page_still_does_not_manage_the
     assert 'data-active="settings"' not in html, "the settings page is not a workspace tab"
 
 
-def test_removing_user_data_is_not_promised_before_the_ownership_is_complete():
-    """9B 的 ownership 侦察结论：日志、WebView2 与 legacy config 三项治理（Phase 10）之前，
-    不实现、也不占位「移除 MarkdownReader 用户数据」。
+def test_removing_user_data_is_promised_only_behind_the_onefile_fact():
+    """Phase 11 取代 9B 的反向守卫：动作必须真的存在，但按责任分层、且不越过 backend 事实。
 
-    一个名字承诺完整删除、实现却明知不完整的按钮，比没有按钮更糟：它把「删除」变成一个
-    用户再也无法核实真假的承诺。"""
-    sources = {
-        "index.html": (ROOT / "gui" / "assets" / "index.html").read_text(encoding="utf-8"),
-        "gui.js": (ROOT / "gui" / "assets" / "gui.js").read_text(encoding="utf-8"),
-        "gui/api.py": (ROOT / "gui" / "api.py").read_text(encoding="utf-8"),
-    }
+    9B 锁的是「还不许承诺」；Phase 10 把 storage ownership 收口之后，这条契约改写成「承诺必须
+    完整」——HTML 只负责入口与弹窗的 DOM 身份，JS 只负责倒计时与发一次请求，Python 才是终止
+    状态的 owner，而删文件只发生在 `webview.start()` 返回之后。
+    """
+    html = (ROOT / "gui" / "assets" / "index.html").read_text(encoding="utf-8")
+    javascript = (ROOT / "gui" / "assets" / "gui.js").read_text(encoding="utf-8")
+    api = (ROOT / "gui" / "api.py").read_text(encoding="utf-8")
+
     for token in (
-        "remove_user_data",
-        "removeUserData",
-        "btn-remove-user-data",
-        "user-data-countdown",
+        'id="btn-remove-user-data"',
+        'id="user-data-confirm"',
+        'id="user-data-countdown"',
+        'id="btn-user-data-confirm"',
+        'id="btn-user-data-cancel"',
     ):
-        for name, text in sources.items():
-            assert token not in text, (
-                token + " must not exist before Phase 10 owns the whole deletion (" + name + ")"
-            )
+        assert token in html, token + " must exist in index.html"
+
+    assert "request_user_data_removal" in javascript, "the page asks instead of deleting"
+    assert "user-data-countdown" in javascript
+    assert "removal_available" in javascript, "the entry follows the backend fact"
+    assert "sys.frozen" not in javascript, "the page must not guess the packaging mode"
+    assert "LOCALAPPDATA" not in javascript
+
+    assert "request_user_data_removal" in api
+    assert "shutil.rmtree" not in api, "the bridge must not delete files itself"
+    assert "rmtree" not in javascript, "and neither may the page"

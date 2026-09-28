@@ -166,8 +166,8 @@ def test_storage_info_reports_the_real_paths_for_each_packaging_mode(monkeypatch
     # name, so patching `core.external_themes.theme_root` would only move the expectation,
     # never the value under test.
     assert str(info["external_themes_root"]).replace("\\", "/") == "U:/data/assets/themes/external"
-    assert "Phase 11" in info["runtime_note"], (
-        "the page must not imply that removing user data exists yet"
+    assert "runtime" in info["runtime_note"], (
+        "the note still explains what the runtime directory holds"
     )
 
     monkeypatch.setattr(paths, "is_frozen", lambda: True)
@@ -191,3 +191,76 @@ def test_about_reports_the_single_runtime_version(monkeypatch):
     assert info["renderer_version"] == core_config.PRODUCTION_RENDERER_VERSION
     assert info["mode"] == "source"
     assert info["python"]
+
+
+# ── Phase 11: the settings facts also decide whether user data may be removed ────────
+
+
+def test_storage_info_offers_the_removal_only_on_onefile(monkeypatch):
+    """P11-1/P11-11：capability 是 `core.paths` 的事实，页面不需要自己猜 frozen 布局。"""
+    monkeypatch.setattr(paths, "user_data_root", lambda: "U:/data")
+
+    monkeypatch.setattr(paths, "is_frozen", lambda: False)
+    monkeypatch.setattr(paths, "is_onedir", lambda: False)
+    assert BridgeApi().get_storage_info()["removal_available"] is False, "source"
+
+    monkeypatch.setattr(paths, "is_frozen", lambda: True)
+    monkeypatch.setattr(paths, "is_onedir", lambda: True)
+    assert BridgeApi().get_storage_info()["removal_available"] is False, "onedir"
+
+    monkeypatch.setattr(paths, "is_onedir", lambda: False)
+    info = BridgeApi().get_storage_info()
+
+    assert info["removal_available"] is True, "onefile"
+    assert [item["key"] for item in info["removal_items"]] == [
+        "config",
+        "external-themes",
+        "runtime",
+    ]
+    for item in info["removal_items"]:
+        assert item["label"], item
+        assert item["path"], item
+
+
+def test_the_removal_items_follow_the_path_facts(monkeypatch):
+    """三项事实来自解析器：改 `core.paths` 就跟着改，桥接不得写死路径。"""
+    monkeypatch.setattr(paths, "user_data_root", lambda: "U:/data")
+    monkeypatch.setattr(paths, "is_frozen", lambda: True)
+    monkeypatch.setattr(paths, "is_onedir", lambda: False)
+
+    items = {
+        item["key"]: str(item["path"]).replace("\\", "/")
+        for item in BridgeApi().get_storage_info()["removal_items"]
+    }
+
+    assert items["config"] == "U:/data/profile/config.json"
+    assert items["external-themes"] == "U:/data/assets"
+    assert items["runtime"] == "U:/data/runtime"
+
+
+def test_the_runtime_note_no_longer_promises_a_missing_action(monkeypatch):
+    """Phase 11 落地后「仍未提供」成为陈旧事实：说明必须改述真实边界。"""
+    monkeypatch.setattr(paths, "is_frozen", lambda: True)
+    monkeypatch.setattr(paths, "is_onedir", lambda: False)
+
+    note = BridgeApi().get_storage_info()["runtime_note"]
+
+    assert "仍未提供" not in note, note
+    assert "onefile" in note, "the note says where removing user data exists: " + note
+
+
+def test_the_removal_bridge_call_has_the_agreed_shape(monkeypatch):
+    """桥接名与形状冻结：无参请求 + 一个 {ok, error} 回复（与设置页动作同一协议）。"""
+    import inspect
+
+    method = getattr(BridgeApi, "request_user_data_removal", None)
+    assert method is not None, "BridgeApi must offer request_user_data_removal()"
+    parameters = list(inspect.signature(method).parameters)
+    assert parameters == ["self"], parameters
+
+    monkeypatch.setattr(paths, "is_frozen", lambda: False)
+    refused = method(BridgeApi())
+
+    assert isinstance(refused, dict), refused
+    assert refused.get("ok") is False, refused
+    assert refused.get("error"), refused

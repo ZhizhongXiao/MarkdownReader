@@ -1294,3 +1294,230 @@ contract("GS13 the settings bridge calls keep the single-request shape", "pass",
   assert.equal(EXPORT_SINGLE, "1",
     "BridgeApi.export_theme_template must be (self, request) as well");
 });
+
+// ── Phase 11: terminal removal of MarkdownReader user data ──────────────────────
+//
+// The page presents and asks; it never deletes. `get_storage_info()` decides whether the
+// action exists at all (onefile only) and which three things it promises, and the
+// confirmation sends exactly one request -- after which the bridge ends the window and the
+// filesystem work happens in the application, not here.
+
+const STORAGE_INFO_SOURCE = {
+  mode: "source",
+  user_data_root: "U:/repo/.runtime",
+  config_path: "U:/repo/.runtime/profile/config.json",
+  external_themes_root: "U:/repo/.runtime/assets/themes/external",
+  runtime_root: "U:/repo/.runtime/runtime",
+  runtime_note: "source 布局的运行时数据。",
+  removal_available: false,
+  removal_items: [],
+};
+
+const STORAGE_INFO_ONEDIR = Object.assign({}, STORAGE_INFO_SOURCE, {
+  mode: "onedir",
+  user_data_root: "C:/app/MarkdownReader/data",
+  config_path: "C:/app/MarkdownReader/data/profile/config.json",
+  external_themes_root: "C:/app/MarkdownReader/data/assets/themes/external",
+  runtime_root: "C:/app/MarkdownReader/data/runtime",
+  runtime_note: "删除整个程序目录即可完整移除。",
+});
+
+const ONEFILE_ROOT = "C:/Users/u/AppData/Local/MarkdownReader";
+
+const STORAGE_INFO_ONEFILE = {
+  mode: "onefile",
+  user_data_root: ONEFILE_ROOT,
+  config_path: ONEFILE_ROOT + "/profile/config.json",
+  external_themes_root: ONEFILE_ROOT + "/assets/themes/external",
+  runtime_root: ONEFILE_ROOT + "/runtime",
+  runtime_note: "日志与 WebView2 profile 都在 runtime 内；移除用户数据仅 onefile 提供。",
+  removal_available: true,
+  removal_items: [
+    { key: "config", label: "配置", path: ONEFILE_ROOT + "/profile/config.json" },
+    { key: "external-themes", label: "外置主题", path: ONEFILE_ROOT + "/assets" },
+    { key: "runtime", label: "runtime 数据", path: ONEFILE_ROOT + "/runtime" },
+  ],
+};
+
+// Every removal contract drives frozen time: the countdown is five seconds, and waiting for
+// it would make the suite slow and flaky in equal measure.
+async function bootRemoval(storageInfo) {
+  const session = await bootGui({
+    clock: true,
+    themeState: THEME_STATE_A,
+    themeInventory: THEME_INVENTORY,
+    storageInfo: storageInfo,
+  });
+  session.window.openSettings();
+  await session.flush(4);
+  return session;
+}
+
+function promisedItems(session) {
+  const modal = session.list("user-data-confirm");
+  if (!modal) return null;
+  return Array.prototype.map.call(modal.querySelectorAll("[data-removal-item]"), function (node) {
+    return node.getAttribute("data-removal-item");
+  });
+}
+
+// Red reads as a missing capability, not as a broken probe: the entry is asserted before it is
+// used, so a page without the removal surface fails on that fact instead of on a null deref.
+function removalEntry(session) {
+  const entry = session.list("btn-remove-user-data");
+  assert.ok(entry, "the removal entry must exist before a confirmation can be opened");
+  return entry;
+}
+
+// jsdom runs no inline event handlers (`runScripts: "outside-only"`), so these contracts drive
+// the page's own functions -- exactly how the settings contracts drive `openSettings()`.
+function openRemovalConfirmation(session) {
+  const entry = removalEntry(session);
+  assert.equal(entry.disabled, false, "the entry is offered while nothing is in flight");
+  session.window.openUserDataConfirmation();
+}
+
+contract("GR1 the removal entry exists only when the bridge offers it", "pass", async () => {
+  const onefile = await bootRemoval(STORAGE_INFO_ONEFILE);
+  try {
+    const entry = onefile.list("btn-remove-user-data");
+    assert.ok(entry, "onefile must offer the removal entry");
+    assert.equal(entry.hidden, false, "the entry is offered on onefile");
+  } finally { onefile.close(); }
+
+  const cases = [["source", STORAGE_INFO_SOURCE], ["onedir", STORAGE_INFO_ONEDIR]];
+  for (let i = 0; i < cases.length; i += 1) {
+    const session = await bootRemoval(cases[i][1]);
+    try {
+      const entry = session.list("btn-remove-user-data");
+      const offered = !!entry && entry.hidden !== true && !entry.classList.contains("hidden");
+      assert.equal(offered, false, cases[i][0] + " must not offer removing user data");
+      assert.equal(session.callsOf("request_user_data_removal").length, 0,
+        "and nothing may be requested there either");
+    } finally { session.close(); }
+  }
+});
+
+contract("GR2 the confirmation lists exactly what the bridge promises", "pass", async () => {
+  const session = await bootRemoval(STORAGE_INFO_ONEFILE);
+  try {
+    openRemovalConfirmation(session);
+    await session.flush(4);
+
+    const modal = session.list("user-data-confirm");
+    assert.ok(modal, "the confirmation must exist");
+    assert.equal(modal.classList.contains("hidden"), false, "the confirmation is shown");
+    assert.deepEqual((promisedItems(session) || []).slice().sort(),
+      ["config", "external-themes", "runtime"],
+      "the three promised facts, and only those, come from the bridge reply");
+    assert.ok(modal.textContent.indexOf(STORAGE_INFO_ONEFILE.config_path) !== -1,
+      "the configuration path is named");
+    assert.ok(modal.textContent.indexOf(STORAGE_INFO_ONEFILE.runtime_root) !== -1,
+      "the runtime path is named");
+  } finally { session.close(); }
+});
+
+contract("GR3 the confirmation stays disabled for the full five seconds", "pass", async () => {
+  const session = await bootRemoval(STORAGE_INFO_ONEFILE);
+  try {
+    openRemovalConfirmation(session);
+    await session.flush(4);
+
+    const confirm = session.list("btn-user-data-confirm");
+    assert.ok(confirm, "the confirmation has a confirm button");
+    assert.equal(confirm.disabled, true, "it is disabled when the confirmation appears");
+
+    await session.advance(4999);
+    assert.equal(confirm.disabled, true, "still disabled before five seconds have passed");
+
+    await session.advance(1);
+    assert.equal(confirm.disabled, false, "enabled once the countdown has finished");
+  } finally { session.close(); }
+});
+
+contract("GR4 cancel is always available and reopening restarts the countdown", "pass", async () => {
+  const session = await bootRemoval(STORAGE_INFO_ONEFILE);
+  try {
+    openRemovalConfirmation(session);
+    await session.flush(4);
+
+    const cancel = session.list("btn-user-data-cancel");
+    assert.ok(cancel, "the confirmation has a cancel button");
+    assert.equal(cancel.disabled, false, "cancel works while the countdown still runs");
+
+    await session.advance(6000);
+    assert.equal(session.list("btn-user-data-confirm").disabled, false, "the countdown finished");
+    session.window.cancelUserDataRemoval();
+    await session.flush(3);
+
+    assert.equal(session.list("user-data-confirm").classList.contains("hidden"), true,
+      "cancel closes the confirmation");
+    assert.equal(session.callsOf("request_user_data_removal").length, 0,
+      "cancel never asks the bridge for anything");
+
+    openRemovalConfirmation(session);
+    await session.flush(3);
+    assert.equal(session.list("btn-user-data-confirm").disabled, true,
+      "reopening restarts the countdown instead of keeping the finished one");
+    await session.advance(4999);
+    assert.equal(session.list("btn-user-data-confirm").disabled, true);
+    await session.advance(1);
+    assert.equal(session.list("btn-user-data-confirm").disabled, false);
+  } finally { session.close(); }
+});
+
+contract("GR5 confirming locks the page and asks the bridge exactly once", "pass", async () => {
+  const session = await bootRemoval(STORAGE_INFO_ONEFILE);
+  try {
+    session.window.addInputs([PLAN_ONE.items[0].source_path]);
+    await session.flush(3);
+    await session.resolve("prepare_conversion", PLAN_ONE);
+
+    openRemovalConfirmation(session);
+    await session.flush(4);
+    await session.advance(5000);
+    session.window.confirmUserDataRemoval();
+    await session.flush(4);
+
+    assert.equal(session.callsOf("request_user_data_removal").length, 1,
+      "the terminal transition is requested exactly once");
+    assert.equal(session.list("btn-import-theme").disabled, true,
+      "the terminal state locks the management actions before any reply arrives");
+
+    // A disabled button is a hint, not a rule: the direct calls must be refused as well.
+    session.window.importTheme();
+    session.window.openThemeLocation();
+    session.window.runConvert();
+    await session.flush(4);
+    assert.equal(session.callsOf("import_theme").length, 0, "a direct management call is refused");
+    assert.equal(session.callsOf("open_theme_location").length, 0,
+      "including the one that creates directories");
+    assert.equal(session.callsOf("set_configs").length, 0,
+      "no run may write configuration after the terminal flag");
+    assert.equal(session.callsOf("convert").length, 0, "and no run may start");
+
+    session.window.confirmUserDataRemoval();
+    await session.flush(3);
+    assert.equal(session.callsOf("request_user_data_removal").length, 1,
+      "a second confirmation must not ask twice");
+  } finally { session.close(); }
+});
+
+contract("GR6 removing user data uses no other bridge call", "pass", async () => {
+  const session = await bootRemoval(STORAGE_INFO_ONEFILE);
+  try {
+    openRemovalConfirmation(session);
+    await session.flush(4);
+    await session.advance(5000);
+    session.window.confirmUserDataRemoval();
+    await session.flush(4);
+
+    ["set_configs", "import_theme", "remove_theme", "export_theme_template",
+      "open_theme_location", "convert"].forEach(function (name) {
+      assert.equal(session.callsOf(name).length, 0,
+        name + " must not be part of removing user data");
+    });
+    assert.deepEqual(session.argCounts("request_user_data_removal"), [0],
+      "the request carries no target: the backend decides what user data means");
+  } finally { session.close(); }
+});
