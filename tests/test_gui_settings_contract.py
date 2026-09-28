@@ -146,6 +146,26 @@ def test_open_theme_location_creates_the_directory_it_opens(sandbox, monkeypatch
     assert opened == [str(sandbox)]
 
 
+def test_open_theme_location_reports_a_failing_system_opener(sandbox, monkeypatch):
+    """9B2：opener 失败必须和其它管理动作同形状，而不是把异常丢给页面。
+
+    `ensure_theme_root()` 的失败早已被 shaped refusal 覆盖，但「创建成功、打开失败」这一支
+    会越过边界直接抛出去。JS 能 catch rejected Promise，所以不是严重功能 bug，但桥接协议在
+    这里漂了形状：设置页四个动作里只有它可能抛异常。
+    """
+
+    def refuse(_path: str) -> None:
+        raise OSError("shell failed")
+
+    monkeypatch.setattr(gui_api.os, "startfile", refuse, raising=False)
+
+    result = BridgeApi().open_theme_location()
+
+    assert result["ok"] is False, result
+    assert result["path"] == ""
+    assert result["error"], "the refusal names what went wrong"
+
+
 def test_storage_info_reports_the_real_paths_for_each_packaging_mode(monkeypatch):
     """存储信息是 core.paths 的事实，不是页面或桥接层自己的猜测。"""
     monkeypatch.setattr(paths, "user_data_root", lambda: "U:/data")

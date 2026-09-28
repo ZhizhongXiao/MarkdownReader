@@ -45,11 +45,13 @@ API_PY = ROOT / "gui" / "api.py"
 # storage and about facts, the run lock and the joint call shapes).
 # Phase 11 adds 7 records (GR1-GR7: the onefile-only entry, the promised items, the five
 # second countdown on frozen time, cancel, the terminal lock, the single request, and the
-# explicit-refusal recovery). During the red phase the suite reports the failures instead of the
-# passes below -- these two numbers are the green target the lock enforces.
-EXPECTED_PASS = 48
+# explicit-refusal recovery). Phase 9B2 adds GT19 (an installed broken theme is neither
+# selectable nor removable, and the summary counts what it renders). During the red phase the
+# suite reports the failures instead of the passes below -- these two numbers are the green
+# target the lock enforces.
+EXPECTED_PASS = 49
 EXPECTED_XFAIL = 0
-EXPECTED_CONTRACTS = 48
+EXPECTED_CONTRACTS = 49
 
 
 def _single_request_shape(method: str) -> int:

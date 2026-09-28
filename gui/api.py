@@ -359,6 +359,10 @@ class BridgeApi:
                 "selected": state["selected"],
                 "missing": state["missing"],
                 "invalid": state["invalid"],
+                # Phase 9B2: the installation-side health sits next to the configured-only
+                # `invalid`, so the page can refuse an unusable install it never remembered --
+                # from the same state read and the same registry snapshot.
+                "installed_invalid": state["installed_invalid"],
                 "warnings": state["warnings"],
             }
 
@@ -443,16 +447,22 @@ class BridgeApi:
             return {"ok": True, "path": path, "error": ""}
 
     def open_theme_location(self) -> dict:
-        """Create the external theme directory if it is missing, then reveal it."""
+        """Create the external theme directory if it is missing, then reveal it.
+
+        Both steps sit inside one shaped failure boundary: the bridge owns the reply protocol for
+        every settings action, so a failing system opener must come back as `{ok: false, ...}`
+        instead of leaving the boundary as an exception (Phase 9B2). `open_directory()` itself is
+        unchanged -- the other callers keep its plain behaviour.
+        """
         with self._operation() as allowed:
             if not allowed:
                 return _refused_path()
             try:
                 root = ensure_theme_root()
+                self.open_directory(root)
             except Exception as error:
-                _logger.warning("创建外置主题目录失败：%s", error)
+                _logger.warning("打开外置主题目录失败：%s", error)
                 return {"ok": False, "path": "", "error": str(error)}
-            self.open_directory(root)
             return {"ok": True, "path": root, "error": ""}
 
     def get_storage_info(self) -> dict:

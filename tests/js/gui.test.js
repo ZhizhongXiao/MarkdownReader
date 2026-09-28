@@ -415,6 +415,21 @@ const THEME_STATE_MISLEADING = Object.assign({}, THEME_STATE_A, {
   ],
 });
 
+// Phase 9B2: an installed theme can be broken without ever having been configured. `invalid`
+// stays what Phase 8C defined -- the configured ids that cannot be used today -- and the
+// installation's own health arrives as a second fact, so nothing has to be redefined. `damaged`
+// is installed and broken but not remembered; `paper` is installed and healthy.
+const THEME_STATE_INSTALL_HEALTH = {
+  default: "modern",
+  installed: ["damaged", "paper"],
+  configured: [],
+  selected: [],
+  missing: [],
+  invalid: [],
+  installed_invalid: ["damaged"],
+  warnings: [],
+};
+
 function themeIdList(rows) {
   return (rows || []).map(function (row) { return row.id; }).sort();
 }
@@ -479,6 +494,32 @@ contract("GT3 theme rows: the classification is read from fields, never from war
     assert.equal(session.themeRow("broken").state, "invalid", "the invalid field owns this state");
     assert.equal(session.themeRow("ghost").disabled, true);
     assert.equal(session.themeRow("broken").disabled, true);
+  } finally { session.close(); }
+});
+
+contract("GT19 an installed broken theme is not selectable and cannot be removed", "pass", async () => {
+  const session = await bootGui({ themeState: THEME_STATE_INSTALL_HEALTH });
+  try {
+    const damaged = session.themeRow("damaged");
+    assert.equal(damaged.state, "invalid",
+      "an installed theme that fails the use-time gate is not available");
+    assert.equal(damaged.checked, false);
+    assert.equal(damaged.disabled, true, "and it must not be selectable");
+    assert.equal(damaged.removable, false,
+      "it is not remembered, so offering to forget it would be a button that does nothing");
+
+    const paper = session.themeRow("paper");
+    assert.equal(paper.state, "available", "a healthy installation stays selectable");
+    assert.equal(paper.disabled, false);
+
+    assert.deepEqual(session.themeSummary(), { selected: "0", missing: "0", invalid: "1" },
+      "the summary counts the rows it renders, not only the configured ones");
+
+    session.window.toggleExternalTheme("damaged");
+    await session.flush(3);
+    assert.equal(session.callsOf("set_configs").length, 0,
+      "a direct handler call must not select an unusable theme either");
+    assert.equal(session.themeRow("damaged").state, "invalid");
   } finally { session.close(); }
 });
 

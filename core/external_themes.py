@@ -421,9 +421,19 @@ def theme_state(configured: list[str] | None = None, *, default: str | None = No
     classified -- one bad theme must neither hide the ones that are fine nor the ones
     that are simply missing.
 
-    Returns ``{"installed", "selected", "missing", "invalid", "warnings"}``.
+    Returns ``{"installed", "selected", "missing", "invalid", "installed_invalid", "warnings"}``.
     ``selected`` is a subsequence of the configured list, so it keeps the user's own
     order; the bundle's ``external_ids`` keeps its own deterministic sort.
+
+    ``invalid`` stays what Phase 8C defined -- the *configured* ids that cannot be used today.
+    ``installed_invalid`` is the additive installation-side fact: every installed id that fails the
+    use-time gate, whether the configuration remembers it or not. Phase 9B2 needs it because an
+    installed theme that was broken by hand and never selected was otherwise reported as usable,
+    and the failure only surfaced at the next conversion. The two facts stay separate on purpose:
+    widening ``invalid`` would redefine a locked Phase 8 meaning instead of adding to it.
+
+    The unconfigured ids are the only ones checked a second time, so a configured broken theme is
+    still validated exactly once per read, and ``installed_invalid`` keeps the ``installed`` order.
     """
     installed = set(viewer_assets.external_theme_ids())
     selected: list[str] = []
@@ -445,6 +455,18 @@ def theme_state(configured: list[str] | None = None, *, default: str | None = No
             invalid.append(theme_id)
             warnings.append(str(error) if error else "外置主题当前不可用：" + theme_id)
 
+    classified = set(selected) | set(missing) | set(invalid)
+    unconfigured_invalid = {
+        theme_id
+        for theme_id in installed - classified
+        if _classify_configured_theme(theme_id, installed)[0] != _STATE_VALID
+    }
+    installed_invalid = [
+        theme_id
+        for theme_id in sorted(installed)
+        if theme_id in invalid or theme_id in unconfigured_invalid
+    ]
+
     default_warning = _document_default_warning(default)
     if default_warning:
         warnings.append(default_warning)
@@ -453,6 +475,7 @@ def theme_state(configured: list[str] | None = None, *, default: str | None = No
         "selected": selected,
         "missing": missing,
         "invalid": invalid,
+        "installed_invalid": installed_invalid,
         "warnings": warnings,
     }
 
@@ -460,11 +483,11 @@ def theme_state(configured: list[str] | None = None, *, default: str | None = No
 def theme_inventory() -> dict:
     """Return every installed user theme with its own validity verdict (Phase 9B1).
 
-    `theme_state()` answers what a reader can restore *from the configuration*, so it only
-    classifies the ids the configuration remembers. The settings page needs the other
-    question -- "what is installed here, and does it still work" -- and an installed theme
-    that was broken by hand and never selected is invisible to `theme_state()`. The answer
-    is built here, next to the other registry rules, so the bridge keeps reading facts
+    `theme_state()` answers what a reader can restore *from the configuration*, so it classifies the
+    configured ids first, and since Phase 9B2 it also reports the installed ids that are unusable
+    but were never configured (`installed_invalid`) -- the main page must not offer those either.
+    This function is still the detailed answer the settings page renders: one verdict and one reason
+    per installed id, built here next to the other registry rules so the bridge keeps reading facts
     instead of the registry itself (Phase 8C).
     """
     installed: list[dict] = []

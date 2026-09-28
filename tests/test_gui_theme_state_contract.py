@@ -83,6 +83,27 @@ def test_a_broken_installed_theme_is_reported_rather_than_hidden(sandbox, monkey
     assert state["invalid"] == ["paper"]
     assert any("不合法" in warning for warning in state["warnings"])
 
+def test_an_installed_but_broken_theme_is_its_own_fact(sandbox, monkeypatch):
+    """9B2：安装健康度是**新增**事实，`invalid` 仍然是 configured-only（Phase 8C 不许被改写）。
+
+    `theme_state()` 只分类配置记住的 id，所以一个「已安装、被手工改坏、又从未被选中」的主题
+    既不在 `selected` 也不在 `invalid` —— 主页面因此把它当成可选，用户勾了它，下一次转换才
+    hard fail。修法是补一个安装侧的事实，而不是把 `invalid` 扩成「所有坏安装」：后者会悄悄
+    推翻 Phase 8/9 已经封板、并被其它契约依赖的定义。
+    """
+    pretend_registry(monkeypatch, ["damaged", "paper"], broken={"damaged"})
+    core_config.save_config({"external_themes": []})
+
+    state = BridgeApi().get_theme_state()
+
+    assert state["invalid"] == [], "Phase 8C：invalid 只分类 configured 的 id"
+    assert state["installed_invalid"] == ["damaged"], (
+        "安装健康度：已安装但过不了 use-time gate 的 id"
+    )
+    assert state["installed"] == ["damaged", "paper"]
+    assert state["selected"] == []
+    assert state["missing"] == []
+
 
 def test_a_deleted_default_theme_keeps_its_config_value_and_warns(sandbox, monkeypatch):
     pretend_registry(monkeypatch, [])

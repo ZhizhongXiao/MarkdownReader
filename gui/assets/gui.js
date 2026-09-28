@@ -297,12 +297,16 @@ function closeOnClickOutside(event) {
 //   selected   selectable and in the working selection   checked, selectable
 //   available  selectable but not in it                  unchecked, selectable
 //   missing    in `missing`                              unchecked, not selectable
-//   invalid    in `invalid`                              unchecked, not selectable
+//   invalid    in `invalid` or `installed_invalid`        unchecked, not selectable
 
 function themeRowState(id) {
     var state = _themeState || {};
     if ((state.missing || []).indexOf(id) !== -1) return "missing";
     if ((state.invalid || []).indexOf(id) !== -1) return "invalid";
+    // Phase 9B2: an installed theme that fails the use-time gate is unusable whether or not the
+    // configuration remembers it. Without this the page offered a broken installation as a usable
+    // choice, and the failure only surfaced at the next conversion.
+    if ((state.installed_invalid || []).indexOf(id) !== -1) return "invalid";
     return _themeSelection.indexOf(id) !== -1 ? "selected" : "available";
 }
 
@@ -331,7 +335,6 @@ function renderThemeSelection() {
     if (!list) return;
     var empty = document.getElementById("external-theme-empty");
     var summary = document.getElementById("external-theme-summary");
-    var state = _themeState || {};
     list.innerHTML = "";
 
     var rows = themeRowOrder();
@@ -361,7 +364,11 @@ function renderThemeSelection() {
         badge.textContent = themeStateLabel(rowState);
         row.appendChild(badge);
 
-        if (rowState === "missing" || rowState === "invalid") {
+        // Only a remembered id can be forgotten, and only while it cannot be used: an installed
+        // theme is carried by checking it, and an unusable installation nobody chose must not grow
+        // a button that would have nothing to do (Phase 9B2).
+        var remembered = _themeSelection.indexOf(id) !== -1;
+        if (remembered && (rowState === "missing" || rowState === "invalid")) {
             var remove = document.createElement("button");
             remove.className = "theme-remove";
             remove.setAttribute("data-theme-action", "remove");
@@ -374,19 +381,20 @@ function renderThemeSelection() {
     });
 
     if (summary) {
-        // The count follows the working selection rather than the reply that started the
-        // page: otherwise the summary would contradict the checkboxes next to it until the
-        // bridge answers again. A remembered id that cannot be used today never counts.
-        var selected = 0;
+        // Every count is taken from the rows on screen: the summary describes what the user can
+        // see, and a remembered id that cannot be used today never counts. That is also why the
+        // numbers no longer come from one backend sub-field -- `invalid` is configured-only since
+        // Phase 9B2, so reading it here would have hidden an unusable installation.
+        var counts = { selected: 0, missing: 0, invalid: 0 };
         rows.forEach(function (id) {
-            if (themeRowState(id) === "selected") selected += 1;
+            var rowState = themeRowState(id);
+            if (counts[rowState] !== undefined) counts[rowState] += 1;
         });
-        var missing = (state.missing || []).length;
-        var invalid = (state.invalid || []).length;
-        summary.setAttribute("data-selected", String(selected));
-        summary.setAttribute("data-missing", String(missing));
-        summary.setAttribute("data-invalid", String(invalid));
-        summary.textContent = "已选 " + selected + " · 缺失 " + missing + " · 不可用 " + invalid;
+        summary.setAttribute("data-selected", String(counts.selected));
+        summary.setAttribute("data-missing", String(counts.missing));
+        summary.setAttribute("data-invalid", String(counts.invalid));
+        summary.textContent = "已选 " + counts.selected + " · 缺失 " + counts.missing +
+            " · 不可用 " + counts.invalid;
     }
     if (empty) empty.classList.toggle("hidden", rows.length !== 0);
     applyThemeControlLock();
@@ -411,6 +419,10 @@ function applyThemeControlLock() {
 
 function toggleExternalTheme(id) {
     if (_conversionRunning) return;
+    // A disabled checkbox is a hint, not a rule: a direct call must not select something that
+    // cannot be used today (Phase 9B2), just like the settings actions against the terminal state.
+    var rowState = themeRowState(id);
+    if (rowState === "missing" || rowState === "invalid") return;
     var index = _themeSelection.indexOf(id);
     if (index === -1) {
         _themeSelection.push(id);          // a new choice goes to the end of the memory
