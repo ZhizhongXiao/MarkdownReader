@@ -590,6 +590,10 @@ samples/demo.html                         → 未改动，快照契约仍成立
     （第二次真的发出第 2 个请求，且不需要重新倒计时）；**Promise rejection 不回滚**，因为 accepted 请求本就会
     销毁窗口。`core.user_data.remove_user_data()` 也在第一行检查 `removal_available()`：source / onedir 上
     直接调用一次删除都不做，只返回 `{ok:false, …, error}`。
+  * **destroy 失败（follow-up）**：`window.destroy()` 抛异常时旧实现只记 warning 仍回 `{ok:true}` ⇒ terminal
+    flag 保持、窗口仍活、`webview.start()` 不返回，既不删除也不退出、GUI 还锁死。现在 `_destroy_window()`
+    返回成功与否，失败即回滚 `_removal_requested` 并回 `{ok:false, error:…}`（页面凭 GR7 机制解锁、可直接重试，
+    第二次 close 成功即 `ok:true`）；file logging 保持关闭 —— 明确失败后的降级状态，不引入 reopen 生命周期。
   证据：红阶段 28 failed / 692 passed / 1 skipped（27 条新/翻转契约红 + JS wrapper），JS `tests 47 / pass 41 / fail 6`
   ——红签名都是能力断言（`No module named 'core.user_data'`、`BridgeApi must offer request_user_data_removal()`、
   `core.logger must offer close_file_logging()`、`KeyError: 'removal_available'`、`id="btn-remove-user-data" must exist`）；

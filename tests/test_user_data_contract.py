@@ -433,6 +433,56 @@ def test_an_accepted_request_marks_once_and_destroys_once(onefile_tree):
     assert window.destroyed == 1, "the window is destroyed exactly once"
 
 
+def test_a_window_that_cannot_be_destroyed_is_an_explicit_refusal(onefile_tree, monkeypatch):
+    """destroy 失败必须是一次被拒的请求，而不是一个既不退出也不删除的锁死会话。
+
+    The request promises a deletion that happens after the GUI loop returns. If the window refuses
+    to close, that loop never returns: accepting the request would reserve the terminal state for a
+    promise nothing can keep. The refusal keeps the same shape as every other one, so the page's
+    existing recovery path (GR7) unlocks it without any new front-end work.
+    """
+    import gui.api as gui_api
+
+    module = user_data()
+    deleted: list[str] = []
+
+    def spy_remove():
+        deleted.append("called")
+        return {"ok": True}
+
+    monkeypatch.setattr(module, "remove_user_data", spy_remove)
+
+    class StubbornWindow(WindowStub):
+        def __init__(self) -> None:
+            super().__init__()
+            self.calls = 0
+
+        def destroy(self) -> None:
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("close failed")
+            super().destroy()
+
+    raw = gui_api.BridgeApi()
+    window = StubbornWindow()
+    raw.attach_window(window)
+    api = RemovalBridge(raw)
+
+    refused = api.request_user_data_removal()
+
+    assert refused.get("ok") is False, refused
+    assert refused.get("error"), refused
+    assert api.removal_requested() is False, "a refused request must not stay reserved"
+    assert deleted == [], "no deletion may start without a closed window"
+
+    accepted = api.request_user_data_removal()
+
+    assert accepted.get("ok") is not False, accepted
+    assert window.calls == 2, "the retry really tries to close the window again"
+    assert window.destroyed == 1
+    assert api.removal_requested() is True
+
+
 def test_the_removal_is_refused_where_it_is_not_offered(monkeypatch, tmp_path):
     """source / onedir 上桥接也必须拒绝：前端不展示，不等于后端可以接受。"""
     monkeypatch.delattr(sys, "frozen", raising=False)

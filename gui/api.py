@@ -664,9 +664,9 @@ class BridgeApi:
         `webview.start()` returned -- the WebView2 profile lives in `runtime/`, so deleting it
         while the browser is still alive would fight a running process for its own files.
 
-        Refused: anywhere but onefile, while another entry is still running, or when the request
-        was already accepted. The reply is a courtesy -- the page must not depend on it, because
-        the window may disappear before it arrives.
+        Refused: anywhere but onefile, while another entry is still running, when the request was
+        already accepted, or when the window refuses to close. The reply is a courtesy -- the page
+        must not depend on it, because the window may disappear before it arrives.
         """
         if not user_data.removal_available():
             return {"ok": False, "error": "只有 onefile 构建提供「移除 MarkdownReader 用户数据」。"}
@@ -677,17 +677,33 @@ class BridgeApi:
                 return {"ok": False, "error": "仍有操作在执行，请稍后再试。"}
             self._removal_requested = True
         close_file_logging()
-        self._destroy_window()
+        if not self._destroy_window():
+            # The whole point of the request is the deletion that happens after the GUI loop
+            # returns. A window that cannot be destroyed leaves that loop running forever, so
+            # accepting would reserve the terminal state for a promise nothing can keep -- and
+            # the user would face a window that neither exits nor deletes anything. Refusing with
+            # the same shape as every other refusal lets the page unlock itself and retry, and the
+            # file log stays closed: a deliberate degraded state after a failed act, not a reason
+            # to invent a second reopen lifecycle.
+            with self._state_lock:
+                self._removal_requested = False
+            return {"ok": False, "error": "无法关闭窗口，用户数据未删除。"}
         return {"ok": True, "error": ""}
 
-    def _destroy_window(self) -> None:
-        """End the window, which is what makes `webview.start()` return."""
+    def _destroy_window(self) -> bool:
+        """End the window, which is what makes `webview.start()` return.
+
+        Returns False when there is nothing to close or the close failed, so the caller can refuse
+        the request instead of pretending the session is over.
+        """
         if self._window is None:
-            return
+            return False
         try:
             self._window.destroy()
         except Exception:
-            _logger.warning("销毁窗口失败，退出流程仍将继续。", exc_info=True)
+            _logger.warning("销毁窗口失败，本次移除请求被拒绝。", exc_info=True)
+            return False
+        return True
 
     def _should_remove_user_data_on_exit(self) -> bool:
         """Return True when an accepted request still has to be carried out.

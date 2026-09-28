@@ -1008,6 +1008,9 @@ EXE 本身保留。
             重试有界（约 2s deadline / 200ms），耗尽即上报，绝不谎报、绝不重建
 非 onefile   `remove_user_data()` 第一行自己拒绝：source / onedir 一次删除都不做，报告
             ok=false + error（onefile-only 是 core 的前提，不是调用者必须记得的责任）
+destroy 失败  `_destroy_window()` 返回成功与否；失败则回滚 `_removal_requested` 并回
+            `{ok:false, error:"无法关闭窗口，用户数据未删除。"}` —— 页面用既有的 GR7 机制自动
+            解锁并可重试；file logging 保持关闭（明确失败后的降级状态，不引入 reopen 生命周期）
 日志        `close_file_logging()` 幂等，并把 logger 置为终止态：之后 `setup_logging()`
             不得再打开文件（AGENTS §23「确认后禁止日志写入」因此严格成立）
 桥接        public surface 只新增 `request_user_data_removal()`；它只结束会话、不删文件，
@@ -1046,6 +1049,15 @@ JS `tests 47 / pass 41 / fail 6`；实现后 JS **47/47**、聚焦契约 **54 pa
 `{'ok': True, 'removed': [...], 'user_data_root_removed': True}`（旧实现真的触达 deletion spy）；`GR7` 红签名是
 `the page works again once the backend refuses`（`tests 48 / pass 47 / fail 1`）。修复后聚焦契约 **56 passed**、
 JS **48/48**。
+
+（3）**destroy 失败的语义**：`window.destroy()` 抛异常时旧实现只记 warning 却仍回 `{ok:true}`，于是
+terminal flag 保持、窗口仍活、`webview.start()` 不返回 ⇒ 既没删除也没退出、GUI 还锁死。现在
+`_destroy_window()` 返回成功与否，失败时回滚 `_removal_requested` 并回 `{ok:false, error:"无法关闭窗口…"}`，
+页面用既有的 GR7 机制解锁并可重试第二次（第二次 close 成功即 `ok:true`）；file logging 保持关闭 ——
+这是明确失败后的降级状态，不为它引入 reopen 生命周期。判别契约（先红后绿）：
+`test_a_window_that_cannot_be_destroyed_is_an_explicit_refusal` 红签名是 `{'ok': True, 'error': ''}`
+（destroy 抛 `RuntimeError` 仍被当成成功）；修复后聚焦契约 **57 passed**、JS **48/48**（无需新增 JS 契约，
+GR7 已覆盖全部结构化拒绝的恢复）。
 
 **未做**（9B2 分界）：`docs/USAGE.md` 存储位置与截图刷新、主页「坏但未配置主题仍可勾选」、
 `open_theme_location` 的返回值形状清理、`_write_output` newline 债。

@@ -264,6 +264,7 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
   `setup_logging()` 之后不能再打开日志文件（AGENTS §23）。`request_user_data_removal()` 的拒绝是**可恢复**的：
   收到结构化 `{ok:false}` 时页面回滚 provisional terminal lock 并允许再次确认（Promise rejection 不回滚，
   因为 accepted 请求本就会销毁窗口）；`core.user_data.remove_user_data()` 自身也拒绝非 onefile 布局。
+  窗口销毁失败同样是一次**可恢复的拒绝**：回滚终止标志、不执行删除、页面可重试，file logging 保持关闭。
 
 ## 命名与路径约定
 
