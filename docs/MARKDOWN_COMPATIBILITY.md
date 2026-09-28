@@ -564,6 +564,10 @@ samples/demo.html                         → 未改动，快照契约仍成立
     红阶段 2 failed / 18 passed（`tests/test_config_contract.py`），修复后 20 passed、四个契约文件 **54 passed**、
     全套 **693 passed / 0 failed / 1 skipped**、ruff（项目闸 + MCP 规则集）0、pyright 0 error、MCP `python_review`
     本批 `batch_ok` 且 `scope_complete`。
+  **状态**：本 follow-up 已推送（`04c30c2`）并通过远端独立静态终审：P10-A / P10-B、P10-C 的成功迁移 /
+  写失败 snapshot / corrupt 单次读取 / retire 失败后的权威性 / 不复活 / 显式路径隔离 / 单一原子写全部 PASS，
+  `_find_config` 保持查询性质、public API 未变、scope 纪律 PASS ⇒ **Phase 10 overall PASS**（对象 `04c30c2`；
+  `54 passed` / `693 passed / 1 skipped` / ruff / pyright / MCP 仍只记**本地**证据，远端 combined status 为空）。
 
 ## texmath 审计记录（Phase 4B，为什么不复用 `markdown-it-texmath`）
 

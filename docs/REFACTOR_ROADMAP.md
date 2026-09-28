@@ -654,11 +654,12 @@ Settings page
           「安装事实」两个状态机互不写入；返回主页先重读再显示）
 9B2 NOT STARTED  9B closeout：`docs/USAGE.md` 存储位置收口、截图刷新、主页「坏但未配置主题仍可勾选」
                  是否顺带修正
-Phase 10 implementation/contracts PASS；overall seal pending remote audit of the failure-path follow-up
+Phase 10 PASS（remote seal = 04c30c2）
                  storage ownership 收口：log 与 WebView2 profile 进 `runtime/`；legacy config 变成一次性升级输入
                  （写完 profile 即退场，不再复活）。`47ea13f` 远端终审：P10-A PASS / P10-B PASS /
                  P10-C success path PASS / P10-C failed-save + corrupt single-read FOLLOW-UP REQUIRED
-                 ⇒ 本地 follow-up 红→绿完成（2 failed / 18 passed → 20 passed），remote audit pending。
+                 ⇒ 本地 follow-up 红→绿完成（2 failed / 18 passed → 20 passed）；远端独立终审对象 `04c30c2`
+                 （failure-path snapshot / single-read / scope discipline 均 PASS）⇒ **Phase 10 overall PASS**。
 Phase 11 NOT STARTED  用户数据移除 lifecycle（terminal removal state：停写 → 关窗口 → 删 profile/assets/
                  runtime → 退出；`core/user_data.py` 仍不预建）
 ```
@@ -941,6 +942,9 @@ FOLLOW-UP REQUIRED —— 冻结语「写失败时本次仍用已解析的 legac
 2 failed / 18 passed（`tests/test_config_contract.py`），修复后 20 passed、四个契约文件 **54 passed**、全套
 **693 passed / 0 failed / 1 skipped**、ruff（项目闸 + MCP 规则集）0、pyright 0 error、MCP `python_review` 本批
 `batch_ok` 且 `scope_complete`。
+
+远端独立终审对象 `04c30c2`（本 follow-up 的提交）：failure-path snapshot / single-read / scope discipline 均 PASS
+⇒ **Phase 10 overall PASS**（Phase 10 封板于 `04c30c2`）。
 
 **未做**（按阶段顺序）：`remove user data` 按钮与 5 秒倒计时、terminal deletion、`core/user_data.py`、
 9B2 截图刷新、未 configured 坏主题的主页修复、`_write_output` newline 债。
