@@ -601,6 +601,12 @@ samples/demo.html                         → 未改动，快照契约仍成立
   改动面：`core/user_data.py`（新）、`core/config.py`、`core/logger.py`、`gui/api.py`、`gui/app.py`、
   `gui/assets/{index.html,gui.js,gui.css}`、7 个测试/契约文件与三份文档；`viewer/`、`themes/`、`renderer/`、
   `packaging/`、`samples/` 未进入 diff。9B2 的四项仍未做。
+  **状态**：本阶段经过三轮远端独立终审（`e7a71ed` → `0ee305e` → `1405a26`）：首轮给出主实现 PASS 与两项
+  FOLLOW-UP REQUIRED；第二轮关闭 explicit-refusal recovery 与 core 对 source/onedir 的破坏性守卫；第三轮
+  关闭 destroy 失败语义（reservation 回滚、不 cleanup、可重试）⇒ **Phase 11 overall PASS**（对象 `1405a26`）。
+  最终本地证据：聚焦契约 **57 passed**、JS **48/48**、全套 **729 passed / 1 skipped / 0 failed**、ruff 与
+  pyright PASS；`python-quality` MCP 在最后两批 unavailable（`Not connected`），按证据边界**不计为最终证据**
+  （远端 combined status 为空，无 CI）。
 
 ## texmath 审计记录（Phase 4B，为什么不复用 `markdown-it-texmath`）
 

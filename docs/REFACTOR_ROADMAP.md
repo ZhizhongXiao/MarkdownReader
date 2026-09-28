@@ -652,18 +652,20 @@ Settings page
           「失败丢弃排队意图」；远端独立终审（对象 9a7063a）9A-1…9A-8 全 PASS
 9B1 PASS  设置页 + 外置主题管理 + 存储信息 + 关于（GS1–GS13 + GS2b，共 14 条契约；主页「携带集合」与设置页
           「安装事实」两个状态机互不写入；返回主页先重读再显示）
-9B2 NOT STARTED  9B closeout：`docs/USAGE.md` 存储位置收口、截图刷新、主页「坏但未配置主题仍可勾选」
-                 是否顺带修正
+9B2 READY        9B closeout：`docs/USAGE.md` 存储位置收口、截图刷新、主页「坏但未配置主题仍可勾选」
+                 是否顺带修正（Phase 11 已封板，可开始）
 Phase 10 PASS（remote seal = 04c30c2）
                  storage ownership 收口：log 与 WebView2 profile 进 `runtime/`；legacy config 变成一次性升级输入
                  （写完 profile 即退场，不再复活）。`47ea13f` 远端终审：P10-A PASS / P10-B PASS /
                  P10-C success path PASS / P10-C failed-save + corrupt single-read FOLLOW-UP REQUIRED
                  ⇒ 本地 follow-up 红→绿完成（2 failed / 18 passed → 20 passed）；远端独立终审对象 `04c30c2`
                  （failure-path snapshot / single-read / scope discipline 均 PASS）⇒ **Phase 10 overall PASS**。
-Phase 11 实现完成（待远端复审）  用户数据移除 lifecycle：onefile-only 入口 + 5 秒确认 + terminal 状态
+Phase 11 PASS（remote seal = 1405a26）  用户数据移除 lifecycle：onefile-only 入口 + 5 秒确认 + terminal 状态
                  （单锁 operation gate，accepted 即关闭 file log 并 `window.destroy()`）+
                  `webview.start()` 返回后删 profile/assets/runtime/legacy 并 rmdir 空 root；
-                 `core/user_data.py` 已落地
+                 `core/user_data.py` 已落地。`e7a71ed → 0ee305e → 1405a26` 三轮远端审计：主实现 PASS，
+                 两项主轮 follow-up（explicit-refusal recovery / core onefile guard）与第三轮 destroy-failure
+                 语义均已关闭 ⇒ **Phase 11 overall PASS**
 ```
 
 ## 落地记录（Phase 9A：主页面外置主题选择）
@@ -1058,6 +1060,15 @@ terminal flag 保持、窗口仍活、`webview.start()` 不返回 ⇒ 既没删�
 `test_a_window_that_cannot_be_destroyed_is_an_explicit_refusal` 红签名是 `{'ok': True, 'error': ''}`
 （destroy 抛 `RuntimeError` 仍被当成成功）；修复后聚焦契约 **57 passed**、JS **48/48**（无需新增 JS 契约，
 GR7 已覆盖全部结构化拒绝的恢复）。
+
+远端独立终审对象 `1405a26`（本阶段第三次审计对象）：destroy 失败即结构化拒绝 —— reservation 回滚、
+cleanup 不发生、可第二次重试（第二次 close 成功后 `requested=true`）；与 `0ee305e` 关闭的两项
+（explicit-refusal recovery / core 对 source·onedir 的破坏性守卫）合起来 ⇒ **Phase 11 overall PASS**，
+封板于 `1405a26`。
+
+最终本地证据：聚焦契约 **57 passed**；JS **48/48**；全量 **729 passed / 1 skipped / 0 failed**；
+ruff（项目闸 + MCP 规则集）PASS；pyright（项目标准）PASS；`python-quality` MCP 在最后两批
+unavailable（`Not connected`），因此**不计为最终证据**（远端 combined status 仍为空，无 CI）。
 
 **未做**（9B2 分界）：`docs/USAGE.md` 存储位置与截图刷新、主页「坏但未配置主题仍可勾选」、
 `open_theme_location` 的返回值形状清理、`_write_output` newline 债。
