@@ -32,6 +32,26 @@ def write_json(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
 
 
+def count_content_reads(monkeypatch, path: Path) -> list[str]:
+    """Count the real *reads* of one file, whoever performs them.
+
+    `os.path.isfile()` opens nothing, so wrapping `builtins.open` counts exactly the times a
+    consumer read the file's contents -- which is what the single-read contract is about, not which
+    private helper happens to do the reading. Writes are filtered out (the failing-write contract
+    rewrites the legacy file on purpose) by looking at the mode.
+    """
+    opened: list[str] = []
+    real_open = builtins.open
+
+    def counting_open(file, mode="r", *args, **kwargs):
+        if not any(flag in str(mode) for flag in "wax"):
+            opened.append(str(file))
+        return real_open(file, mode, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "open", counting_open)
+    return opened
+
+
 @pytest.fixture()
 def sandbox(tmp_path, monkeypatch):
     """Point the profile location and the legacy location at a temporary tree."""
@@ -234,9 +254,14 @@ def test_deleting_the_profile_cannot_resurrect_a_legacy_config(sandbox):
     assert not sandbox["profile"].exists(), "defaults must not write a profile of their own"
 
 
-def test_a_corrupt_legacy_migrates_nothing_and_says_so(sandbox, caplog):
-    """迁移失败不得制造半个 profile，也不能把坏文件当成已处理。"""
+def test_a_corrupt_legacy_migrates_nothing_and_says_so(sandbox, monkeypatch, caplog):
+    """迁移失败不得制造半个 profile，也不能把坏文件当成已处理。
+
+    「不能当成已处理」是可观察的：坏文件在**一次** `load_config()` 里只被读一次。读第二次不只是
+    浪费 —— 它会把同一个坏文件再报一次 warning，也把「本次已经处理过 legacy」这件事重新变成不确定。
+    """
     sandbox["legacy"].write_text("{ not json", encoding="utf-8")
+    reads = count_content_reads(monkeypatch, sandbox["legacy"])
 
     with caplog.at_level(logging.WARNING, logger="core.config"):
         loaded = core_config.load_config()
@@ -244,9 +269,11 @@ def test_a_corrupt_legacy_migrates_nothing_and_says_so(sandbox, caplog):
     assert loaded["template"] == core_config._DEFAULTS["template"]
     assert not sandbox["profile"].exists(), "a failed migration must not write a half profile"
     assert sandbox["legacy"].exists(), "the unreadable file stays for a retry or a cleanup"
-    assert [
+    assert reads.count(str(sandbox["legacy"])) == 1, reads
+    reported = [
         record for record in caplog.records if str(sandbox["legacy"]) in record.getMessage()
-    ], "the unreadable legacy file is reported"
+    ]
+    assert len(reported) == 1, "one read, one report -- not a second look at the same bad file"
 
 
 def test_the_migration_writes_through_the_one_atomic_config_writer(sandbox, monkeypatch):
@@ -277,18 +304,11 @@ def test_the_migration_reads_the_legacy_file_once(sandbox, monkeypatch):
     已确认可迁移的 legacy 删掉。这里数的是对 legacy 这个文件的真实内容读取次数（与函数名无关）。
     """
     write_json(sandbox["legacy"], {"build": {"template": "office"}})
-    opened: list[str] = []
-    real_open = builtins.open
-
-    def counting_open(file, *args, **kwargs):
-        opened.append(str(file))
-        return real_open(file, *args, **kwargs)
-
-    monkeypatch.setattr(builtins, "open", counting_open)
+    reads = count_content_reads(monkeypatch, sandbox["legacy"])
 
     assert core_config.load_config()["template"] == "office"
 
-    assert opened.count(str(sandbox["legacy"])) == 1, opened
+    assert reads.count(str(sandbox["legacy"])) == 1, reads
 
 
 def test_a_failed_retirement_is_a_warning_and_never_a_second_migration(
@@ -296,6 +316,7 @@ def test_a_failed_retirement_is_a_warning_and_never_a_second_migration(
 ):
     """retire 失败不等于迁移失败：profile 已落盘所以不会复活，但必须留下可审计的 warning。"""
     write_json(sandbox["legacy"], {"build": {"template": "office"}})
+    reads = count_content_reads(monkeypatch, sandbox["legacy"])
 
     def locked(_target):
         raise OSError(32, "the file is in use")
@@ -306,6 +327,7 @@ def test_a_failed_retirement_is_a_warning_and_never_a_second_migration(
         loaded = core_config.load_config()
 
     assert loaded["template"] == "office"
+    assert reads.count(str(sandbox["legacy"])) == 1, reads
     assert sandbox["profile"].is_file(), "the values are already safe in the profile"
     assert sandbox["legacy"].exists(), "the retirement failed, so the file is still there"
     assert [
@@ -333,12 +355,18 @@ def test_a_failed_profile_write_keeps_and_uses_the_legacy_config(
     """最危险的一支：profile 写不进去时，绝不能先删 legacy，也不能让可读的旧配置失效。
 
     升级存储失败不该把一个此前能正常读取的安装变成 defaults，更不该删掉用户唯一的那份配置。
-    因此顺序被冻结为：parse → save（失败则保留 legacy，本次继续用已解析的内容）→ remove。
+    因此顺序被冻结为：parse → save（失败则保留 legacy，本次继续用第一次读取的 snapshot）→ remove。
+
+    判别点在这里：写盘失败的那一刻顺手把 legacy 改成 `vscode`。只要这次运行再去读一遍 legacy，
+    第一次确认过的 `office` 就会被刚写进去的 `vscode` 静默替换掉 —— 那正是「snapshot 只取一次」
+    要排除的事。
     """
     write_json(sandbox["legacy"], {"build": {"template": "office"}})
+    reads = count_content_reads(monkeypatch, sandbox["legacy"])
     removals: list[str] = []
 
     def disk_full(_cfg, _config_path=None):
+        write_json(sandbox["legacy"], {"build": {"template": "vscode"}})
         raise OSError(28, "disk full")
 
     monkeypatch.setattr(core_config, "save_config", disk_full)
@@ -348,6 +376,7 @@ def test_a_failed_profile_write_keeps_and_uses_the_legacy_config(
         loaded = core_config.load_config()
 
     assert loaded["template"] == "office", "a failed upgrade must not downgrade a readable config"
+    assert reads.count(str(sandbox["legacy"])) == 1, "this run keeps the snapshot it confirmed"
     assert not sandbox["profile"].exists()
     assert sandbox["legacy"].exists(), "the only copy of the user's settings must survive"
     assert removals == [], "legacy must never be deleted before the profile write succeeded"

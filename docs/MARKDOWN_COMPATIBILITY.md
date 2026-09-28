@@ -545,14 +545,25 @@ samples/demo.html                         → 未改动，快照契约仍成立
     写的是 **flat config**；sectioning / normalization / 原子写仍只由 `save_config()` 负责）→ **成功后才**
     `os.remove(legacy)`。`_find_config()` 保持查询性质，迁移只在私有
     helper 里发生；「合法空对象 `{}`」与「解析失败」由私有 `_read_config_object()` 区分。
-  * **失败语义（冻结，无 tombstone）**：写 profile 失败 → 本次仍用已解析的 legacy 内容、保留文件、warning（下次可
-    重试），**绝不先删 legacy**；删 legacy 失败 → warning，profile 已是权威故永不复活；legacy 不可解析 → defaults +
-    warning，不写 profile、不删 legacy。
+  * **失败语义（冻结，无 tombstone）**：写 profile 失败 → 本次直接用**第一次读取的 snapshot**（不再重读 legacy）、保留
+    文件、warning（下次可重试），**绝不先删 legacy**；删 legacy 失败 → warning，profile 已是权威故永不复活；legacy
+    不可解析 → defaults + warning，不写 profile、不删 legacy。
   证据：红阶段 16 failed / 31 passed —— P10-9 的红签名 `assert 'office' == 'modern'` 就是复活的实证，P10-14 的红签名
-  只有「失败必须被报告」这条不成立；实现后契约 47/47 全绿、全套 **692 passed / 0 failed / 1 skipped**、ruff 全绿、
-  pyright（项目 standard）82 文件 0 error、MCP `python_review` 11/11 批 `batch_ok` 且末批 `scope_complete`。三种布局的
+  只有「失败必须被报告」这条不成立；实现后**四个契约文件 54 passed**、全套 **693 passed / 0 failed / 1 skipped**、ruff
+  全绿、pyright（项目 standard）82 文件 0 error、MCP `python_review` 11/11 批 `batch_ok` 且末批 `scope_complete`。三种布局的
   最终形态见 `REFACTOR_ROADMAP.md` 的 Phase 10 落地记录；`gui/api.py::get_storage_info()` 的 shape 未变，设置页因此
   自动显示新的 runtime truth。
+  * **audit follow-up（远端终审对象 `47ea13f` ⇒ P10-C 失败支路 FOLLOW-UP REQUIRED）**：冻结语「写失败时本次仍用已解析的
+    legacy 内容」当时**并不严格成立** —— 迁移返回后 `load_config()` 仍会 `_find_config()` 再找到 legacy 并 `_parse_json()`
+    读第二遍；两次之间文件被改（或改坏）时，第一次确认过的值会被替换；corrupt 支路同样重复读取、重复 warning。
+    窄修复（不改公开 API、不扩大范围）：私有 helper 改为返回 `(handled, snapshot)`，`load_config()` 在 `handled` 时直接
+    `cfg.update(snapshot)`、不再查 `_find_config()`；`_find_config()` 的查询性质、`save_config` 恰好一次、flat config
+    入参、显式路径不触发迁移全部不变。判别契约（先红后绿）：corrupt 支路数真实读取次数 `assert 2 == 1` 且同一条 warning
+    出现两次；failed-save 支路在 mock `save_config()` 里**先把 legacy 改成 `vscode` 再抛 `OSError(28)`**，旧实现红签名
+    `assert 'vscode' == 'office'`，新实现仍用第一次的 snapshot `office`；成功支路与 retire-failure 支路同样锁 1 次读取。
+    红阶段 2 failed / 18 passed（`tests/test_config_contract.py`），修复后 20 passed、四个契约文件 **54 passed**、
+    全套 **693 passed / 0 failed / 1 skipped**、ruff（项目闸 + MCP 规则集）0、pyright 0 error、MCP `python_review`
+    本批 `batch_ok` 且 `scope_complete`。
 
 ## texmath 审计记录（Phase 4B，为什么不复用 `markdown-it-texmath`）
 

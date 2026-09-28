@@ -226,7 +226,7 @@ def _read_config_object(filepath: str) -> dict | None:
     return data
 
 
-def _migrate_legacy_config_if_needed() -> None:
+def _migrate_legacy_config_if_needed() -> tuple[bool, dict | None]:
     """Upgrade a legacy configuration once, and only while no profile exists.
 
     The legacy file beside the executable is an *upgrade input*, not a permanent fallback: while
@@ -241,37 +241,54 @@ def _migrate_legacy_config_if_needed() -> None:
             -> only then remove the legacy file
                (a failure is reported; the profile is authoritative from then on)
 
+    The return value is what keeps "this run still uses the parsed values" true, and it is
+    `(handled, snapshot)`:
+
+        (False, None)   the profile exists, or there is no legacy file -- nothing happened, and the
+                        caller reads the configuration file the usual way;
+        (True, None)    the legacy file was read and cannot contribute (unreadable, or not an
+                        object) -- the caller uses defaults and must not read it again;
+        (True, data)    the legacy file was parsed into `data`: the snapshot this run uses, whether
+                        the write succeeded, the write failed, or the retirement failed.
+
+    `handled` is what makes this a single read. The profile can still be missing after a failed
+    write, so a caller that went on to `_find_config()` would find the legacy file again and read
+    it a second time -- and an edit in between would replace the configuration this migration has
+    already confirmed with something else, or with nothing at all.
+
     `_find_config()` stays a query. This is the single place that changes the storage layout, and
     it is reached only from `load_config()` when no explicit path was given.
     """
     profile_path = paths.config_path()
     if os.path.isfile(profile_path):
-        return
+        return False, None
     legacy_path = _legacy_config_path()
     if not os.path.isfile(legacy_path):
-        return
+        return False, None
 
     legacy_data = _read_config_object(legacy_path)
     if legacy_data is None:
         # Unreadable or not an object; the read above already said why. Defaults for this run,
         # nothing written, and the file stays for a retry or a Phase 11 cleanup.
-        return
+        return True, None
 
+    legacy_cfg = _parse_config_object(legacy_data)
     try:
         # One snapshot, one writer: the flat configuration is built from the object read above,
         # never by reading the file again. A second read could see an edit that happened in
         # between and silently replace the data this migration has just confirmed.
-        save_config(_parse_config_object(legacy_data))
+        save_config(legacy_cfg)
     except Exception as error:
         _logger.warning("迁移旧版配置失败，保留原文件：%s（%s）", legacy_path, error)
-        return
+        return True, legacy_cfg
 
     try:
         os.remove(legacy_path)
     except OSError as error:
         _logger.warning("旧版配置未能删除，profile 已生效：%s（%s）", legacy_path, error)
-        return
+        return True, legacy_cfg
     _logger.info("旧版配置已迁移并退场：%s", legacy_path)
+    return True, legacy_cfg
 
 
 def _find_config(config_path: str | None = None) -> str | None:
@@ -335,16 +352,25 @@ def load_config(
 ) -> dict:
     """Load configuration with priority: runtime overrides > config.json > defaults."""
     cfg = dict(_DEFAULTS)
-    if not config_path:
-        # An explicit path is a one-off input: it must not rewrite the user's storage. Without
-        # one, a legacy install gets upgraded before the read, so the rest of this function sees
-        # the profile like every other run does.
-        _migrate_legacy_config_if_needed()
-    path = _find_config(config_path)
-    if path:
+    legacy_cfg: dict | None = None
+    path: str | None = None
+    if config_path:
+        # An explicit path is a one-off input: it must not rewrite the user's storage, so it never
+        # triggers a migration and the file it names is read as given.
+        path = _find_config(config_path)
+    else:
+        # Without one, a legacy install gets upgraded before the read. Once the helper answers, the
+        # legacy input is settled for this run: `handled` means "do not go looking for that file
+        # again", and `legacy_cfg` is the snapshot the single read produced.
+        handled, legacy_cfg = _migrate_legacy_config_if_needed()
+        if not handled:
+            path = _find_config()
+
+    if legacy_cfg is not None:
+        cfg.update(legacy_cfg)
+    elif path:
         _logger.debug("正在加载配置：%s", path)
-        file_cfg = _parse_json(path)
-        cfg.update(file_cfg)
+        cfg.update(_parse_json(path))
     if runtime_overrides:
         overrides = {key: value for key, value in runtime_overrides.items() if value is not None}
         cfg.update(overrides)

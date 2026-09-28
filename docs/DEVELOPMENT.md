@@ -209,9 +209,11 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
   不回落 legacy）。legacy `PROJECT_ROOT/config.json` 自 Phase 10 起是**一次性升级输入**：profile 缺失且 legacy 可解析时，
   先对**同一份 snapshot** 调 `save_config(_parse_config_object(legacy_data))`（写的是 flat config；
   sectioning / normalization / 原子写仍只由 `save_config()` 负责；legacy 只读一次，不存在 TOCTOU 重读）
-  把内容写进 profile，**成功后才** `os.remove(legacy)`；写失败则本次继续用已解析的 legacy
+  把内容写进 profile，**成功后才** `os.remove(legacy)`；写失败则本次继续用那份 snapshot
   内容并保留文件（下次可重试），删除失败只记 warning（profile 已是权威，永不复活）。`_find_config()` 保持查询性质，
-  迁移只在 `_migrate_legacy_config_if_needed()` 里发生，且**显式路径不触发迁移**。
+  迁移只在 `_migrate_legacy_config_if_needed()` 里发生，且**显式路径不触发迁移**；该 helper 返回
+   `(handled, snapshot)` —— `handled` 表示「本次的 legacy 输入已经处理完」，`load_config()` 据此直接使用 snapshot
+   而不再 `_find_config()`，因此成功 / 写失败 / 不可解析三条支路都只真实读取 legacy 一次（Phase 10 audit follow-up）。
   `build.template`（文档默认主题）与 `build.external_themes`（额外携带列表）是两个独立概念，只写 id、永不写路径；
   `BridgeApi.get_theme_state()` 区分 `configured` / `selected` / `missing` / `invalid`（后两者分别是「不在 registry」与「在
   registry 但过不了 use-time gate」），判定与转换同源于 `external_themes._classify_configured_theme()`；GUI 控件属 Phase 9。
