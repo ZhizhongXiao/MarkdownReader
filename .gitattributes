@@ -6,9 +6,9 @@ config.json text eol=crlf
 # config.json is handled above.
 tests/js/package-lock.json text eol=lf
 
-# samples/demo.html is the committed specimen of what the reader renders. The
-# suite compares a fresh render against it after normalising newlines, so LF is
-# pinned here to keep the worktree, Windows Python and the remote blob agreeing.
+# samples/demo.html is the committed specimen of what the reader renders. The writers pin LF
+# (Phase 9B2-B) and the suite compares a fresh render against it byte for byte, so LF is pinned
+# here too, to keep the worktree, Windows Python and the remote blob agreeing.
 samples/demo.html text eol=lf linguist-generated=true
 
 # 迁移 fixture 语料：断言对换行敏感，仓库内固定 LF（同 samples/demo.html 的做法）。

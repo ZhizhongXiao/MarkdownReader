@@ -27,6 +27,19 @@ def demo_html(tmp_path_factory) -> str:
     return output.read_text(encoding="utf-8")
 
 
+def _first_difference(actual: bytes, expected: bytes) -> int:
+    """Return the offset of the first differing byte, or the shorter length.
+
+    A byte comparison that only says "not equal" leaves a 1.5 MB page to bisect by
+    hand; the offset is what turns the failure into a diagnosis (a newline
+    translation shows up as a one-byte shift at the first line break).
+    """
+    for offset, (left, right) in enumerate(zip(actual, expected, strict=False)):
+        if left != right:
+            return offset
+    return min(len(actual), len(expected))
+
+
 def test_demo_generation_writes_a_standalone_document(demo_html: str):
     assert "<html" in demo_html
     assert "<body" in demo_html
@@ -57,20 +70,26 @@ def test_demo_inlines_the_shared_viewer_javascript(demo_html: str):
 
 
 def test_demo_html_matches_the_committed_specimen(tmp_path: Path):
-    """A fresh render must equal samples/demo.html byte for byte, modulo newlines.
+    """A fresh render must equal samples/demo.html byte for byte.
 
     The committed page is the artifact readers open, so it is only useful as a
-    specimen while it is exactly what the current sources produce.
+    specimen while it is exactly what the current sources produce. The comparison
+    is on bytes, deliberately: the writer pins LF (Phase 9B2-B), so the specimen,
+    the worktree, a Windows render and the remote blob are all the same bytes. A
+    normalising comparison -- the one that used to run here -- would go green again
+    the moment the platform default newline crept back into the writer.
     """
     generated = tmp_path / "demo.html"
     generate_demo(output=generated)
 
     committed = ROOT / "samples" / "demo.html"
-    expected = committed.read_text(encoding="utf-8").replace("\r\n", "\n")
-    actual = generated.read_text(encoding="utf-8").replace("\r\n", "\n")
+    expected = committed.read_bytes()
+    actual = generated.read_bytes()
 
     assert actual == expected, (
-        "samples/demo.html no longer matches the sources: run "
+        "samples/demo.html is no longer byte-identical to a fresh render: run "
         "`python tools/generate_demo.py` and commit the regenerated file "
-        "(or fix what changed in viewer/, themes/, node_renderer/ or samples/demo.md)."
+        "(or fix what changed in viewer/, themes/, node_renderer/ or samples/demo.md). "
+        f"Generated {len(actual)} B, committed {len(expected)} B, first difference at byte "
+        f"{_first_difference(actual, expected)}."
     )

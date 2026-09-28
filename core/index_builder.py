@@ -142,7 +142,9 @@ def build_index(
 
     output_path = os.path.join(output_dir, filename)
     os.makedirs(output_dir, exist_ok=True)
-    with open(output_path, "w", encoding="utf-8") as stream:
+    # LF is pinned for the same reason as the document writer (Phase 9B2-B): the index is a durable
+    # artifact, and the platform default would rewrite every line break on Windows.
+    with open(output_path, "w", encoding="utf-8", newline="\n") as stream:
         stream.write(html)
 
     _logger.info("索引页已生成：%s", output_path)

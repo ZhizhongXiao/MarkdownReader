@@ -70,9 +70,14 @@ def _selected_external_themes(cfg: dict) -> list[str]:
 
 
 def _write_output(output_path: str, template_html: str) -> str:
-    """Write the assembled document and return its path (both paths share this)."""
+    """Write the assembled document and return its path (both paths share this).
+
+    ``newline="\\n"`` is deliberate (Phase 9B2-B): the markup is assembled with LF and the file is a
+    durable artifact -- diffs, checksums and the committed demo specimen compare its bytes -- so the
+    platform default must not rewrite every line break into CRLF on Windows.
+    """
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    with open(output_path, "w", encoding="utf-8") as f:
+    with open(output_path, "w", encoding="utf-8", newline="\n") as f:
         f.write(template_html)
 
     _logger.info("已生成：%s", output_path)
