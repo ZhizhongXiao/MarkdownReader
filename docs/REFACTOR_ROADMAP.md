@@ -652,8 +652,13 @@ Settings page
           「失败丢弃排队意图」；远端独立终审（对象 9a7063a）9A-1…9A-8 全 PASS
 9B1 PASS  设置页 + 外置主题管理 + 存储信息 + 关于（GS1–GS13 + GS2b，共 14 条契约；主页「携带集合」与设置页
           「安装事实」两个状态机互不写入；返回主页先重读再显示）
-9B2 READY        9B closeout：`docs/USAGE.md` 存储位置收口、截图刷新、主页「坏但未配置主题仍可勾选」
-                 是否顺带修正（Phase 11 已封板，可开始）
+9B2 PASS        Phase 9 closeout，分三批；A / B / B′ 均已远端静态复审，C 为本次文档收口：
+                （A）主题健康度与目录打开 `99b14c3`：`installed_invalid` 为附加事实、`invalid` 仍
+                    configured-only、GT19 锁定「坏但未 configured 的安装不可选不可卸」、opener 失败回结构化拒绝
+                （B）生成 HTML 换行卫生 `e056b79`：converter / index_builder 两个 writer 固定 `newline="\n"`、
+                    demo specimen 改为逐字节比对（`samples/` 无需再生）
+                （B′）回归判别力硬化 `df6ec28`（仅测试）：artifact 与 writer-intent 契约分层
+                （C）文档收口：用户数据三布局、截图审计结论、A/B 对象与证据归档
 Phase 10 PASS（remote seal = 04c30c2）
                  storage ownership 收口：log 与 WebView2 profile 进 `runtime/`；legacy config 变成一次性升级输入
                  （写完 profile 即退场，不再复活）。`47ea13f` 远端终审：P10-A PASS / P10-B PASS /
@@ -819,6 +824,82 @@ stale」的窗口，而 GS12 当时只证明「最终会重读」，不证明「
 `await reloadThemeState()` 成功后才隐藏；失败则留在设置页并记 ERROR，Back 即重试（重试真的再读一次）。
 GS12 相应升级为「先重读再显示」的判别契约（含失败支路），record 数不变（仍 41）。
 
+## 落地记录（Phase 9B2：主题健康度 + 生成 HTML 换行卫生 + 文档收口）
+
+9B2 把 9B1 留下的三项 closeout 做完，另加一项远端审计提出的回归硬化；每批单独提交、单独过了远端静态复审。
+本地证据按既有口径记账（远端 combined status 仍为空，无 CI）。
+
+### 9B2-A 主题健康度与目录打开（对象 `99b14c3`，7 文件）
+
+`theme_state()` 增加 `installed_invalid`：一个已安装、被手工改坏、又从未被 configured 的主题，此前在主页既不
+是 invalid、也不出现在任何列表里，于是渲染成可选、勾选框可用，要到下一次转换才 hard fail。收口方式：
+
+```text
+installed_invalid  安装侧事实：installed 中所有当前不可用的 ids（configured invalid ∪ 未 configured 但 gate 失败）
+                   —— 附加字段，只对未 classified 的 id 补跑一次 gate，不新增 warning、不改 installed 顺序
+invalid            不变：仍只表示 configured 中不可用的 ids（Phase 8C 语义，绝不放宽）
+主页               两者共同决定行的可选性：不可用行不可勾选，只有 remembered unusable id 才显示「移除」，
+                   direct toggleExternalTheme() 对 missing / invalid 同样 no-op；设置页卸载安装副本不受影响
+摘要               selected / missing / invalid 三个计数改为按实际渲染行统计
+```
+
+同批修掉 `open_theme_location()` 的失败形状：创建目录原本在 shaped boundary 内、打开不在，系统 opener 抛错会从
+桥接边界逃出；现在两步同一边界，失败回 `{ok:false, path:"", error:…}`（`open_directory()` 本身未改，其它调用方
+保持原行为）。判别契约 GT19 先红（坏安装渲染为 available）后绿；GT1–GT18、GS1–GS13 与 configured invalid 契约
+全部保持绿 —— 这正是 `invalid` 被**追加**而非被改写的证据。本地证据：聚焦 27 passed、JS 49/49、全量
+**731 passed / 1 skipped**、ruff（项目闸 + MCP 规则集）/ pyright / MCP `python_review` 全 0。
+
+### 9B2-B 生成 HTML 换行卫生（production 对象 `e056b79`，5 文件）
+
+两个正式 writer —— `core.converter._write_output()`（v1/v2 两条 renderer 路径共用）与
+`core.index_builder.build_index()` —— 都以平台默认换行打开目标文件，于是 Windows 上每一条 LF 被改写成 CRLF：
+同一份源码在不同平台产出不同字节，而生成页是要被 diff、校验和与快照比对的持久产物。修复是给两个 writer 显式
+`newline="\n"`：它只**不让 writer 翻译**已有的 LF，不做内容归一化；`config.json` 保持既有 `eol=crlf`，不在本批范围。
+
+```text
+demo specimen    1,576,292 B / CRLF 2069  →  1,574,223 B / CRLF 0  →  与入库样本逐字节相同
+document HTML       92,402 B / CRLF 1909  →     90,493 B / CRLF 0
+index HTML          15,029 B / CRLF  401  →     14,628 B / CRLF 0
+```
+
+缩减量恰好等于 CRLF 数，说明此前唯一差异就是换行翻译；`samples/` 逐字节未动 —— 入库 specimen 本来就是正确的
+LF 产物，错的是 writer，因此无需再生。同批把 demo 契约从「byte for byte，modulo newlines」升级为 `read_bytes()`
+逐字节比对：那层归一化正是遮住该缺陷的容差。
+
+### 9B2-B′ 回归判别力硬化（对象 `df6ec28`，仅测试）
+
+远端指出 artifact 契约（产物无 CR、有 LF）只能证明**运行本测试的这台机器**：Linux/macOS 上旧实现同样写 LF，
+删掉 `newline="\n"` 也不会红。于是补一层 writer-intent 契约 —— `TargetWriteRecorder` 包装内建 `open`，并把**每次
+调用都转发给真实 open**（只观察不替换，且「观察不到写入」本身即失败，没有真空通过的空间），分别锁定 document 与
+index 两个 writer 确实要求 `newline="\n"`。判别力用 mutation 实测：各自移除一个 writer 的 `newline="\n"` 时只有
+对应那条红（`observed [{'mode': 'w', 'newline': None}]`），随后逐字节还原（`git hash-object` 与 HEAD blob 相等）。
+
+口径澄清：**`df6ec28` 不是对 `e056b79` 的 production 修复** —— production 在 `e056b79` 已经正确，这是远端审计
+提出的额外回归硬化；项目本身是 Windows-only，因此它不是产品 PASS 的必要条件，保留为增强证据。本地证据：契约
+文件 5 passed、全量 **736 passed / 1 skipped**、ruff / pyright / MCP `python_review`（`batch_ok` 且
+`scope_complete`）全 0。
+
+### 9B2-C 文档收口（本批）
+
+`docs/USAGE.md` 的「设置与日志」原先写着 `config.json` 与启动日志在「EXE 同级」、WebView2 在
+`%LOCALAPPDATA%\MarkdownReader\WebView2` —— 三处都是 Phase 10/11 之后失效的事实。现在改为三布局说明
+（source `<repo>/.runtime/`、onedir `<app>/data/`、onefile `%LOCALAPPDATA%\MarkdownReader/`，内部结构一致），
+并写明三件产品行为：source 的数据属于工作树；onedir 删除整个应用目录即完整移除；onefile 的数据与 EXE 分离、
+移动 EXE 不丢设置，且设置页提供「移除用户数据并退出」（删 profile / assets / runtime、保留 EXE、5 秒倒计时后
+才可确认、执行即退出）。写入实现细节（operation gate、有界重试、`webview.start()` 顺序）留在本页与
+DEVELOPMENT，不写进用户手册。
+
+```text
+screenshot audit
+  当前仓库没有 GUI 文档截图：受控图片只有 packaging/assets/MarkdownReader.ico、
+  packaging/assets/MarkdownReader_splash.png 与 samples/assets/demo.svg；docs/screenshots/ 不存在，
+  USAGE 全文也没有截图引用。⇒ 不存在 stale screenshot 可刷新，9B2 不为满足旧计划文字而新增截图。
+  若发布版需要产品截图，待 Phase 12 的 release artifact 与 UI 固定后再制作。
+```
+
+本页同时把 Phase 9A / 10 / 11 记录里列为「未做」或 KNOWN STALE 的四项标注为已由 9B2 关闭；那些段落保持历史
+原文，其中的「未做」不再读作当前状态。
+
 ---
 
 # Phase 10 — 剩余 user-storage 迁移与治理
@@ -950,8 +1031,9 @@ FOLLOW-UP REQUIRED —— 冻结语「写失败时本次仍用已解析的 legac
 远端独立终审对象 `04c30c2`（本 follow-up 的提交）：failure-path snapshot / single-read / scope discipline 均 PASS
 ⇒ **Phase 10 overall PASS**（Phase 10 封板于 `04c30c2`）。
 
-**未做**（按阶段顺序）：`remove user data` 按钮与 5 秒倒计时、terminal deletion、`core/user_data.py`、
-9B2 截图刷新、未 configured 坏主题的主页修复、`_write_output` newline 债。
+**当时未做**（按阶段顺序，后续均已关闭）：`remove user data` 按钮与 5 秒倒计时、terminal deletion、
+`core/user_data.py`（Phase 11）；截图（9B2-C：仓库无 stale 截图，不新增）、未 configured 坏主题的主页修复
+（9B2-A）、`_write_output` newline 债（9B2-B）。
 
 ---
 
@@ -1070,8 +1152,8 @@ cleanup 不发生、可第二次重试（第二次 close 成功后 `requested=tr
 ruff（项目闸 + MCP 规则集）PASS；pyright（项目标准）PASS；`python-quality` MCP 在最后两批
 unavailable（`Not connected`），因此**不计为最终证据**（远端 combined status 仍为空，无 CI）。
 
-**未做**（9B2 分界）：`docs/USAGE.md` 存储位置与截图刷新、主页「坏但未配置主题仍可勾选」、
-`open_theme_location` 的返回值形状清理、`_write_output` newline 债。
+**当时未做**（9B2 分界，后续均已关闭）：`docs/USAGE.md` 存储位置与截图审计（9B2-C）、主页「坏但未配置主题仍
+可勾选」（9B2-A）、`open_theme_location` 的返回值形状清理（9B2-A）、`_write_output` newline 债（9B2-B）。
 
 ---
 

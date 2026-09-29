@@ -68,7 +68,9 @@ GUI 不负责 Markdown 解析、目录生成、正文渲染与阅读器交互逻
 
 源码运行需要 Python 3.12.x、Node.js 18+、pywebview 与 Node 渲染依赖。面向用户的发布包内置
 Python 运行时、Node.js 与渲染依赖，只使用内置 Node（缺失即视为打包物损坏），不增加安装器、
-后台更新服务或自更新器；配置与日志写在 EXE 同级的 `config.json` 与 `MarkdownReader.log`。
+后台更新服务或自更新器。用户数据按运行方式集中到统一数据根：源码运行使用 `<repo>/.runtime/`，
+onedir 使用 `<app>/data/`，onefile 使用 `%LOCALAPPDATA%/MarkdownReader/`；设置、外置主题与运行数据
+分别归入 `profile/`、`assets/` 与 `runtime/`。
 
 ## 不做
 

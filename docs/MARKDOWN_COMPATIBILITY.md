@@ -600,13 +600,35 @@ samples/demo.html                         → 未改动，快照契约仍成立
   实现后 JS **47/47**、聚焦契约 **54 passed**、全套 **726 passed / 1 skipped / 0 failed**，ruff / pyright / MCP 全 0。
   改动面：`core/user_data.py`（新）、`core/config.py`、`core/logger.py`、`gui/api.py`、`gui/app.py`、
   `gui/assets/{index.html,gui.js,gui.css}`、7 个测试/契约文件与三份文档；`viewer/`、`themes/`、`renderer/`、
-  `packaging/`、`samples/` 未进入 diff。9B2 的四项仍未做。
+  `packaging/`、`samples/` 未进入 diff。9B2 的四项此时仍未做（后在 9B2-A/B/C 全部关闭，见下文 9B2 条目）。
   **状态**：本阶段经过三轮远端独立终审（`e7a71ed` → `0ee305e` → `1405a26`）：首轮给出主实现 PASS 与两项
   FOLLOW-UP REQUIRED；第二轮关闭 explicit-refusal recovery 与 core 对 source/onedir 的破坏性守卫；第三轮
   关闭 destroy 失败语义（reservation 回滚、不 cleanup、可重试）⇒ **Phase 11 overall PASS**（对象 `1405a26`）。
   最终本地证据：聚焦契约 **57 passed**、JS **48/48**、全套 **729 passed / 1 skipped / 0 failed**、ruff 与
   pyright PASS；`python-quality` MCP 在最后两批 unavailable（`Not connected`），按证据边界**不计为最终证据**
   （远端 combined status 为空，无 CI）。
+
+- 2026-09-29（Phase 9B2：主题健康度 + 生成 HTML 换行卫生 + 文档收口）：9B closeout，分三批，每批单独提交并单独
+  过了远端静态复审；本地证据按既有口径记账（远端 combined status 仍为空，无 CI）。
+  * **`invalid` / `installed_invalid` 语义边界**：`theme_state()["invalid"]` **仍只表示 configured 中当前不可用的
+    ids**，Phase 8C 的语义没有被放宽；新增的 **`installed_invalid`** 是安装侧健康度事实，覆盖 installed 中所有当前
+    不可用的 ids（configured invalid ∪ 未 configured 但 use-time gate 失败的安装）。主页由两者共同决定一行是否
+    不可选：不可用行不可勾选，只有 remembered unusable id 才显示「移除」（这是主页携带集合的移除），direct
+    `toggleExternalTheme()` 同样 no-op；设置页卸载安装副本是另一条链路，不受影响。设置页 inventory **仍保持逐
+    installed id 的 `valid` + `reason` 详细事实**，不并入聚合语义。实现边界：
+    只对未被原分类触及的 id 补跑一次 gate，不新增 warning、不改 installed 顺序。
+  * **生成 HTML 的新行契约**：`document HTML` 与 `index HTML` 由 writer 显式 `newline="\n"` 写出
+    （`core.converter._write_output()` 与 `core.index_builder.build_index()` 两个正式 writer）；`samples/demo.html`
+    的 fresh generation 与入库 specimen **逐字节相同** —— 此前「byte for byte，modulo newlines」的容差已删除
+    （那层归一化正是遮住该缺陷的地方）。边界：`config.json` 保持 `.gitattributes` 里既有的 `text eol=crlf` 语义，
+    不在本批范围。
+  * **对象**：9B2-A `99b14c3`（主题健康度与目录打开，远端静态复审 PASS）；9B2-B `e056b79`（production：两个 writer
+    固定 LF + specimen 逐字节，远端静态复审 PASS）；9B2-B′ `df6ec28`（**test hardening**：artifact 契约与
+    writer-intent 契约分层，不改 production，远端静态复审 PASS）；9B2-C 本次提交（文档收口）。
+  * **口径**：`df6ec28` 不是对 `e056b79` 的 production 修复 —— production 在 `e056b79` 已正确；这是远端审计提出的
+    额外回归硬化，项目为 Windows-only，故它不是产品 PASS 的必要条件，保留为增强证据。
+  * **截图审计**：当前仓库没有 GUI 文档截图（受控图片只有 splash / ico / `samples/assets/demo.svg`，`docs/screenshots/`
+    不存在，USAGE 无截图引用），因此不存在 stale screenshot 可刷新，9B2 不为满足旧计划文字而新增截图。
 
 ## texmath 审计记录（Phase 4B，为什么不复用 `markdown-it-texmath`）
 

@@ -58,11 +58,41 @@ notes/demo.md  →  输出目录/demo.html
 
 ## 设置与日志
 
-- `config.json` 保存在 EXE 同级目录（源码运行时是项目根目录），在**首次保存设置或首次成功进入转换流程时**写入；
-  单纯启动不会创建它。仓库只提供 `config.example.json`。
+用户数据（设置、外置主题、日志与 WebView2 数据）按运行方式放在三处之一，内部结构完全一致：
+
+```text
+源码运行   <仓库>/.runtime/
+便携目录   <应用目录>/data/
+单文件 EXE %LOCALAPPDATA%\MarkdownReader/
+
+{用户数据根}/
+  profile/config.json              设置（首次保存或首次成功转换时写入，单纯启动不创建）
+  assets/themes/external/          已安装的外置主题
+  runtime/MarkdownReader.log       启动日志
+  runtime/WebView2/                WebView2 数据
+```
+
+- **源码运行**：用户数据属于工作树下的 `.runtime/`。
+- **便携目录（onedir）**：用户数据位于应用目录的 `data/`；删除整个应用目录即可连同用户数据一起移除。
+- **单文件 EXE（onefile）**：用户数据与 EXE 分离，固定放在 `%LOCALAPPDATA%\MarkdownReader`；移动或重命名 EXE
+  不会丢失设置与外置主题。
+
+其余事实：
+
+- 仓库只提供 `config.example.json`，不提供 `config.json`。
 - 输入记录只保存第一个输入来源的目录，不保存完整的多选文件清单。
-- 启动日志写入 EXE 同级的 `MarkdownReader.log`。
-- WebView2 数据位于 `%LOCALAPPDATA%\MarkdownReader\WebView2`。
+
+### 移除用户数据（单文件 EXE）
+
+设置页提供「移除 MarkdownReader 用户数据并退出」：
+
+```text
+删除  设置（profile/）、已安装的外置主题（assets/）、运行数据（runtime/，含日志与 WebView2）
+保留  MarkdownReader.exe 本身
+确认  按钮在 5 秒倒计时结束后才可用；执行后程序退出
+```
+
+便携目录版本没有这个入口，也不需要：删除整个应用目录即可（用户数据在它的 `data/` 下）。
 
 ## 打印
 
