@@ -654,7 +654,8 @@ Settings page
           「安装事实」两个状态机互不写入；返回主页先重读再显示）
 9B2 PASS        Phase 9 closeout，分三批；A / B / B′ 均已远端静态复审，C 为本次文档收口：
                 （A）主题健康度与目录打开 `99b14c3`：`installed_invalid` 为附加事实、`invalid` 仍
-                    configured-only、GT19 锁定「坏但未 configured 的安装不可选不可卸」、opener 失败回结构化拒绝
+                    configured-only、GT19 锁定「坏但未 configured 的安装不可勾选，未 remembered 时主页
+                    不显示『移除』」，设置页卸载安装副本不受影响；opener 失败回结构化拒绝
                 （B）生成 HTML 换行卫生 `e056b79`：converter / index_builder 两个 writer 固定 `newline="\n"`、
                     demo specimen 改为逐字节比对（`samples/` 无需再生）
                 （B′）回归判别力硬化 `df6ec28`（仅测试）：artifact 与 writer-intent 契约分层
@@ -826,8 +827,9 @@ GS12 相应升级为「先重读再显示」的判别契约（含失败支路）
 
 ## 落地记录（Phase 9B2：主题健康度 + 生成 HTML 换行卫生 + 文档收口）
 
-9B2 把 9B1 留下的三项 closeout 做完，另加一项远端审计提出的回归硬化；每批单独提交、单独过了远端静态复审。
-本地证据按既有口径记账（远端 combined status 仍为空，无 CI）。
+9B2 把 9B1 留下的三项 closeout 做完，另加一项远端审计提出的回归硬化。A / B / B′ 各自单独提交并通过远端静态
+复审；C 负责文档收口，以及远端复审发现的 docs-only 口径修正。本地证据按既有口径记账（远端 combined status
+仍为空，无 CI）。
 
 ### 9B2-A 主题健康度与目录打开（对象 `99b14c3`，7 文件）
 
@@ -879,7 +881,7 @@ index 两个 writer 确实要求 `newline="\n"`。判别力用 mutation 实测�
 文件 5 passed、全量 **736 passed / 1 skipped**、ruff / pyright / MCP `python_review`（`batch_ok` 且
 `scope_complete`）全 0。
 
-### 9B2-C 文档收口（本批）
+### 9B2-C 文档收口（closeout 与 docs-only follow-up）
 
 `docs/USAGE.md` 的「设置与日志」原先写着 `config.json` 与启动日志在「EXE 同级」、WebView2 在
 `%LOCALAPPDATA%\MarkdownReader\WebView2` —— 三处都是 Phase 10/11 之后失效的事实。现在改为三布局说明
