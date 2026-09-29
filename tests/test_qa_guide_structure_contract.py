@@ -24,11 +24,18 @@ import importlib.util
 import pathlib
 import re
 
+import pytest
+
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 CHECKLIST = ROOT / "docs" / "QA-CHECKLIST-1.0.0-rc1-v2.md"
 SECTION = re.compile(r"^## ([A-H])[. ]")
-BOX = re.compile(r"^- \[ \]", re.MULTILINE)
+# Any checkbox line is one record item, whatever its mark holds: `[ ]`, `[x]`, `[X]`, `[ x ]`
+# and even a mistyped `[y]` are all list items. Whether an item *passes* is the release gate's
+# business (`release_freeze.qa_gate`), and the structure here must not depend on it -- counting
+# only unchecked boxes would turn "QA finished" into a structural red.
+CHECKBOX = re.compile(r"^\s*-\s*\[[^\]]*\]", re.MULTILINE)
+FLIP = re.compile(r"^(\s*-\s*)\[([^\]]*)\]", re.MULTILINE)
 STEP = re.compile(r"^- ([A-H])(\d+)\b")
 
 # One stable token per record item, keyed by (section, item number).
@@ -109,12 +116,35 @@ def _split_sections(text: str) -> list:
     return [(letter, "\n".join(body)) for letter, body in found]
 
 
+def _count_items(record_text: str) -> list:
+    """Return (letter, item count) per section, counting every checkbox line."""
+    return [
+        (letter, len(CHECKBOX.findall(body))) for letter, body in _split_sections(record_text)
+    ]
+
+
 def _record_counts() -> list:
     """Return (letter, item count) for the record the gate reads."""
+    return _count_items(CHECKLIST.read_text(encoding="utf-8"))
+
+
+def _guide_counts(guide: str) -> list:
+    """Return (letter, step count) per section of the operating guide."""
     return [
-        (letter, len(BOX.findall(body)))
-        for letter, body in _split_sections(CHECKLIST.read_text(encoding="utf-8"))
+        (letter, len(re.findall(r"^- " + letter + r"\d+", body, re.MULTILINE)))
+        for letter, body in _split_sections(guide)
     ]
+
+
+def _flip_states(record_text: str) -> str:
+    """Return the record with every checkbox flipped, for state-independence checks."""
+    return FLIP.sub(
+        lambda match: match.group(1)
+        + "["
+        + (" " if match.group(2).strip().lower() == "x" else "X")
+        + "]",
+        record_text,
+    )
 
 
 def _guide_steps(guide: str) -> dict:
@@ -134,10 +164,7 @@ def _guide_steps(guide: str) -> dict:
 def test_the_guide_covers_the_record_section_by_section() -> None:
     guide = _guide_text()
     expected = _record_counts()
-    actual = [
-        (letter, len(re.findall(r"^- " + letter + r"\d+", body, re.MULTILINE)))
-        for letter, body in _split_sections(guide)
-    ]
+    actual = _guide_counts(guide)
 
     assert [letter for letter, _ in actual] == [letter for letter, _ in expected], (
         "the guide sections and the record sections no longer line up: "
@@ -200,3 +227,31 @@ def test_the_theme_recipe_is_executable() -> None:
     missing = [token for token in THEME_RECIPE if token not in recipe]
 
     assert not missing, "the D1 theme recipe is not executable: " + ", ".join(missing)
+
+
+@pytest.mark.parametrize("mark", [" ", "x", "X", " x ", "y"])
+def test_a_checkbox_counts_as_one_item_whatever_its_state(mark: str) -> None:
+    """A mark says whether an item passed, not whether the item exists."""
+    record = "## A 启动与集成\n\n- [" + mark + "]  一\n- [" + mark + "]  二\n"
+
+    assert _count_items(record) == [("A", 2)]
+
+
+def test_the_mapping_holds_when_the_record_is_ticked() -> None:
+    """12C ticks every box, so the mapping must be invariant under the checkbox state.
+
+    Counting only unchecked boxes would turn "the acceptance run finished" into a structural
+    failure. The guide contract stays green from 0/32 to 32/32; whether the run itself passed
+    remains `release_freeze.qa_gate`'s decision.
+    """
+    original = CHECKLIST.read_text(encoding="utf-8")
+    ticked = _flip_states(original)
+
+    assert ticked != original, "the fixture has to actually change the checkbox states"
+    assert _count_items(ticked) == _count_items(original), (
+        "record item counts changed with the checkbox states: "
+        + str(_count_items(ticked))
+        + " vs "
+        + str(_count_items(original))
+    )
+    assert _guide_counts(_guide_text()) == _count_items(ticked)
