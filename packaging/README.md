@@ -59,9 +59,13 @@ packaging/node/node.exe
 
 ## 运行时行为
 
-- `config.json` 与 `MarkdownReader.log` 写在 EXE 同级目录。
-- 只读资源从 PyInstaller 临时目录加载；WebView2 数据位于 `%LOCALAPPDATA%\MarkdownReader\WebView2`。
-- 需要 Microsoft Edge WebView2 Runtime（强制 `edgechromium`，不降级到 MSHTML）。
+- 用户数据按运行方式集中到一个数据根：源码运行 `<仓库>/.runtime/`、onedir `<应用目录>/data/`、
+  onefile `%LOCALAPPDATA%\MarkdownReader/`；设置、外置主题与运行数据分别在 `profile/`、`assets/`、
+  `runtime/` 下（日志与 WebView2 profile 属于运行数据，因此都在 `runtime/`）。
+- 只读资源从 PyInstaller 临时目录加载；需要 Microsoft Edge WebView2 Runtime（强制 `edgechromium`，
+  不降级到 MSHTML），它是系统前置，不是随包内容。
+- onedir 的「删除整个应用目录即完整移除」因此成立；onefile 的数据与 EXE 分离，移动 EXE 不丢设置，
+  设置页另提供「移除 MarkdownReader 用户数据并退出」。
 
 启动图与图标：
 
@@ -80,10 +84,17 @@ python packaging/release_freeze.py --check-only              # 版本一致性�
 python packaging/release_freeze.py --tag                     # 重建产物、写校验和与记录、打并推送 tag
 ```
 
-`release_freeze.py` 要求工作区干净、HEAD 与 `origin/main` 一致，并从 `docs/QA-CHECKLIST.md` 读取验收结果：
-条目全部勾选且结论包含 `QA 结论：通过` 才允许打 tag。发布物为 EXE、便携 ZIP、`SHA256SUMS.txt`
-与 `release-record-<版本>.md`。
+`release_freeze.py` 要求工作区干净、HEAD 与 `origin/main` 一致，并读取**当前发布对应的**验收记录：
+记录里的 `QA identity` 块（`version` / `production_renderer` / `shapes` / `platform`）必须与当前版本和
+当前 production renderer 匹配，条目全部勾选且结论包含 `QA 结论：通过`，才允许打 tag。发布物为 EXE、
+便携 ZIP、`SHA256SUMS.txt` 与 `release-record-<版本>.md`。
 
-`--qa-record` 默认指向 `docs/QA-CHECKLIST.md`；实机验收记录必须与**当前 production renderer**
-对应（v2 cutover 之后的记录不能沿用 v1 时代的勾选），因此切换 production renderer 时要指向对应
-的那一份记录文件。
+记录默认**不按固定路径**查找：`release_freeze.py` 扫描 `docs/QA-CHECKLIST*.md`，用身份块选出唯一匹配的
+那一份；0 条、多条、或候选里有格式损坏的身份块都直接拒绝并说明原因。`--qa-record` 可以显式指定任意路径，
+但同样必须通过身份校验 —— 显式指定是选择文件，不是豁免检查。`docs/QA-CHECKLIST.md` 是 v1 时代的历史记录，
+没有身份块，因此永远不会被当成当前 release 的证据。
+
+校验过程本身也是隔离的：`validate_release.py` 在沙箱副本上运行 onedir 候选，并给 onefile 运行注入临时的
+`LOCALAPPDATA` / `APPDATA`，所以候选树与开发机的真实 profile 都不会被校验改动。如果
+`dist/MarkdownReader/` 里已经出现 `data/`（说明有人就地运行过候选），`package_artifacts()` 会拒绝打包，
+而不是把用户数据从压缩包里过滤掉。

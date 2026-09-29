@@ -1,80 +1,91 @@
 # MarkdownReader 1.0.0-rc1（v2 production renderer）实机验收清单
 
+## QA 身份
+
+```text
+QA identity
+version: 1.0.0-rc1
+production_renderer: v2
+shapes: onefile, onedir
+platform: Windows x64
+```
+
+这是 **record class identity**：它证明本记录属于这个版本与这个 production renderer，不等于已经验收了某一个
+精确候选产物。候选绑定（产物哈希或 source commit）在最终发布前解决，见 Phase 12A-3 / 12C。
+
 这份记录对应 **Cutover C4 之后**的 production renderer（v2：`renderer/dist/renderer.cjs` +
 `core/html_assembly.py`）。`docs/QA-CHECKLIST.md` 保留为 v1 production 的历史证据，两者不能互相替代：
-`packaging/release_freeze.py` 只认这一份（用 `--qa-record docs/QA-CHECKLIST-1.0.0-rc1-v2.md`）。
+`packaging/release_freeze.py` 按 QA 身份块发现本记录，而不是按固定文件名。
+
+人工验收只覆盖自动契约证明不了的风险：frozen 包、真实 Windows GUI / Edge / Defender、跨进程持久化与真实文件
+系统生命周期。GT19、LF-only、`invalid` / `installed_invalid` 边界、renderer 语义矩阵、阅读器与索引页状态机、
+删除失败语义、内置 Node 下限、onedir 载荷枚举等由自动化契约与 12A-3 的 build/validation gate 承担，不在这里重复。
 
 在目标机器上按顺序执行；每一项都记录实际结果，不通过就停下修，不带着已知问题发布。
 
 只有在结论处写下 `QA 结论：` 接 `通过`，并且把清单里的全部条目勾选，`packaging/release_freeze.py`
 才会允许打 tag。
 
-## A. 启动与外壳
+## A. 启动与 Windows 集成（两种形态都要）
 
 - [ ]  onefile：双击 `MarkdownReader-1.0.0-rc1-win-x64.exe`，启动图出现后 GUI 正常显示
-- [ ]  没有系统 Node.js 的机器上仍能启动（EXE 只使用内置 Node）
-- [ ]  frozen 启动检查走 v2：删掉（或临时改名）包内的 `_internal/renderer/dist/renderer.cjs`，应用必须**启动即失败**并给出可读提示，而不是转换到一半才报错
+- [ ]  onedir：运行 `MarkdownReader\MarkdownReader.exe`，启动图出现后 GUI 正常显示
+- [ ]  目标机没有 Python，也没有 Node/npm（或临时把 Node 移出 PATH）→ 仍能启动并完成一次转换（只用内置 Node）
+- [ ]  WebView2 Runtime：确认目标机已安装；若缺失，应用给出可读失败，而不是空白窗口或静默退出
 - [ ]  普通用户权限（非管理员）可启动、可转换
-- [ ]  中文路径与含空格路径下的输出目录均可写入
-- [ ]  `config.json` 首次保存设置时生成在 EXE 同级目录；重启后设置恢复
+- [ ]  中文路径与含空格路径：程序所在目录与输出目录各验证一次
+- [ ]  【onedir】临时移走 `_internal\renderer\dist\renderer.cjs` → 应用**启动即失败**并给出可读提示 → 复原文件后恢复
+      （onefile 不做 `_MEIxxxx` 人工篡改：载荷在临时解包目录里，不是用户可控接口；其完整性由构建期
+       REQUIRED_FILES、内置 Node/v2 预检、`validate_release` 与真实启动/转换共同证明）
 
-## B. 输入与转换
+## B. 打包 smoke
 
 - [ ]  原生文件窗口添加文件；Ctrl / Shift 多选
 - [ ]  拖入文件、拖入目录
-- [ ]  单文件转换
-- [ ]  目录批量转换：勾选「保留目录结构」后子目录被保留，且整套产物落在「输出目录/源目录名-HTML/」下；不勾选则全部平铺
-- [ ]  批量索引页生成并能打开
+- [ ]  单文件转换；生成的 HTML 用 Edge 打开：正文、KaTeX 公式、本地图片（data URI）都正常
+- [ ]  目录批量转换：勾选与不勾选「保留目录结构」各一次
+- [ ]  批量索引页生成并能打开；搜索命中与不命中；复制绝对路径可用
+- [ ]  含 Mermaid 的文档在断网状态下刷新仍能渲染
 - [ ]  Modern / Office / VS Code 三套模板各转换一次
 
-## C. 文档特性（v2 renderer）
+## C. 存储与生命周期
 
-- [ ]  YAML front matter：页面标题取自 `title`，原始 `---` 块不出现在正文里
-- [ ]  行内公式与块级公式（KaTeX）
-- [ ]  本地图片（内嵌为 data URI，移动 HTML 后仍显示）
-- [ ]  脚注
-- [ ]  清单内跨 Markdown 链接正确指向生成的 HTML
-- [ ]  无公式文档不含 KaTeX 字体（记事本搜 `KaTeX_AMS` 为 0 处）；含公式文档字体完整
-- [ ]  **TARGET：任务列表 checkbox** 渲染为可勾选控件，字面 `[ ]` 不残留
-- [ ]  **TARGET：`==高亮==`** 渲染为 `<mark>`，字面 `==` 不残留
-- [ ]  **TARGET：Callout**（`> [!NOTE]` / `> [!WARNING]`）渲染为提示块，标记文本不残留
-- [ ]  **TARGET：WikiLink**（`[[第二章]]`、`[[第二章|别名]]`）渲染为指向目标的链接
-- [ ]  **TARGET：Obsidian tag**（`#标签`）渲染为标签语义，不是普通文本
-- [ ]  **TARGET：Mermaid** 围栏在阅读器里离线渲染出图形（断网/断 Wi-Fi 后刷新仍能渲染）
-- [ ]  **TARGET：PlantUML**（`@startuml` 块或 `plantuml` 围栏）在联网时显示图形
+- [ ]  首次保存设置（或首次成功转换）后 `profile/config.json` 出现在**本形态的用户数据根**；单纯启动不创建；
+      重启后设置恢复。onefile `%LOCALAPPDATA%\MarkdownReader\profile\config.json`；onedir `<应用目录>\data\profile\config.json`
+- [ ]  设置页「存储信息」显示的四条真实路径与本形态相符（onefile → `%LOCALAPPDATA%\MarkdownReader\…`；onedir → `<应用目录>\data\…`）
+- [ ]  日志与 WebView2 数据只在 `<用户数据根>\runtime\` 下；EXE 旁边不出现 `config.json` / `MarkdownReader.log`
+- [ ]  【onefile】把 EXE 改名或移到另一目录（含中文空格路径）→ 设置、外置主题与日志历史都还在
+- [ ]  【onedir】用户数据只在 `<应用目录>\data\`；把整个应用目录复制到别处运行，设置仍在
+- [ ]  【onedir】删除整个应用目录 → 用户数据完全消失（`%LOCALAPPDATA%` 等处无残留）
 
-## D. 阅读器
+## D. 外置主题
 
-- [ ]  目录导航与跳转（点击目录项跳到对应小节；高亮跟随视口顶部）
-- [ ]  正文逐条折叠
-- [ ]  刷新后折叠状态与阅读位置恢复
-- [ ]  目录折叠状态保留
-- [ ]  代码复制按钮
-- [ ]  图片灯箱：打开 / 关闭正常；滚轮可缩放至 6 倍，缩放后仍可点击关闭
-- [ ]  明暗模式切换并保持
-- [ ]  自动编号开关
+- [ ]  导入一个外置主题 → installed 清单可见；主页可勾选并用它转换（生成 HTML 携带 `theme-<id>`）
+- [ ]  重启后仍安装、仍可选中；文件位于 `<用户数据根>\assets\themes\external\<id>\`
+- [ ]  设置页卸载 → 安装副本消失；该 id 在主页变为 missing（并出现主页「移除」）
 
-## E. 索引页
+## E. 移除用户数据（onefile）
 
-- [ ]  搜索命中与不命中
-- [ ]  复制绝对路径（本地盘；如有网络共享，另测 UNC）
-- [ ]  文件夹折叠
+- [ ]  入口只在 onefile 出现（onedir / 源码运行没有该入口）
+- [ ]  确认框列明将删除 profile / assets / runtime；确认键初始 disabled、5 秒内不可点；取消始终可用，取消后页面仍可用
+- [ ]  确认后：进程退出；`profile/`、`assets/`、`runtime/` 全部消失；空根被移除；`MarkdownReader.exe` 仍在
+- [ ]  删除后再次启动同一 EXE：回到默认设置、没有旧外置主题、生成新的日志（旧数据不复活）
 
-## F. 打印
+## F. 升级路径
+
+- [ ]  EXE 同级存在旧 `config.json` 时首次启动 → 配置被读入并落到 `profile/config.json`；旧文件按 Phase 10
+      冻结语义退场（一次性升级输入）
+- [ ]  迁移完成后修改那个旧文件 → 不再影响当前配置（不复活）
+
+## G. 打印（真实 Edge）
 
 - [ ]  Edge 打印预览：页边距与旧版一致；正文列主题块与框线正常
-- [ ]  导出 PDF 正常
-- [ ]  表格、代码块、长文档分页可接受
+- [ ]  导出 PDF 正常；表格、代码块、长文档分页可接受
 
-## G. 安全性
+## H. 安全
 
-- [ ]  Defender 对 onefile 的实际表现（首次运行是否被拦、是否需要放行）
-
-## H. 打包与回退
-
-- [ ]  onedir 包内同时存在 `_internal/renderer/dist/`（v2 载荷）与 `_internal/node_renderer/`（v1 回退资产）与 `_internal/node/node.exe`
-- [ ]  按 `packaging/README.md` 的 rollback 说明（把 `core/config.py` 的 `PRODUCTION_RENDERER_VERSION` 改回 `"v1"` 并重建）后，转换产物仍正常；改回 `"v2"` 重建后恢复
-- [ ]  内置 Node 版本满足 v2 下限（`v24.20.0` ≥ 18）
+- [ ]  Defender / SmartScreen：记录 onefile 首次运行的**实际表现**（无 malware detection 即为通过；
+      unknown-publisher / reputation 提示按实际情况记录，不要求完全没有提示）
 
 ## 结论
 
@@ -82,3 +93,4 @@
 - Windows 版本：
 - 测试人：
 - 日期：
+- QA 结论：

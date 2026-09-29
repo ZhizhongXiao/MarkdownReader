@@ -183,21 +183,31 @@ GUIDE = """# MarkdownReader 1.0.0-rc1 实机验收操作指引
 被测产物（先确认存在）：
 
     dist/MarkdownReader-1.0.0-rc1-win-x64.exe
-    dist/MarkdownReader-1.0.0-rc1-portable-win-x64.zip   （可选形态；清单只验收 onefile）
+    dist/MarkdownReader-1.0.0-rc1-portable-win-x64.zip
+
+两种形态都要跑：onefile 用那个 EXE；onedir 解压 ZIP 后运行其中的 MarkdownReader.exe。
+目标机不应安装 Python 或 Node/npm（否则先换干净机器，或把 Node 临时移出 PATH）。
+需要 Microsoft Edge WebView2 Runtime（系统前置，不随包提供）。
 
 在 GUI 里把「本目录」整体作为输入，输出目录另选一个空目录；
 模板分别用 Modern / Office / VS Code 各跑一次。
 观感基线：正文为左对齐；超长链接与裸文件名会在容器内折行，不会被裁掉；
 打印输出为白纸加跟随正文的主题块与左右两条框线。
-下面每一条按同一顺序对应 `docs/QA-CHECKLIST.md` 中的条目。
+下面每一条按同一顺序对应 `docs/QA-CHECKLIST-1.0.0-rc1-v2.md` 中的条目。
 
-## A 启动与外壳
+## A 启动与 Windows 集成
 
-- A1 双击 onefile EXE → 启动图出现后 GUI 正常显示。
-- A2 若本机装有系统 Node：临时把它从 PATH 移开（或换一台没有 Node 的机器）仍然可以启动。
-- A3 以普通用户（非管理员）身份启动并完成一次转换。
-- A4 把本目录复制到含中文与空格的路径下再跑；输出目录也选中文与空格路径。
-- A5 改一次输出目录并转换成功 → EXE 同级出现 config.json；关闭重启 → 设置恢复。
+- A1 onefile：双击 EXE → 启动图出现后 GUI 正常显示。
+- A2 onedir：解压便携 ZIP，运行目录里的 `MarkdownReader.exe` → 同样正常显示。
+- A3 若本机装有系统 Node：临时把它从 PATH 移开（或换一台没有 Node 的机器）
+  仍然可以启动并完成一次转换。
+- A4 以普通用户（非管理员）身份启动并完成一次转换。
+- A5 把本目录复制到含中文与空格的路径下再跑；输出目录也选中文与空格路径。
+- A6 改一次输出目录并转换成功 → 本形态的用户数据根出现 `profile\\config.json`
+  （onefile `%LOCALAPPDATA%\\MarkdownReader\\profile\\config.json`；
+  onedir `<应用目录>\\data\\profile\\config.json`）；关闭重启 → 设置恢复。
+- A7 onedir：把解压目录里的 `_internal\\renderer\\dist\\renderer.cjs` 临时改名 →
+  应用启动即失败并给出可读提示 → 改回后恢复正常（onefile 不做 `_MEIxxxx` 篡改，理由见验收清单）。
 
 ## B 输入与转换
 
@@ -257,10 +267,12 @@ GUIDE = """# MarkdownReader 1.0.0-rc1 实机验收操作指引
 
 - G1 首次双击 onefile 时观察 Defender / SmartScreen：是否拦截、是否需要放行。
 
-全部通过后，把 `docs/QA-CHECKLIST.md` 里的全部条目勾选，并写下结论行「QA 结论：通过」
-（`release_freeze.py` 按字面量匹配，这七个字必须完整出现），然后：
+全部通过后，把 `docs/QA-CHECKLIST-1.0.0-rc1-v2.md` 里的全部条目勾选，并写下结论行「QA 结论：通过」
+（`release_freeze.py` 按字面量匹配，这七个字必须完整出现）。该文件的 `QA identity` 块必须与当前
+版本和当前 production renderer 一致 —— gate 就是按它发现记录的，v1 时代的记录因为没有身份块
+而无法被复用。然后：
 
-    git add docs/QA-CHECKLIST.md
+    git add docs/QA-CHECKLIST-1.0.0-rc1-v2.md
     git commit -m "docs: record the 1.0.0-rc1 acceptance run"
     git push origin main
     python packaging/release_freeze.py --check-only

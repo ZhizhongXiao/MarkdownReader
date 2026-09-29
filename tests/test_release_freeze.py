@@ -29,9 +29,22 @@ release_freeze = _load_gate()
 CONCLUSION = "- QA 结论：通过\n"
 
 
+def _identity_block() -> str:
+    """Return the identity the gate now requires, built from the gate's own expectation.
+
+    The fixture grew this block when `qa_gate` started checking identity (Phase 12A-2); every
+    tick-shape assertion in this file stays exactly as it was, because what changed is the
+    input a record has to satisfy, not how its boxes are counted.
+    """
+    lines = ["```text", "QA identity"]
+    lines += [key + ": " + value for key, value in release_freeze.expected_identity().items()]
+    lines += ["```", ""]
+    return "\n".join(lines)
+
+
 def _record(tmp_path, body: str) -> pathlib.Path:
     record = tmp_path / "QA-CHECKLIST.md"
-    record.write_text(body, encoding="utf-8")
+    record.write_text(_identity_block() + "\n" + body, encoding="utf-8")
     return record
 
 

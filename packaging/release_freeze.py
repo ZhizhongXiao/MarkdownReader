@@ -5,11 +5,16 @@ when the evidence is missing:
 
   1. the version is stated consistently in pyproject.toml, the changelog and the
      release note;
-  2. the acceptance checklist records a passing result;
+  2. the acceptance checklist records a passing result **for this release**: the record
+     declares a canonical QA identity (version / production_renderer / shapes / platform) and
+     is discovered by that identity, so a finished record from an earlier renderer cannot be
+     reused as current evidence;
   3. dist/ is rebuilt from scratch, onefile and onedir;
-  4. packaging/validate_release.py passes for both shapes;
+  4. packaging/validate_release.py passes for both shapes, on a sandbox copy of the onedir
+     candidate, so the tree that gets packaged is never executed in place;
   5. the artefacts are renamed to their release names, SHA256SUMS.txt and a build
-     record are written next to them;
+     record are written next to them; a candidate that already carries user data is
+     refused here instead of being filtered;
   6. only with --tag: an annotated tag is created and pushed.
 
 Usage:
@@ -43,6 +48,160 @@ PASS_MARKER = "QA 结论：通过"
 # the brackets, or indented. Every shape counts the same. A box holding anything
 # other than x stays unticked, so a typo cannot pass for a finished item.
 BOX = re.compile(r"^\s*-\s*\[\s*([^\]]*?)\s*\]", re.MULTILINE)
+
+# Phase 12A-2: a QA record declares which release it is evidence for. These two facts are
+# canonical constants because nothing else states "this product ships both shapes on Windows
+# x64" as a release fact -- packaging/node-runtime.json only records the Node build.
+RELEASE_SHAPES = ("onefile", "onedir")
+RELEASE_PLATFORM = "Windows x64"
+IDENTITY_MARKER = "QA identity"
+IDENTITY_KEYS = ("version", "production_renderer", "shapes", "platform")
+
+
+class QaRecordError(Exception):
+    """A QA record cannot serve as release evidence.
+
+    `reason` is a stable token rather than prose, so callers and contracts can react to the
+    category while the message stays readable for a person.
+    """
+
+    def __init__(self, reason: str, message: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
+class PackagingError(Exception):
+    """The package step cannot produce a release artifact from this candidate."""
+
+    def __init__(self, reason: str, message: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
+def production_renderer_version() -> str:
+    """Return the renderer policy this release ships.
+
+    Imported lazily: this file runs as a script from packaging/ (where the repository root is
+    not on sys.path) and is also loaded by the release contracts, so the path is fixed up at
+    call time instead of at import time.
+    """
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from core.config import PRODUCTION_RENDERER_VERSION
+
+    return PRODUCTION_RENDERER_VERSION
+
+
+def expected_identity() -> dict:
+    """Return the identity a QA record must declare to be evidence for this release."""
+    return {
+        "version": version_facts()["display"],
+        "production_renderer": production_renderer_version(),
+        "shapes": ", ".join(RELEASE_SHAPES),
+        "platform": RELEASE_PLATFORM,
+    }
+
+
+def parse_identity(text: str) -> dict | None:
+    """Return the identity a record declares, or None when it declares none.
+
+    None means "not a candidate record" -- a historical record, or any other document that
+    happens to sit beside one. A record that does claim an identity is parsed strictly and
+    fails closed: the schema is canonical because this is a release gate, not a user-facing
+    format, so a misspelling has to surface instead of being absorbed by a lenient parser.
+    """
+    lines = text.splitlines()
+    markers = [index for index, line in enumerate(lines) if line.strip() == IDENTITY_MARKER]
+    if not markers:
+        return None
+    if len(markers) > 1:
+        raise QaRecordError("identity_malformed", "record declares QA identity more than once")
+    values: dict = {}
+    for line in lines[markers[0] + 1 :]:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("```"):
+            break
+        key, separator, raw = stripped.partition(":")
+        key = key.strip()
+        value = raw.strip()
+        if not separator or not key:
+            raise QaRecordError("identity_malformed", "not a key: value line: " + stripped)
+        if key not in IDENTITY_KEYS:
+            raise QaRecordError("identity_malformed", "unknown QA identity key: " + key)
+        if key in values:
+            raise QaRecordError("identity_malformed", "duplicate QA identity key: " + key)
+        if not value:
+            raise QaRecordError("identity_malformed", "empty value for " + key)
+        values[key] = value
+    missing = [key for key in IDENTITY_KEYS if key not in values]
+    if missing:
+        raise QaRecordError("identity_malformed", "missing key: " + ", ".join(missing))
+    return values
+
+
+def record_identity(path: Path) -> dict | None:
+    """Return the identity of the record at `path`, or None when it declares none."""
+    if not path.is_file():
+        raise QaRecordError("identity_missing", "acceptance record not found: " + str(path))
+    return parse_identity(read(path))
+
+
+def _mismatched_keys(identity: dict, wanted: dict) -> list:
+    """Return the identity keys that differ from what this release expects."""
+    return [key for key in IDENTITY_KEYS if identity.get(key) != wanted[key]]
+
+
+def _require_matching_identity(path: Path, wanted: dict) -> dict:
+    """Return the identity of `path` after proving it matches `wanted`."""
+    identity = record_identity(path)
+    if identity is None:
+        raise QaRecordError("identity_missing", str(path) + " declares no QA identity block")
+    mismatched = _mismatched_keys(identity, wanted)
+    if mismatched:
+        raise QaRecordError(
+            "identity_mismatch",
+            str(path) + " is not evidence for this release: " + ", ".join(mismatched) + " differ",
+        )
+    return identity
+
+
+def resolve_qa_record(explicit: Path | None = None, search_dir: Path | None = None) -> Path:
+    """Return the QA record that is evidence for this release.
+
+    Without an explicit path the record is discovered among `QA-CHECKLIST*.md` in docs/ by its
+    identity, so the default cannot silently point at a superseded record. Naming a record
+    explicitly chooses a file; it does not waive the identity check, because both routes end in
+    the same comparison.
+    """
+    wanted = expected_identity()
+    if explicit is not None:
+        path = Path(explicit)
+        _require_matching_identity(path, wanted)
+        return path
+    directory = Path(search_dir) if search_dir is not None else ROOT / "docs"
+    matches: list = []
+    ignored = 0
+    for candidate in sorted(directory.glob("QA-CHECKLIST*.md")):
+        identity = record_identity(candidate)
+        if identity is None:
+            ignored += 1
+            continue
+        if not _mismatched_keys(identity, wanted):
+            matches.append(candidate)
+    if not matches:
+        raise QaRecordError(
+            "no_match",
+            "no QA record matches the current release identity ("
+            + ", ".join(key + "=" + wanted[key] for key in IDENTITY_KEYS)
+            + "); records without an identity were ignored: "
+            + str(ignored),
+        )
+    if len(matches) > 1:
+        raise QaRecordError(
+            "ambiguous_match",
+            "several QA records match this release: " + ", ".join(str(path) for path in matches),
+        )
+    return matches[0]
 
 
 def fail(message: str) -> NoReturn:
@@ -111,10 +270,12 @@ def version_agreement(facts: dict) -> bool:
 
 
 def qa_gate(record_path: Path) -> bool:
-    """Refuse to build a release nobody accepted on a real machine."""
+    """Refuse to build a release nobody accepted for *this* release on a real machine."""
     print("acceptance:")
-    if not record_path.is_file():
-        return report(False, "missing acceptance record: " + str(record_path))
+    try:
+        _require_matching_identity(Path(record_path), expected_identity())
+    except QaRecordError as error:
+        return report(False, error.reason + ": " + str(error))
     text = read(record_path)
     marks = [match.group(1) for match in BOX.finditer(text)]
     ticked = sum(1 for mark in marks if mark.lower() == "x")
@@ -222,11 +383,20 @@ def sha256(path: Path) -> str:
 
 def package_artifacts(display: str) -> list:
     print("package:")
+    onedir = DIST / "MarkdownReader"
+    # A candidate that already carries user data means validation ran inside it: an onedir
+    # build keeps its data root next to its executable. Filtering data/ out of the archive
+    # would hide that upstream failure, so the package step refuses instead (Phase 12A-2).
+    if (onedir / "data").exists():
+        raise PackagingError(
+            "candidate_contains_user_data",
+            "refusing to package " + str(onedir) + ": it contains data/ -- validation has to run "
+            "on a sandbox copy, not on the candidate tree",
+        )
     artifacts = []
     final_exe = DIST / ("MarkdownReader-" + display + "-win-x64.exe")
     shutil.copy2(DIST / "MarkdownReader.exe", final_exe)
     artifacts.append(final_exe)
-    onedir = DIST / "MarkdownReader"
     if onedir.is_dir():
         archive = DIST / ("MarkdownReader-" + display + "-portable-win-x64.zip")
         with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as bundle:
@@ -331,15 +501,25 @@ def main() -> int:
     parser.add_argument(
         "--check-only", action="store_true", help="verify the release evidence only"
     )
-    parser.add_argument("--qa-record", default=str(ROOT / "docs" / "QA-CHECKLIST.md"))
+    parser.add_argument(
+        "--qa-record",
+        default=None,
+        help="explicit acceptance record; without it the record is discovered by its identity",
+    )
     parser.add_argument("--tag", action="store_true", help="create and push the release tag")
     args = parser.parse_args()
 
     if not repository_gate():
         print("release freeze: FAIL (repository state)")
         return 1
+    try:
+        record = resolve_qa_record(Path(args.qa_record) if args.qa_record else None)
+    except QaRecordError as error:
+        print("[FAIL] " + str(error))
+        print("release freeze: FAIL (QA evidence, nothing built)")
+        return 1
     facts = version_facts()
-    if not version_agreement(facts) or not qa_gate(Path(args.qa_record)):
+    if not version_agreement(facts) or not qa_gate(record):
         print("release freeze: FAIL (evidence missing, nothing built)")
         return 1
     if args.check_only:
@@ -348,7 +528,12 @@ def main() -> int:
     if not build() or not validate():
         print("release freeze: FAIL (build or validation)")
         return 1
-    artifacts = package_artifacts(facts["display"])
+    try:
+        artifacts = package_artifacts(facts["display"])
+    except PackagingError as error:
+        print("[FAIL] " + str(error))
+        print("release freeze: FAIL (packaging)")
+        return 1
     write_record(facts["display"], artifacts, args.tag)
     if args.tag and not create_tag(facts["display"]):
         print("release freeze: FAIL (tag)")

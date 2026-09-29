@@ -8,6 +8,10 @@ This checks the release contract, not the build log:
     found its bundled Node: main() exits when it cannot
   * the local path used here has Chinese characters and spaces, the same shape a
     localized Windows profile produces
+  * validation never runs the candidate in place: the onedir tree is validated as a sandbox
+    copy, and the onefile run gets a throwaway LOCALAPPDATA/APPDATA. A finished build keeps
+    user data beside itself (onedir) or in the developer profile (onefile), so running it
+    where it stands would write into the very tree that is about to be packaged
 
 Usage:
     python packaging/validate_release.py --mode onefile|onedir|both
@@ -51,10 +55,16 @@ def report(ok, text):
     return ok
 
 
-def launch_and_survive(exe: Path, wait: int) -> bool:
-    """Start the application and see whether it is still alive after $wait seconds."""
+def launch_and_survive(exe: Path, wait: int, env: dict | None = None) -> bool:
+    """Start the application and see whether it is still alive after $wait seconds.
+
+    `env` replaces the child environment when given. A onefile build keeps its user data in
+    `%LOCALAPPDATA%/MarkdownReader`, so `check_onefile` hands it a throwaway profile: inheriting
+    the real environment would add a log and a WebView2 profile to the machine that builds the
+    release (Phase 12A-2).
+    """
     workdir = Path(tempfile.mkdtemp(prefix="MarkdownReader 发布 校验 "))
-    process = subprocess.Popen([str(exe)], cwd=str(workdir))
+    process = subprocess.Popen([str(exe)], cwd=str(workdir), env=env)
     try:
         time.sleep(wait)
         return process.poll() is None
@@ -80,6 +90,30 @@ def launch_and_survive(exe: Path, wait: int) -> bool:
         shutil.rmtree(workdir, ignore_errors=True)
 
 
+def sandbox_copy(source: Path) -> Path:
+    """Copy a candidate tree so a validation run cannot touch the original.
+
+    An onedir build keeps its user data in `<application_dir>/data`, inside the very tree
+    `release_freeze.package_artifacts` archives afterwards. Validating the copy keeps the
+    candidate pristine; the caller removes the sandbox when it is done (Phase 12A-2).
+    """
+    sandbox = Path(tempfile.mkdtemp(prefix="MarkdownReader 发布 沙箱 "))
+    target = sandbox / source.name
+    shutil.copytree(source, target)
+    return target
+
+
+def onefile_environment() -> dict:
+    """Return an environment whose profile roots are throwaway directories.
+
+    A onefile build asks `%LOCALAPPDATA%` (falling back to `%APPDATA%`) for its user data root,
+    so both are redirected: validation must not add a log and a WebView2 profile to the machine
+    that builds the release.
+    """
+    profile = tempfile.mkdtemp(prefix="MarkdownReader 发布 profile ")
+    return dict(os.environ, LOCALAPPDATA=profile, APPDATA=profile)
+
+
 def check_onefile(wait: int) -> bool:
     print("onefile:")
     exe = DIST / "MarkdownReader.exe"
@@ -87,7 +121,14 @@ def check_onefile(wait: int) -> bool:
     if not ok:
         return False
     ok &= report(exe.stat().st_size > 20 * 1024 * 1024, "carries the runtime rather than a stub")
-    ok &= report(launch_and_survive(exe, wait), "starts and survives (frozen runtime validated)")
+    environment = onefile_environment()
+    try:
+        ok &= report(
+            launch_and_survive(exe, wait, env=environment),
+            "starts and survives with a redirected profile (frozen runtime validated)",
+        )
+    finally:
+        shutil.rmtree(environment["LOCALAPPDATA"], ignore_errors=True)
     return ok
 
 
@@ -101,7 +142,14 @@ def check_onedir(wait: int) -> bool:
     internal = base / "_internal"
     for parts in RUNTIME_FILES:
         ok &= report((internal.joinpath(*parts)).exists(), "_internal/" + "/".join(parts))
-    ok &= report(launch_and_survive(exe, wait), "starts and survives (frozen runtime validated)")
+    sandbox = sandbox_copy(base)
+    try:
+        ok &= report(
+            launch_and_survive(sandbox / "MarkdownReader.exe", wait),
+            "starts and survives in a sandbox copy (candidate tree stays pristine)",
+        )
+    finally:
+        shutil.rmtree(sandbox.parent, ignore_errors=True)
     return ok
 
 
