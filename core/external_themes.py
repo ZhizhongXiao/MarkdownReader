@@ -24,6 +24,7 @@ import logging
 import os
 import re
 import shutil
+import tempfile
 from collections.abc import Mapping
 from typing import Final, Literal, TypedDict
 
@@ -401,7 +402,10 @@ def import_theme(source: str, *, replace: bool = False) -> str:
 
     The id comes from ``metadata.json``, not from the source directory name, so a user
     can export the template anywhere, edit it, and import the folder without renaming
-    it first. Nothing is installed unless validation passed.
+    it first. A replacement is copied and validated in a same-volume transaction
+    directory before the installed version is moved aside. If publishing the new copy
+    fails, the previous directory is restored; if restoration also fails, its backup is
+    deliberately retained and its path is reported.
     """
     metadata = validate_theme_directory(source)
     theme_id = str(metadata["id"])
@@ -411,15 +415,68 @@ def import_theme(source: str, *, replace: bool = False) -> str:
         raise ExternalThemeError("源目录已经是安装目录（如需覆盖请用 replace=True 重新导入）。")
 
     target = os.path.join(root, theme_id)
-    if os.path.isdir(target) and not replace:
+    if os.path.lexists(target) and not replace:
         raise ExternalThemeError(f"主题“{theme_id}”已安装；如需覆盖请显式 replace=True。")
+    if os.path.lexists(target) and (not os.path.isdir(target) or os.path.islink(target)):
+        raise ExternalThemeError(f"已安装位置不是可安全替换的主题目录：{target}")
 
     os.makedirs(root, exist_ok=True)
-    if os.path.isdir(target):
-        shutil.rmtree(target)
-    shutil.copytree(base, target)
-    _logger.info("已安装外置主题：%s -> %s", base, target)
-    return theme_id
+    transaction_dir = tempfile.mkdtemp(prefix=f".{theme_id}.transaction-", dir=root)
+    staged = os.path.join(transaction_dir, "stage")
+    backup = os.path.join(transaction_dir, "backup")
+    backup_created = False
+    preserve_transaction = False
+    try:
+        shutil.copytree(base, staged)
+        staged_metadata = validate_theme_directory(staged)
+        if str(staged_metadata["id"]) != theme_id:
+            raise ExternalThemeError("暂存副本的主题 id 与已验证的源目录不一致。")
+
+        # Recheck after staging so a concurrent import cannot be overwritten when the
+        # caller did not opt in to replacement.
+        target_exists = os.path.lexists(target)
+        if target_exists and not replace:
+            raise ExternalThemeError(f"主题“{theme_id}”已安装；如需覆盖请显式 replace=True。")
+        if target_exists and (not os.path.isdir(target) or os.path.islink(target)):
+            raise ExternalThemeError(f"已安装位置不是可安全替换的主题目录：{target}")
+
+        if target_exists:
+            os.replace(target, backup)
+            backup_created = True
+
+        try:
+            os.replace(staged, target)
+        except OSError as publish_error:
+            if backup_created:
+                try:
+                    os.replace(backup, target)
+                except OSError as rollback_error:
+                    preserve_transaction = True
+                    _logger.error(
+                        "旧版本备份保留：%s；发布错误：%s；回滚错误：%s",
+                        backup,
+                        publish_error,
+                        rollback_error,
+                    )
+                    raise ExternalThemeError(
+                        f"主题发布失败且旧版本恢复失败；旧版本备份保留在：{backup}"
+                    ) from publish_error
+            if backup_created:
+                raise ExternalThemeError(
+                    f"主题发布失败，原版本已恢复：{publish_error}"
+                ) from publish_error
+            raise ExternalThemeError(f"主题发布失败：{publish_error}") from publish_error
+
+        _logger.info("已安装外置主题：%s -> %s", base, target)
+        return theme_id
+    except OSError as error:
+        raise ExternalThemeError(f"安装外置主题失败：{error}") from error
+    finally:
+        if not preserve_transaction and os.path.isdir(transaction_dir):
+            try:
+                shutil.rmtree(transaction_dir)
+            except OSError as error:
+                _logger.warning("清理外置主题事务目录失败：%s（%s）", transaction_dir, error)
 
 
 def remove_theme(theme_id: str) -> None:

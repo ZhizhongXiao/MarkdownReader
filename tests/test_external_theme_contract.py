@@ -37,6 +37,15 @@ def theme_files(root: Path, dirname: str, css: dict, **metadata) -> Path:
     return directory
 
 
+def theme_snapshot(directory: Path) -> dict[str, bytes]:
+    """Capture a theme tree byte-for-byte so failed replacement cannot damage it."""
+    return {
+        path.relative_to(directory).as_posix(): path.read_bytes()
+        for path in directory.rglob("*")
+        if path.is_file()
+    }
+
+
 @pytest.fixture()
 def install_root(tmp_path, monkeypatch):
     """Point the installed user themes at a temporary directory."""
@@ -87,12 +96,105 @@ def test_a_valid_theme_can_be_imported_and_removed(tmp_path, install_root):
 
 
 def test_importing_the_same_id_twice_needs_replace(tmp_path, install_root):
-    source = theme_files(tmp_path, "my-theme", {"theme.css": VALID_CSS})
-    external_themes.import_theme(str(source))
+    original = theme_files(
+        tmp_path / "original", "my-theme", {"theme.css": scoped("my-theme", "color:red")}
+    )
+    replacement = theme_files(
+        tmp_path / "replacement", "my-theme", {"theme.css": scoped("my-theme", "color:blue")}
+    )
+    external_themes.import_theme(str(original))
 
     with pytest.raises(external_themes.ExternalThemeError):
-        external_themes.import_theme(str(source))
-    assert external_themes.import_theme(str(source), replace=True) == "my-theme"
+        external_themes.import_theme(str(replacement))
+    assert external_themes.import_theme(str(replacement), replace=True) == "my-theme"
+    assert "color:blue" in (install_root / "my-theme" / "theme.css").read_text(encoding="utf-8")
+    assert list(install_root.iterdir()) == [install_root / "my-theme"]
+
+
+def test_invalid_staged_replacement_preserves_the_installed_theme(
+    tmp_path, install_root, monkeypatch
+):
+    original = theme_files(
+        tmp_path / "original", "my-theme", {"theme.css": scoped("my-theme", "color:red")}
+    )
+    replacement = theme_files(
+        tmp_path / "replacement", "my-theme", {"theme.css": scoped("my-theme", "color:blue")}
+    )
+    external_themes.import_theme(str(original))
+    installed = install_root / "my-theme"
+    before = theme_snapshot(installed)
+    copytree = external_themes.shutil.copytree
+
+    def corrupt_staged_copy(source, destination, **kwargs):
+        result = copytree(source, destination, **kwargs)
+        (Path(destination) / "theme.css").write_text("body{color:blue}\n", encoding="utf-8")
+        return result
+
+    monkeypatch.setattr(external_themes.shutil, "copytree", corrupt_staged_copy)
+    with pytest.raises(external_themes.ExternalThemeError):
+        external_themes.import_theme(str(replacement), replace=True)
+
+    assert theme_snapshot(installed) == before
+    assert list(install_root.iterdir()) == [installed]
+
+
+def test_failed_publish_restores_the_previous_theme(tmp_path, install_root, monkeypatch):
+    original = theme_files(
+        tmp_path / "original", "my-theme", {"theme.css": scoped("my-theme", "color:red")}
+    )
+    replacement = theme_files(
+        tmp_path / "replacement", "my-theme", {"theme.css": scoped("my-theme", "color:blue")}
+    )
+    external_themes.import_theme(str(original))
+    installed = install_root / "my-theme"
+    before = theme_snapshot(installed)
+    replace = external_themes.os.replace
+    failed_publish = False
+
+    def fail_new_directory_once(source, destination):
+        nonlocal failed_publish
+        if Path(source).name == "stage" and Path(destination) == installed and not failed_publish:
+            failed_publish = True
+            raise OSError("injected publish failure")
+        return replace(source, destination)
+
+    monkeypatch.setattr(external_themes.os, "replace", fail_new_directory_once)
+    with pytest.raises(external_themes.ExternalThemeError, match="原版本已恢复"):
+        external_themes.import_theme(str(replacement), replace=True)
+
+    assert failed_publish
+    assert theme_snapshot(installed) == before
+    assert list(install_root.iterdir()) == [installed]
+
+
+def test_failed_rollback_keeps_the_previous_theme_backup(tmp_path, install_root, monkeypatch):
+    original = theme_files(
+        tmp_path / "original", "my-theme", {"theme.css": scoped("my-theme", "color:red")}
+    )
+    replacement = theme_files(
+        tmp_path / "replacement", "my-theme", {"theme.css": scoped("my-theme", "color:blue")}
+    )
+    external_themes.import_theme(str(original))
+    before = theme_snapshot(install_root / "my-theme")
+    replace = external_themes.os.replace
+
+    def fail_publish_and_rollback(source, destination):
+        if Path(source).name == "stage":
+            raise OSError("injected publish failure")
+        if Path(source).name == "backup":
+            raise OSError("injected rollback failure")
+        return replace(source, destination)
+
+    monkeypatch.setattr(external_themes.os, "replace", fail_publish_and_rollback)
+    with pytest.raises(external_themes.ExternalThemeError, match="备份保留"):
+        external_themes.import_theme(str(replacement), replace=True)
+
+    transactions = [
+        path for path in install_root.iterdir() if path.name.startswith(".my-theme.transaction-")
+    ]
+    assert len(transactions) == 1
+    assert theme_snapshot(transactions[0] / "backup") == before
+    assert not (install_root / "my-theme").exists()
 
 
 @pytest.mark.parametrize(

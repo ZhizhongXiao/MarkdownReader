@@ -62,7 +62,8 @@ Markdown 文件
 - **外置主题（Phase 7）**：用户主题是用户资产，装在 `core/paths.py::external_themes_root()`
   （`assets/themes/external/<id>/`），与随包的 `themes/builtin/` 永不混放；同一个 loader 读两者，
   `external_themes.theme_bundle()` 决定每份文档携带哪些（base + 全部 builtin + 本次选中且已安装的外置）。
-  校验 / 安装 / 删除 / 导出模板在 `core/external_themes.py`（含可选的 `preview` 元数据与本地装饰资源），
+  校验 / 安装 / 删除 / 导出模板在 `core/external_themes.py`（含可选的 `preview` 元数据与本地装饰资源）；
+  `replace=True` 先在同卷事务目录复制并复验，再备份旧目录、发布新目录，发布失败时恢复旧版本。
   `themes/template/` 是随包发布的官方模板。
 - `viewer.js` 承载全部阅读交互：目录跳转与定位、折叠、状态持久化、代码复制、图片灯箱、明暗、编号与打印。
   拆分（Phase 6B）只能在**装配期**合并成一个 classic script：交付物以 `file://` 打开，ES module 会被 CORS 拦下。

@@ -203,6 +203,7 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
   onedir `<app>/data/assets/themes/external/`、onefile `%LOCALAPPDATA%/MarkdownReader/assets/themes/external/`），
   与随包的 `themes/builtin/` 永不混放。校验 / 安装 / 删除 / 导出模板在 `core/external_themes.py`；本地资源在装配期转成
   data URI，远程 `url()` 与 `@import` 一律拒收。`themes/template/` 是官方模板且随包发布（导出 -> 编辑 -> 导入）。
+  `replace=True` 在同卷隐藏事务目录暂存并重新校验副本，之后才备份旧版本并发布；发布失败会回滚，回滚也失败时保留旧副本并记录恢复路径。
   装配侧统一走 `external_themes.theme_bundle()`，菜单与账本把外置主题与 builtin 同等对待。
   Phase 7 audit follow-up 起：外置主题的 CSS 由 `core/css_audit.py` 的 fail-closed 扫描器审计（validator / inliner /
   checker 共用同一扫描器，不再有第二套 URL 解析），`validate_installed_theme()` 在**每次读取**前重跑，
