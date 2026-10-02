@@ -209,6 +209,59 @@ test("theme matrix: three themes x two colour schemes", async () => {
   }
 });
 
+test("long theme names stay on one menu row without colliding", async () => {
+  const session = await open(built.modern);
+  const page = session.page;
+  try {
+    const layout = await page.evaluate(() => {
+      const menu = document.getElementById("theme-menu");
+      menu.removeAttribute("hidden");
+      const options = Array.from(menu.querySelectorAll("[data-theme-id]"));
+      options.find((option) => option.getAttribute("data-theme-id") === "modern")
+        .textContent = "Barocco Monumentale";
+      options.find((option) => option.getAttribute("data-theme-id") === "office")
+        .textContent = "Rococo Opulence";
+
+      return {
+        menuWidth: menu.getBoundingClientRect().width,
+        rows: options.map((option) => {
+          const rect = option.getBoundingClientRect();
+          const style = getComputedStyle(option);
+          return {
+            text: option.textContent,
+            top: rect.top,
+            bottom: rect.bottom,
+            height: rect.height,
+            clientWidth: option.clientWidth,
+            scrollWidth: option.scrollWidth,
+            whiteSpace: style.whiteSpace,
+          };
+        }),
+      };
+    });
+
+    assert.ok(layout.menuWidth >= 180, "the menu should give external names room");
+    assert.equal(layout.rows[0].text, "Barocco Monumentale");
+    assert.equal(layout.rows[0].whiteSpace, "nowrap");
+    assert.ok(
+      layout.rows[0].scrollWidth <= layout.rows[0].clientWidth,
+      "Barocco Monumentale should fit without clipping: " + JSON.stringify(layout.rows[0])
+        + " menuWidth=" + layout.menuWidth,
+    );
+    assert.equal(layout.rows[1].text, "Rococo Opulence");
+    assert.ok(
+      layout.rows.every((row) => row.height === 28),
+      "every option must remain a single 28px row",
+    );
+    assert.ok(
+      layout.rows.slice(1).every((row, index) => row.top >= layout.rows[index].bottom),
+      "theme option rows must not overlap",
+    );
+  } finally {
+    await page.close();
+  }
+});
+
 test("print returns to white paper and black text in every combination", async () => {
   const session = await open(built.modern);
   const page = session.page;

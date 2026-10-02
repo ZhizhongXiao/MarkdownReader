@@ -76,7 +76,7 @@ tests/browser/*.test.mjs               真实浏览器：离线资源、Mermaid�
 | `markdown-body` | 正文容器（折叠、灯箱、代码复制、表格滚动） |
 | `back-to-top-btn` | 返回顶部 |
 
-菜单项不打 id，用属性选择器契约：`#theme-menu [data-theme-id]`，文本是**可读名称**（`metadata.json` 的 `name`，如 `Modern` / `Office` / `VS Code`），不是 canonical id。菜单标记由装配期生成（不是 JS 拼的），因此页面在没有脚本时也是正确的。
+菜单项不打 id，用属性选择器契约：`#theme-menu [data-theme-id]`，文本是**可读名称**（`metadata.json` 的 `name`，如 `Modern` / `Office` / `VS Code`），不是 canonical id。菜单标记由装配期生成（不是 JS 拼的），因此页面在没有脚本时也是正确的。外置主题名称可能较长：菜单应按名称自适应宽度、限制在视口内，并保持每项单行，避免名称换行覆盖相邻选项；超过菜单宽度时才用省略号。
 
 ## 5. localStorage 键（9 个）
 
