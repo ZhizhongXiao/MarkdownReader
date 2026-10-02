@@ -39,9 +39,10 @@ cd tests/js; npm test; cd ..      # viewer 契约层（也可由 pytest 触发�
 - harness 自检：针对测试工具本身。
 - 文档契约：`samples/demo.html` 必须等于当前源码重新生成的结果。
 
-渲染相关测试需要本机 Node 与 `node_renderer/node_modules`；JS 层需要 `tests/js/node_modules`，缺少时相应层显式
-skip 并说明原因，不会静默通过。自动化测试不覆盖 GUI 运行时交互、真实打印和打包后的 EXE；发布前按
-[实机验收清单](QA-CHECKLIST.md) 执行验收。
+源码转换需要本机 Node 与已构建的 `renderer/dist/`；v1 rollback 兼容测试还会使用
+`node_renderer/node_modules`，JS 层需要 `tests/js/node_modules`。缺少对应依赖时相应测试层显式 skip 并说明原因，
+不会静默通过。自动化测试不覆盖 GUI 运行时交互、真实打印和打包后的 EXE；发布前按
+[当前实机验收清单](QA-CHECKLIST-1.0.1-v2.md) 执行验收。
 
 ## 目录
 
@@ -79,10 +80,11 @@ pwsh tools/update_vscode_office.ps1 -ExpectCommit <sha>     # 断言当前 check
 更新上游是显式操作：更新后同步 `upstream/pin.json` 并重新跑完整测试。
 `tests/test_upstream_pin.py` 校验 `.gitmodules`、pin commit、上游工作区是否干净，以及 pin 记录里的证据路径与依赖版本是否仍然成立。
 
-## 新 renderer（renderer/，Phase 3）
+## Renderer（v2 production；Phase 3 实现记录）
 
-`renderer/` 是 MarkdownReader-owned 的新 adapter：复用 pinned vscode-office 的 Markdown 实现，
-与生产路径 `node_renderer/` **并存**，尚未接入 GUI 或转换流程。
+`renderer/` 是当前 v2 production adapter，复用 pinned `vscode-office` 的 Markdown 实现。
+Cutover C4 已将 GUI 与转换流程切换到 v2；`node_renderer/` 保留为显式 v1 rollback runtime 和兼容测试路径。
+下面的构建与资源说明始于 Phase 3，个别历史阶段描述应结合这条当前状态阅读。
 
 ```powershell
 cd renderer
@@ -289,7 +291,7 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
     （前者带真实 PNG 装饰 + preview，后者无 preview 元数据）。`packaging/validate_release.py` 的 REQUIRED
     清单随之加上 `themes/template/decorations.css`。验收分两个阶段、不可合并：GUI closeout acceptance
     （source 模式）通过后才打 GUI SEALED，正式 35 项 release QA 只对从该提交重建的 exact candidate 执行
-    （阶段与顺序见 [重构路线图](REFACTOR_ROADMAP.md) 的 Phase 12 GUI closeout 段）。
+    （阶段与顺序见 [历史重构路线图](history/REFACTOR_ROADMAP.md) 的 Phase 12 GUI closeout 段）。
 
 
 

@@ -1,9 +1,9 @@
 """Phase 12A-2: a QA record has to say which release it is evidence for.
 
 The acceptance gate used to read any checklist whose boxes were all ticked and whose
-conclusion line was present. That is not enough to freeze a release:
-`docs/QA-CHECKLIST.md` is a finished 33/33 record from the v1 renderer era, so the default
-invocation could accept v1 evidence for a v2 production release -- measured, not assumed.
+conclusion line was present. That is not enough to freeze a release. The archived
+`docs/history/releases/1.0.0-rc1/QA-CHECKLIST.md` is a finished 33/33 record from the v1
+renderer era, so the default invocation must not accept it as evidence for a v2 release.
 
 The rule locked here has three parts:
 
@@ -273,9 +273,9 @@ def test_the_historical_v1_record_is_rejected_by_the_current_gate() -> None:
     The first assertion is the rule; the second keeps the rejection honest, so nobody can
     satisfy it by writing an identity block into a historical record.
     """
-    record = ROOT / "docs" / "QA-CHECKLIST.md"
+    record = ROOT / "docs" / "history" / "releases" / "1.0.0-rc1" / "QA-CHECKLIST.md"
 
     assert release_freeze.qa_gate(record) is False, (
-        "the gate accepted docs/QA-CHECKLIST.md, a finished record from the v1 renderer era"
+        "the gate accepted the archived 1.0.0-rc1 v1 record as evidence for a current release"
     )
     assert "QA identity" not in record.read_text(encoding="utf-8")

@@ -91,7 +91,7 @@ python packaging/release_freeze.py --tag --artifact-dir "output/candidate/dist"
 
 记录默认**不按固定路径**查找：`release_freeze.py` 扫描 `docs/QA-CHECKLIST*.md`，用身份块选出唯一匹配的
 那一份；0 条、多条、或候选里有格式损坏的身份块都直接拒绝并说明原因。`--qa-record` 可以显式指定任意路径，
-但同样必须通过身份校验 —— 显式指定是选择文件，不是豁免检查。`docs/QA-CHECKLIST.md` 是 v1 时代的历史记录，
+但同样必须通过身份校验 —— 显式指定是选择文件，不是豁免检查。`docs/history/releases/1.0.0-rc1/QA-CHECKLIST.md` 是 v1 时代的历史记录，
 没有身份块，因此永远不会被当成当前 release 的证据。
 
 `--tag` 必须指向验收清单绑定的候选 `dist/`。门禁会核对清单、候选 manifest 与 EXE / ZIP 的 SHA-256，

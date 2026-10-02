@@ -33,11 +33,14 @@ Markdown 文件
 - `renderer_node.py` 每进程只解析一次 Node 命令；frozen 包只使用内置 Node，缺失即视为打包物损坏。
 - `gui/api.py` 把桥接方法暴露给界面；原生对话框一次只开一个，重叠请求被拒绝。
 
-### Node（node_renderer）
+### Node 渲染器
 
-- 从标准输入读 JSON，向标准输出写 JSON：正文 HTML、标题列表、警告，以及需要内联的 KaTeX 样式。
-- 负责 Markdown 解析、脚注、公式排版与本地图片内嵌，不生成完整阅读器页面。
-- 选项与插件范围见 [兼容范围](MARKDOWN.md)。
+- `renderer/` 是 v2 production renderer，复用 pinned `vscode-office` 语义并返回完整 renderer envelope；
+  `core/html_assembly.py` 将 envelope 装配为最终单文件 HTML。
+- `node_renderer/` 是 v1 rollback renderer，保留旧 `markdown-it` 实现与依赖，供显式回退和兼容测试使用。
+- `core/renderer_node.py` 是两个 runtime 的调用与 dispatch 边界；`core/config.py::PRODUCTION_RENDERER_VERSION`
+  是 production policy 的唯一来源。v2 启动/转换失败不会静默回退到 v1。
+- 选项与语法范围见 [兼容范围](MARKDOWN.md)；迁移状态与测试证据见 [兼容矩阵](MARKDOWN_COMPATIBILITY.md)。
 
 ### 模板（templates）与阅读器资产层
 

@@ -1,6 +1,6 @@
 """The acceptance gate reads a record a person ticked, so it reads it generously.
 
-docs/QA-CHECKLIST.md is filled in by hand: people write `[X]` instead of `[x]`,
+current QA checklists are filled in by hand: people write `[X]` instead of `[x]`,
 leave a double space after the box, or indent the line. None of that changes what
 the box means, so none of it may block a release. What the gate must still refuse
 is a record that is unfinished, and one that only claims to be finished.

@@ -11,7 +11,7 @@ MarkdownReader 把 Markdown 文件转换成可离线阅读的独立 HTML，面�
 
 ### 离线优先
 
-生成的 HTML 自包含：不依赖服务器、CDN 或网络连接。
+生成的 HTML 无需 Web 服务。阅读器、主题、交互脚本及可读取的本地资源会尽可能内嵌；如果转换时无法获取远程资源，文档会保留原 URL，因此这类文档仍可能需要网络。
 
 ### 阅读优先
 
@@ -29,34 +29,37 @@ Markdown → Python 调度 → Node 渲染 → 模板组装 → 浏览器阅读
 
 每个 Markdown 输出一个独立 HTML，索引页同理；CSS 与 JavaScript 在生成时内嵌。
 
-### 模板可维护
+### 阅读器与主题分离
 
-阅读器外壳由 `default` 模板提供，主题只覆盖视觉样式，不复制交互逻辑。
+Viewer 负责阅读器 DOM 与交互，Theme 只负责视觉样式。二者通过共享资产层组合，不复制交互逻辑。
 
-## 模板体系
+## 阅读器与主题体系
 
 ```text
 viewer/viewer.html    阅读器外壳：工具栏、目录、正文容器
 viewer/css/layout.css 共享布局与组件样式（只消费主题变量）
 viewer/css/print.css  共享打印样式
-viewer/js/*.js        阅读器交互模块（manifest.json 声明加载顺序，装配时拼成一个脚本；含 theme-switcher.js）
-themes/builtin/base/  基础主题 token（调色板、字体、布局尺寸），全局回落，hidden 不可选
-themes/builtin/modern/     通用阅读主题（scoped 到 html[data-theme-id="modern"]）
-themes/builtin/office/     类 Word 正式文档与打印主题（scoped 到 html[data-theme-id="office"]）
-themes/builtin/vscode/     编辑器预览风格的技术主题（scoped 到 html[data-theme-id="vscode"]）
-themes/template/      外置主题开发模板（随包发布；导出 -> 编辑 -> 导入）
+viewer/js/*.js        阅读器交互模块（manifest.json 声明加载顺序，装配时拼成一个脚本）
+themes/builtin/base/  基础主题 token（调色板、字体、布局尺寸），全局回落，不可选择
+themes/builtin/modern/     通用阅读主题
+themes/builtin/office/     类 Word 正式文档与打印主题
+themes/builtin/vscode/     编辑器风格的技术主题
+themes/template/      外置主题开发模板（随包发布；导出 → 编辑 → 导入）
 assets/themes/external/  用户安装的外置主题（用户资产，永不随包）
-templates/index/      批量索引页（index.html + theme.css + index.js，生成时内嵌；独立表面）
+templates/index/      批量索引页（独立表面）
 ```
 
-三个主题都继承 `default`；索引页与阅读页是两套独立的单文件产物。各主题的视觉约定见各自的 README。
+每份生成的阅读文档都携带 base、Modern、Office 和 VS Code；阅读者在 HTML 中选择内置主题，偏好保存在该 HTML 的
+localStorage。主页面的内置主题预览只存在于本次 GUI 会话；外置主题复选框则决定本次转换要携带哪些已安装主题，
+选择保存在 MarkdownReader 配置中。索引页与阅读页是两套独立的单文件产物。
 
 ## GUI 的边界
 
 GUI 使用 pywebview，只作为桌面入口：文件与目录选择、Windows 复选与拖入、转换清单与预检、
-输出目录与模板选择、转换选项、静态模板预览、日志展示，以及调用核心转换流程。
+输出目录、转换选项、会话级主题预览、外置主题携带选择、日志展示，以及调用核心转换流程。
 
-GUI 不负责 Markdown 解析、目录生成、正文渲染与阅读器交互逻辑；配置写在 `config.json`。
+GUI 不负责 Markdown 解析、目录生成、正文渲染与阅读器交互逻辑。主题区域提供会话级视觉预览；转换参数不包含
+内置主题选择。初始阅读主题 fallback 由 bridge 内部的 `BOOTSTRAP_TEMPLATE = "modern"` 决定，不属于用户配置。
 
 ## 打印
 

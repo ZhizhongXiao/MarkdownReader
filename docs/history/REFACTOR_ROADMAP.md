@@ -63,7 +63,7 @@ MarkdownReader
 ```text
 baseline code commit   : d28f92394963a5f02e8d227667e1cd985afd0e9e
 baseline tag           : pre-vscode-office-refactor-2026-09-24
-refactor bootstrap HEAD: f37c8a2（AGENTS.md + docs/REFACTOR_ROADMAP.md）
+refactor bootstrap HEAD: f37c8a2（AGENTS.md + docs/history/REFACTOR_ROADMAP.md）
 Python                 : 3.12.10
 Node                   : v24.20.0
 npm                    : 11.19.0
@@ -356,7 +356,7 @@ C4  A PASS     packaging closure：renderer/dist 进 spec 的 REQUIRED_FILES + d
     C PASS    7 项 TARGET 由 strict xfail 转为普通通过（xfail 清零）；markdown_fixtures 跟随 policy 且显式离线；
               demo 再生（1,544,529 → 1,547,612 B）并通过 standalone gate
     D PASS    onefile + onedir 真实构建，validate_release --mode both PASS（frozen 启动即验证 v2：包内 node + renderer/dist）
-              浏览器验收 6/6；新验收记录 docs/QA-CHECKLIST-1.0.0-rc1-v2.md（0/43，待实机完成）
+              浏览器验收 6/6；新验收记录 docs/history/releases/1.0.0-rc1/QA-CHECKLIST-1.0.0-rc1-v2.md（0/43，待实机完成）
     剩余（用户侧）实机 QA 勾选 + 合并到 main 后 release_freeze --check-only / --tag
 production renderer = v2（默认）；v1 = 显式回退路径（一处 policy 常量 + 完整打包资产）
 ```

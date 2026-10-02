@@ -1,6 +1,8 @@
 # MarkdownReader 1.0.1 Windows x64 candidate
 
-Status: **Candidate only — 35-item clean-Windows manual acceptance is pending.** This is not the published release.
+Status: **Historical candidate manifest.** This exact candidate later passed all 35 manual acceptance items and was
+published unchanged as the v1.0.1 release (`v1.0.1`). Acceptance evidence is in
+[QA-CHECKLIST-1.0.1-v2.md](QA-CHECKLIST-1.0.1-v2.md). The release includes the same EXE and portable ZIP hashes recorded below.
 
 ## Build identity
 
@@ -39,6 +41,8 @@ The files are under `output/candidate-1.0.1-e084c57/dist/`. `output/candidate-1.
 
 The version-matched sample documents and operating guide are in `QA-materials/`; generated with `packaging/qa_prepare.py --output QA-materials --dist-dir dist`.
 
-## Remaining acceptance
+## Final disposition
 
-Run all 35 items in `docs/QA-CHECKLIST-1.0.1-v2.md` against the exact EXE and ZIP above on a clean Windows 11 machine. The checklist is intentionally unchecked until that run is actually completed.
+The candidate was accepted on Windows 11 on 2026-10-02. The v1.0.1 release reused these exact onefile and portable ZIP
+artifacts without rebuilding them after acceptance. See the [v1.0.1 GitHub Release](https://github.com/ZhizhongXiao/MarkdownReader/releases/tag/v1.0.1)
+for the published files and checksums.

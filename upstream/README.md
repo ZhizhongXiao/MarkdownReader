@@ -12,7 +12,7 @@
 | commit 日期 | 2026-08-16T08:01:41Z（Merge branch 'dev'） |
 | 该 commit 的 package.json | version 4.2.0 |
 | pin manifest | [pin.json](pin.json)（机器可读的 metadata / integration evidence manifest） |
-| 接入阶段 | Phase 2，见 [重构路线图](../docs/REFACTOR_ROADMAP.md) |
+| 接入阶段 | Phase 2，见 [重构路线图](../docs/history/REFACTOR_ROADMAP.md) |
 | 兼容矩阵 | [迁移兼容矩阵](../docs/MARKDOWN_COMPATIBILITY.md) |
 
 ## 事实源（fact sources）

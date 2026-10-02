@@ -213,7 +213,8 @@ GUIDE = """# MarkdownReader __VERSION__ 实机验收操作指引
 下面每一条按同一顺序对应 `__CHECKLIST_PATH__` 中的条目。
 
 阶段划分：本指引服务的是 **candidate 构建之后的正式 release QA**。GUI closeout 的人工验收是另一次、
-在 **source 模式**下进行的检查（记录见 `docs/REFACTOR_ROADMAP.md` 的 Phase 12 GUI closeout 段）：
+在 **source 模式**下进行的检查（记录见
+`docs/history/REFACTOR_ROADMAP.md` 的 Phase 12 GUI closeout 段）：
 它不勾本清单、也不写「QA 结论：通过」。正式 checklist 只对**从 GUI seal commit 重新完整构建出来的
 exact artifacts** 负责 —— 旧 `dist/`（缺 `themes/template/decorations.css`）已 obsolete，
 不作为本次被测产物。

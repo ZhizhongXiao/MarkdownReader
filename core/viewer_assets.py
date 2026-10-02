@@ -1,7 +1,7 @@
 """Reader asset layer: what a generated document is made of, and where from.
 
 Phase 6A collected this knowledge into one module; Phase 6B moved the assets it
-points at (and split the viewer script). Both assembly paths, the GUI dropdown and
+points at (and split the viewer script). Both assembly paths, the GUI theme UI and
 the tests now read the layout through this one layer, which is why the move
 touched paths here instead of in five modules.
 
@@ -22,8 +22,9 @@ they replace. ``<script type="module">`` would be blocked by CORS on ``file://``
 and fetching module files at runtime would break the offline promise.
 
 Terminology: a theme id is the canonical lowercase id from ``metadata.json``, which
-is also its directory name under ``themes/builtin/``. The user-facing selector in
-``config.json`` is that same id.
+is also its directory name under ``themes/builtin/``. Builtin theme choice belongs
+to each generated document's reader preference; ``config.json`` stores only the
+external theme ids selected to be carried into the next conversion.
 """
 
 import json

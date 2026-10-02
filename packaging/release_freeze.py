@@ -64,6 +64,7 @@ POST_CANDIDATE_METADATA_PATHS = frozenset(
         "docs/DEVELOPMENT.md",
         "docs/QA-CHECKLIST-1.0.1-v2.md",
         "docs/REFACTOR_ROADMAP.md",
+        "docs/history/REFACTOR_ROADMAP.md",
         "packaging/README.md",
         "packaging/qa_prepare.py",
         "packaging/release_freeze.py",

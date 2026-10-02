@@ -30,7 +30,7 @@ summary: |
 
 下面两个 token 会在容器内折行，不会被裁掉：
 
-https://github.com/ZhizhongXiao/MarkdownReader/blob/main/docs/QA-CHECKLIST.md?plain=1&tab=readme-ov-file#qa-%E7%BB%93%E8%AE%BA
+https://github.com/ZhizhongXiao/MarkdownReader/blob/main/docs/history/releases/1.0.0-rc1/QA-CHECKLIST.md?plain=1&tab=readme-ov-file#qa-%E7%BB%93%E8%AE%BA
 
 `zh_CN_an_identifier_long_enough_to_prove_that_a_single_token_wraps_inside_the_column`
 

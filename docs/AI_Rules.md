@@ -18,7 +18,7 @@
 ## 不要做
 
 - 不要在文档里写测试总数或契约条数：它们会随测试变化；真值由测试里的锁定常量与失败信息给出。
-- 不要把当前态文档当历史：`docs/CHANGELOG.md`、`docs/QA-CHECKLIST.md` 与 `release-readme.md` 是冻结证据，
+- 不要把当前态文档当历史：`docs/CHANGELOG.md`、`docs/history/releases/1.0.0-rc1/QA-CHECKLIST.md` 与 `release-readme.md` 是冻结证据，
   不要为了描述现状去改它们。
 - 不要在 `samples/demo.md` 里解释「以前为什么这样」，也不要写尚未支持的语法：它是渲染标本。
 - 不要复制阅读器交互：交互只在 `viewer/js/`（装配时按 `manifest.json` 拼成一个脚本），主题只覆盖视觉。
