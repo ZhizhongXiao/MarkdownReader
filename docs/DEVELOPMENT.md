@@ -49,7 +49,9 @@ cd tests/js; npm test; cd ..      # viewer 契约层（也可由 pytest 触发�
 ```text
 core/                 转换计划、front matter、TOC、渲染调度、索引生成
 core/viewer_assets.py 阅读器/主题资产的唯一来源（外壳、脚本、样式链、注册表）
-gui/                  pywebview 界面与静态资源（gui/assets/）
+gui/api.py            稳定的 pywebview façade
+gui/services/         GUI 对话框/输入、转换、主题与生命周期/存储服务
+gui/assets/           GUI 静态资源（index.html、CSS、JavaScript）
 renderer/             生产 renderer（v2 adapter，产物 renderer/dist 随包发布）
 node_renderer/        v1 回退 renderer（markdown-it、footnote、texmath、KaTeX）
 viewer/viewer.html    阅读器外壳（工具栏、目录、正文容器）

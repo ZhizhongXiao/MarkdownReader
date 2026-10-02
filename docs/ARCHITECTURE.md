@@ -4,7 +4,7 @@
 
 ```text
 core/           Python 调度：配置、转换计划、front matter、目录、渲染调度、索引生成、阅读器资产定位
-gui/            pywebview 桌面界面与静态资源
+gui/            pywebview 桌面界面；api.py 是稳定 façade，services/ 按对话框、转换、主题和生命周期/存储分工
 renderer/       Node 渲染服务（v2 production adapter；产物 renderer/dist 随包发布）
 node_renderer/  Node 渲染服务（v1 回退：markdown-it 与插件、KaTeX）
 viewer/         阅读器外壳、布局与打印样式、交互模块（装配期合并成一个 classic script）
@@ -31,7 +31,10 @@ Markdown 文件
 - 只负责调度与组装：不做 Markdown 解析，不实现阅读器交互。
 - `conversion_plan.py` 在任何写入之前给出可预览、可校验的转换计划，冲突在写入前拦下。
 - `renderer_node.py` 每进程只解析一次 Node 命令；frozen 包只使用内置 Node，缺失即视为打包物损坏。
-- `gui/api.py` 把桥接方法暴露给界面；原生对话框一次只开一个，重叠请求被拒绝。
+- `gui/api.py` 是稳定的 pywebview façade，保留 `pywebview.api.*` 方法与数据契约；内部由 `gui/services/` 的
+  对话框/输入、转换、主题、生命周期/存储服务承接工作。
+- 生命周期服务统一管理终止移除状态与在途操作 gate；对话框服务独立串行化 Tk 对话框。服务拆分不改变 GUI bridge
+  方法、参数、返回 shape 或 `gui.js`。
 
 ### Node 渲染器
 

@@ -67,7 +67,11 @@ def test_the_builtin_registry_and_the_bundle_are_untouched() -> None:
     from core.viewer_assets import builtin_theme_ids
 
     assert builtin_theme_ids(), "the builtin theme registry must stay available"
-    assert hasattr(gui_api, "load_config"), "the bridge keeps its configuration reader"
+    from gui.services.lifecycle import LifecycleStorageService
+
+    assert callable(LifecycleStorageService.get_config), (
+        "configuration reads stay in the GUI backend"
+    )
 
 
 def test_the_bootstrap_theme_is_a_bridge_constant() -> None:

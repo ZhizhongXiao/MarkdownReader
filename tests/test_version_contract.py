@@ -47,6 +47,7 @@ def test_the_version_file_is_the_only_place_a_version_is_spelled_out():
     for relative in (
         "gui/api.py",
         "gui/app.py",
+        "gui/services/lifecycle.py",
         "core/config.py",
         "core/paths.py",
     ):

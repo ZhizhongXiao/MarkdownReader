@@ -50,7 +50,7 @@ OLD_ASSET_PATHS = (
     "templates/vscode",
 )
 
-CONSUMERS = ("core/converter.py", "core/html_assembly.py", "gui/api.py")
+CONSUMERS = ("core/converter.py", "core/html_assembly.py", "gui/services/conversion.py")
 # Functions that used to be read straight out of `core.config` by every consumer.
 MOVED_FROM_CONFIG = {
     "theme_body_class",
@@ -334,7 +334,9 @@ def test_the_gui_registry_comes_from_the_asset_layer():
     # `builtin_theme_ids` 在 bridge 里已没有消费者（把它从 import 列表移除是整理，不是换来源）。
     # 判据未变，而且被加强：bridge 仍只经资产层解析主题名，页面上的内置主题清单必须逐个
     # 都是资产层承认的 builtin id —— 页面不得自造一个注册表。
-    assert imported_from("gui/api.py", "core.viewer_assets") == {"normalize_theme_id"}
+    assert imported_from("gui/services/conversion.py", "core.viewer_assets") == {
+        "normalize_theme_id"
+    }
     assert "TEMPLATES_DIR" not in (ROOT / "gui" / "api.py").read_text(encoding="utf-8")
 
     javascript = (ROOT / "gui" / "assets" / "gui.js").read_text(encoding="utf-8")

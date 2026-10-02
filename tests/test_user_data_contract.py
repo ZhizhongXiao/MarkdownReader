@@ -516,22 +516,25 @@ def test_every_mutating_handler_is_refused_after_the_terminal_flag(
     onefile_tree, monkeypatch, name
 ):
     """P11-3：确认之后不再允许任何写入 —— 包括会 mkdir 的 open_theme_location。"""
-    import gui.api as gui_api
+    from gui.services import conversion, dialogs, lifecycle, themes
 
     api, _window = bridge_with_window()
     touched: list[str] = []
-    for attribute in (
-        "save_config",
-        "install_theme",
-        "uninstall_theme",
-        "export_template",
-        "ensure_theme_root",
-        "build_conversion_plan",
-    ):
+    guarded_dependencies = (
+        (lifecycle, "save_config"),
+        (themes, "install_theme"),
+        (themes, "uninstall_theme"),
+        (themes, "export_template"),
+        (themes, "ensure_theme_root"),
+        (conversion, "build_conversion_plan"),
+    )
+    for module, attribute in guarded_dependencies:
         monkeypatch.setattr(
-            gui_api, attribute, lambda *args, _name=attribute, **kwargs: touched.append(_name)
+            module,
+            attribute,
+            lambda *args, _name=attribute, **kwargs: touched.append(_name),
         )
-    monkeypatch.setattr(gui_api, "_pick_directory", lambda _title: touched.append("dialog") or "")
+    monkeypatch.setattr(dialogs, "_pick_directory", lambda _title: touched.append("dialog") or "")
 
     api.request_user_data_removal()
     assert api.removal_requested() is True, name
@@ -550,7 +553,7 @@ def test_every_mutating_handler_is_refused_after_the_terminal_flag(
 
 def test_a_mutation_in_flight_refuses_the_removal_request(onefile_tree, monkeypatch):
     """P11-3 的原子部分：在途的写入不是「之后被禁」，而是根本不允许开始终止。"""
-    import gui.api as gui_api
+    from gui.services import themes
 
     api, window = bridge_with_window()
     started = threading.Event()
@@ -561,7 +564,7 @@ def test_a_mutation_in_flight_refuses_the_removal_request(onefile_tree, monkeypa
         release.wait(5)
         return "paper"
 
-    monkeypatch.setattr(gui_api, "install_theme", slow_import)
+    monkeypatch.setattr(themes, "install_theme", slow_import)
     worker = threading.Thread(target=lambda: api.import_theme({"source": "C:/themes/paper"}))
     worker.start()
     assert started.wait(5), "fixture: the import is in flight"
@@ -578,7 +581,7 @@ def test_a_mutation_in_flight_refuses_the_removal_request(onefile_tree, monkeypa
 
 def test_an_open_native_dialog_refuses_the_removal_request(onefile_tree, monkeypatch):
     """dialog 不是 storage mutation，但终止转换期间也不能强拆它。"""
-    import gui.api as gui_api
+    from gui.services import dialogs
 
     api, window = bridge_with_window()
     opened = threading.Event()
@@ -589,7 +592,7 @@ def test_an_open_native_dialog_refuses_the_removal_request(onefile_tree, monkeyp
         release.wait(5)
         return ""
 
-    monkeypatch.setattr(gui_api, "_pick_directory", blocking_directory)
+    monkeypatch.setattr(dialogs, "_pick_directory", blocking_directory)
     worker = threading.Thread(target=lambda: api.import_theme({}))
     worker.start()
     assert opened.wait(5), "fixture: the dialog is open"
@@ -656,6 +659,7 @@ def test_an_accepted_request_closes_the_log_before_it_destroys_the_window(
     """AGENTS §23：确认之后禁止日志写入 —— 所以 file handler 必须早于窗口销毁就关闭。"""
     import gui.api as gui_api
     from core import logger as core_logger
+    from gui.services import lifecycle
 
     events: list[str] = []
 
@@ -674,8 +678,7 @@ def test_an_accepted_request_closes_the_log_before_it_destroys_the_window(
         events.append("close_log")
         return original_close()
 
-    # `gui.api` imported the function by name, so the name it calls is the module attribute.
-    monkeypatch.setattr(gui_api, "close_file_logging", spy_close)
+    monkeypatch.setattr(lifecycle, "close_file_logging", spy_close)
 
     reply = api.request_user_data_removal()
 

@@ -23,7 +23,6 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import gui.api as gui_api  # noqa: E402
 from core import config as core_config  # noqa: E402
 from core import paths  # noqa: E402
 from gui.api import BridgeApi  # noqa: E402
@@ -115,7 +114,9 @@ def test_no_management_action_writes_the_configuration(sandbox, monkeypatch, tmp
     writes: list[dict] = []
     monkeypatch.setattr(core_config, "save_config", writes.append)
     opened: list[str] = []
-    monkeypatch.setattr(gui_api.os, "startfile", opened.append, raising=False)
+    from gui.services import lifecycle
+
+    monkeypatch.setattr(lifecycle.os, "startfile", opened.append, raising=False)
 
     api = BridgeApi()
     assert api.import_theme({"source": str(tmp_path / "incoming")})["ok"] is True
@@ -136,7 +137,9 @@ def test_no_management_action_writes_the_configuration(sandbox, monkeypatch, tmp
 def test_open_theme_location_creates_the_directory_it_opens(sandbox, monkeypatch):
     """新环境（从未装过主题）里目录并不存在：必须是「创建后打开」，不是静默 no-op。"""
     opened: list[str] = []
-    monkeypatch.setattr(gui_api.os, "startfile", opened.append, raising=False)
+    from gui.services import lifecycle
+
+    monkeypatch.setattr(lifecycle.os, "startfile", opened.append, raising=False)
     assert not sandbox.exists(), "fixture: nothing has been installed yet"
 
     result = BridgeApi().open_theme_location()
@@ -157,7 +160,9 @@ def test_open_theme_location_reports_a_failing_system_opener(sandbox, monkeypatc
     def refuse(_path: str) -> None:
         raise OSError("shell failed")
 
-    monkeypatch.setattr(gui_api.os, "startfile", refuse, raising=False)
+    from gui.services import lifecycle
+
+    monkeypatch.setattr(lifecycle.os, "startfile", refuse, raising=False)
 
     result = BridgeApi().open_theme_location()
 

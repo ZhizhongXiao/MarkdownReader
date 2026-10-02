@@ -14,6 +14,7 @@ def test_gui_exposes_multiselect_drop_and_conversion_list_contract():
     html = (ROOT / "gui" / "assets" / "index.html").read_text(encoding="utf-8")
     javascript = (ROOT / "gui" / "assets" / "gui.js").read_text(encoding="utf-8")
     api = (ROOT / "gui" / "api.py").read_text(encoding="utf-8")
+    dialogs = (ROOT / "gui" / "services" / "dialogs.py").read_text(encoding="utf-8")
 
     assert 'id="conversion-page"' in html
     assert 'id="tab-conversion"' in html
@@ -23,7 +24,8 @@ def test_gui_exposes_multiselect_drop_and_conversion_list_contract():
     assert 'class="workspace-tab workspace-tab-log"' in html
     assert 'id="log-issue-count"' in html
     assert "conversion-table-head" not in html
-    assert "askopenfilenames" in api
+    assert "askopenfilenames" in dialogs
+    assert "select_input_files" in api
     assert "select_input_files" in javascript
     assert "acceptDroppedInputs" in javascript
     assert '"直接加入"' in javascript
@@ -131,28 +133,31 @@ def test_opening_a_result_hands_the_system_a_file_uri(monkeypatch, tmp_path):
     A stale association opens something else, or nothing at all; a file:// URI
     says what the target is, and survives spaces and non-ASCII names.
     """
-    from gui import api as gui_api
+    from gui.services import lifecycle
 
     opened: list[str] = []
-    monkeypatch.setattr(gui_api.webbrowser, "open", opened.append)
+    monkeypatch.setattr(lifecycle.webbrowser, "open", opened.append)
 
     target = tmp_path / "索引-示例.html"
     target.write_text("<html><body>ok</body></html>", encoding="utf-8")
-    gui_api.BridgeApi().open_file(str(target))
+    from gui.api import BridgeApi
+
+    BridgeApi().open_file(str(target))
 
     assert opened == [target.resolve().as_uri()], opened
     assert opened[0].startswith("file:///")
 
     opened.clear()
-    gui_api.BridgeApi().open_file(str(tmp_path / "absent.html"))
+    BridgeApi().open_file(str(tmp_path / "absent.html"))
     assert opened == [], "a missing file must not be handed to the system"
 
 
 def test_the_auto_open_path_uses_the_same_file_uri_helper():
-    api = (ROOT / "gui" / "api.py").read_text(encoding="utf-8")
+    conversion = (ROOT / "gui" / "services" / "conversion.py").read_text(encoding="utf-8")
+    lifecycle = (ROOT / "gui" / "services" / "lifecycle.py").read_text(encoding="utf-8")
 
-    assert "webbrowser.open(_file_uri(entry_file))" in api
-    assert "webbrowser.open(_file_uri(path))" in api
+    assert "self._open_file_uri(entry_file)" in conversion
+    assert "webbrowser.open(_file_uri(path))" in lifecycle
 
 
 def test_gui_exposes_the_external_theme_selection_surface():
