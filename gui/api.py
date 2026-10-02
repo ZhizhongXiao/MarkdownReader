@@ -28,7 +28,7 @@ from core.external_themes import (
 from core.external_themes import import_theme as install_theme
 from core.external_themes import remove_theme as uninstall_theme
 from core.logger import close_file_logging
-from core.viewer_assets import builtin_theme_ids, normalize_theme_id
+from core.viewer_assets import normalize_theme_id
 
 _logger = logging.getLogger("gui")
 
@@ -36,6 +36,11 @@ _logger = logging.getLogger("gui")
 # exporter refuses an existing target, so a stable name turns "already exported" into a
 # message the user can read instead of an overwrite or a silent no-op.
 EXPORTED_TEMPLATE_DIR_NAME = "markdownreader-theme-template"
+
+# Phase 12 GUI closeout: the internal bootstrap theme. A document whose reader has no preference
+# yet renders with this builtin theme. The GUI has no control for it, and a `template` sent by a
+# client is ignored at this boundary, so the retired control cannot come back through the bridge.
+BOOTSTRAP_TEMPLATE = "modern"
 
 # Phase 10 moved the log and the WebView2 profile into `runtime/`, and Phase 11 added the
 # removal action -- so the note states the real boundary instead of promising that something is
@@ -293,16 +298,6 @@ class BridgeApi:
                     "counts": {"selected": 0, "directory": 0, "dependency": 0, "total": 0},
                 }
 
-    # ── Template ────────────────────────────────────────────
-
-    def get_templates(self) -> list[str]:
-        """Return the builtin themes a document's default theme may be chosen from.
-
-        Builtin only on purpose: user themes are installed and selected on their own
-        surface (Phase 9), while this list feeds the existing dropdown.
-        """
-        return builtin_theme_ids() or ["modern"]
-
     # ── Config ──────────────────────────────────────────────
 
     def get_config(self) -> dict:
@@ -344,16 +339,22 @@ class BridgeApi:
         The classification belongs to `core.external_themes.theme_state()`, which shares
         its rules with the conversion path; this bridge only merges it with what the
         configuration remembers.
+
+        Phase 12 GUI closeout: the payload also carries the preview facts of the installed, valid
+        themes (`previews`), and it no longer reports a document-default theme -- that concept
+        belongs to the reader now, so `config.template` stays a compatibility field for the
+        converter and never becomes product state again.
         """
         with self._operation() as allowed:
             if not allowed:
                 return {}
             cfg = load_config()
             configured = list(cfg.get("external_themes") or [])
-            default = str(cfg.get("template") or "")
-            state = theme_state(configured, default=default)
+            # Phase 12 GUI closeout: the payload carries no document-default theme. A builtin
+            # theme is a reader preference now, and `config.template` stays a compatibility field
+            # for the converter -- it must not travel back into the GUI as a product state.
+            state = theme_state(configured)
             return {
-                "default": default,
                 "installed": state["installed"],
                 "configured": configured,
                 "selected": state["selected"],
@@ -363,6 +364,9 @@ class BridgeApi:
                 # `invalid`, so the page can refuse an unusable install it never remembered --
                 # from the same state read and the same registry snapshot.
                 "installed_invalid": state["installed_invalid"],
+                # Phase 12 GUI closeout: the preview facts travel with the state read, so the page
+                # renders preview targets and their tokens without reading theme files.
+                "previews": state["previews"],
                 "warnings": state["warnings"],
             }
 
@@ -519,7 +523,10 @@ class BridgeApi:
         request = request or {}
         paths = request.get("inputs", [])
         output_dir = request.get("output_dir", "")
-        template = request.get("template", "modern")
+        # Phase 12 GUI closeout: the GUI has no builtin selector, so a `template` in the request is
+        # ignored instead of honoured. `core` still accepts a template -- the converter parameter
+        # and the v1 rollback are untouched -- but this boundary always renders with the bootstrap
+        # theme, so an old page or a hand-written call cannot resurrect the retired control.
         overwrite = bool(request.get("overwrite", False))
         build_index = bool(request.get("build_index", True))
         auto_open = bool(request.get("auto_open", False))
@@ -530,7 +537,7 @@ class BridgeApi:
 
         # Build runtime overrides
         overrides = {
-            "template": normalize_theme_id(template),
+            "template": normalize_theme_id(BOOTSTRAP_TEMPLATE),
             "output": output_dir,
             "overwrite": overwrite,
             "build_index": build_index,

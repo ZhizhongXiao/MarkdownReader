@@ -7,7 +7,7 @@
    04. Left-side form panels
    05. Shared controls
    06. Workspace tabs and pages
-   07. Static template preview
+   07. Static theme preview
    08. Settings page
 
    Notes:
@@ -133,10 +133,7 @@ body,
 input[type="text"],
 select,
 button,
-.check-row label,
-.custom-select-btn,
-.custom-select-dropdown,
-.custom-select-dropdown .dropdown-item {
+    .check-row label {
     transition:
         background-color .22s ease,
         border-color .22s ease,
@@ -175,9 +172,26 @@ a { color: inherit; text-decoration: none; }
     width: 36px; height: 32px; padding: 0; border: 1px solid rgba(255,255,255,0.3); border-radius: var(--radius-sm);
     background: rgba(255,255,255,0.1); color: #fff; font-size: 17px; cursor: pointer; font-weight: 700;
     font-family: "Segoe UI Symbol", "Arial Unicode MS", sans-serif;
-    line-height: 1;
+    line-height: 1; display: grid; place-items: center;
 }
 .theme-btn:hover { background: rgba(255,255,255,0.2); }
+.theme-btn .theme-icon {
+    grid-area: 1 / 1; width: 18px; height: 18px; display: block;
+    fill: none; stroke: currentColor; stroke-width: 2;
+    stroke-linecap: round; stroke-linejoin: round;
+}
+.theme-btn .theme-icon-sun { display: none; }
+html[data-theme="dark"] .theme-btn .theme-icon-moon { display: none; }
+html[data-theme="dark"] .theme-btn .theme-icon-sun { display: block; }
+.settings-view-toggle .settings-open-icon,
+.settings-view-toggle .settings-return-icon { grid-area: 1 / 1; }
+.settings-view-toggle .settings-open-icon { line-height: 1; }
+.settings-view-toggle .settings-return-icon {
+    width: 18px; height: 18px; display: none; fill: none; stroke: currentColor;
+    stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+.app.settings-open .settings-view-toggle .settings-open-icon { display: none; }
+.app.settings-open .settings-view-toggle .settings-return-icon { display: block; }
 
 /* 03.3 Conversion status strip and primary actions. */
 .status-strip {
@@ -384,37 +398,6 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .scroll-indicator-top { top: 4px; }
 .scroll-indicator-bottom { bottom: 4px; }
 
-/* 05.6 Custom template dropdown. The menu is portaled to <body> by gui.js. */
-.custom-select { position: relative; width: 100%; }
-.custom-select-btn {
-    width: 100%; height: var(--input-height); border: 1px solid var(--border);
-    border-radius: var(--radius); background: var(--panel); color: var(--text);
-    padding: 0 36px 0 12px; font-size: 13px; font-weight: 600;
-    text-align: left; cursor: pointer; position: relative;
-    display: flex; align-items: center; justify-content: space-between;
-}
-.custom-select-btn:hover { border-color: var(--blue-bright); }
-.custom-select-arrow {
-    font-size: 10px; color: var(--muted); transition: transform .2s;
-    position: absolute; right: 12px; pointer-events: none;
-}
-.custom-select-btn.open .custom-select-arrow { transform: rotate(180deg); }
-.custom-select-dropdown {
-    position: fixed;
-    background: var(--panel); border: 1px solid var(--border);
-    border-radius: var(--radius); box-shadow: 0 8px 20px rgba(0,0,0,0.16);
-    z-index: 99999; max-height: 180px; overflow-y: auto;
-}
-.custom-select-dropdown .dropdown-item {
-    padding: 8px 14px; cursor: pointer; font-size: 13px; color: var(--text);
-    border-bottom: 1px solid var(--border-soft); transition: background .12s;
-}
-.custom-select-dropdown .dropdown-item:last-child { border-bottom: none; }
-.custom-select-dropdown .dropdown-item:hover { background: var(--panel-alt); }
-.custom-select-dropdown .dropdown-item.selected {
-    background: var(--blue-bright); color: #fff; font-weight: 700;
-}
-
 /* ============================================================
    06. Workspace tabs and pages
    ============================================================ */
@@ -509,6 +492,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     background: var(--panel-alt);
     overflow: auto;
     padding: 18px;
+    flex-direction: column;
+    gap: 12px;
 }
 .conversion-page {
     background: var(--panel); flex-direction: column; min-width: 0;
@@ -607,17 +592,49 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .drop-overlay-card strong { font-size: 13px; }
 
 /* ============================================================
-   07. Static template preview
+   07. Static theme preview
    ============================================================ */
 
-/* 07.1 Shared preview scaffold. Template-specific classes only alter the document area. */
-.template-preview {
+/* 07.1 Shared preview scaffold. The stage and its navigation are the theme preview: a
+   builtin theme switches the stage class, an external theme brings its own tokens as CSS
+   variables on the same element, and a theme without a preview uses a full-size text notice. */
+.theme-preview-nav {
+    flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; min-height: 44px; padding: 6px 10px 6px 14px;
+    border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--panel);
+}
+.preview-current { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.preview-nav-label { color: var(--muted); font-size: 11px; font-weight: 700; white-space: nowrap; }
+#preview-theme-name { overflow: hidden; color: var(--text); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.preview-nav-controls { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; }
+.preview-nav-btn {
+    flex: 0 0 32px; width: 32px; height: 32px; display: grid; place-items: center;
+    padding: 0; border-radius: var(--radius-sm); border: 1px solid var(--border);
+    background: var(--panel-alt); color: var(--text-secondary);
+    font-family: "Segoe UI Symbol", "Arial Unicode MS", sans-serif;
+    font-size: 11px; line-height: 1; cursor: pointer;
+}
+.preview-nav-btn:hover:not(:disabled) {
+    background: var(--panel); border-color: var(--blue-bright); color: var(--blue-deep);
+}
+.preview-nav-btn:focus-visible { outline: 2px solid var(--blue-bright); outline-offset: 2px; }
+.preview-nav-btn:disabled { opacity: .55; cursor: not-allowed; }
+.theme-preview {
+    flex: 1 1 auto;
     min-width: 520px;
-    min-height: 0;
+    min-height: 320px;
     width: 100%;
-    height: 100%;
     display: block;
 }
+.preview-fallback {
+    flex: 1 1 auto; min-width: 520px; min-height: 320px; width: 100%;
+    display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 4px;
+    padding: 12px 14px; border: 1px dashed var(--border); border-radius: var(--radius);
+    background: var(--panel-alt); text-align: center;
+}
+.preview-fallback strong { font-size: 12px; color: var(--text-secondary); }
+.preview-fallback span { font-size: 11px; color: var(--muted); }
 .preview-stage {
     width: 100%;
     height: 100%;
@@ -830,16 +847,35 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     border-color: #64748b;
 }
 
+/* 07.5 External theme preview: the theme own tokens drive the stage. The GUI never runs
+   user CSS -- it only applies the six declarative tokens the bridge reported. */
+.theme-preview.preview-external .preview-stage { background: var(--preview-background, #eef4ff); }
+.theme-preview.preview-external .preview-sidebar { background: var(--preview-surface, transparent); }
+.theme-preview.preview-external .preview-document {
+    background: var(--preview-surface, transparent);
+    border-left: 2px solid var(--preview-accent, var(--blue-bright));
+    box-shadow: inset 0 0 0 1px var(--preview-border, transparent);
+}
+.theme-preview.preview-external .preview-heading,
+.theme-preview.preview-external .preview-subheading { background: var(--preview-text, #334155); }
+.theme-preview.preview-external .preview-line { background: var(--preview-muted, rgba(51, 65, 85, .28)); }
+.theme-preview.preview-external .preview-block,
+.theme-preview.preview-external .preview-grid span {
+    background: var(--preview-surface, rgba(96, 165, 250, .18));
+    border-color: var(--preview-border, rgba(148, 163, 184, .45));
+}
+
 /* ============================================================
    08. External theme selection (phase 9A)
    ============================================================ */
 
-/* 08.1 One row per theme: the checkbox with its id, a state badge, and -- for a
-   remembered id that cannot be used today -- the explicit removal action. */
+/* 08.1 One row per theme and two independent controls: the carry checkbox, then the name
+   and the description, then the state badge and -- for a remembered id that cannot be
+   used today -- the explicit removal action. */
 .theme-list { display: flex; flex-direction: column; gap: var(--gap-xs); }
 .theme-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-columns: auto auto minmax(0, 1fr) auto auto;
     align-items: center;
     gap: 8px;
     padding: 7px 10px;
@@ -847,16 +883,28 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     border-radius: var(--radius-sm);
     background: var(--panel-alt);
 }
-.theme-check { display: flex; min-width: 0; align-items: center; gap: 8px; cursor: pointer; }
-.theme-check input[type="checkbox"] { flex: 0 0 auto; width: 15px; height: 15px; }
-.theme-check span {
-    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    color: var(--text); font-size: 12px;
+.theme-row-check {
+    flex: 0 0 auto; width: 15px; height: 15px; margin: 0; cursor: pointer;
 }
-.theme-row[data-theme-state="missing"] .theme-check,
-.theme-row[data-theme-state="invalid"] .theme-check { cursor: default; }
-.theme-row[data-theme-state="missing"] .theme-check span,
-.theme-row[data-theme-state="invalid"] .theme-check span { color: var(--muted); }
+.theme-row-check:disabled { cursor: not-allowed; }
+.theme-row-name {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: var(--text); font-size: 12px; font-weight: 600;
+}
+.theme-row-desc {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: var(--muted); font-size: 11px;
+}
+.theme-row[data-theme-state="missing"] .theme-row-name,
+.theme-row[data-theme-state="invalid"] .theme-row-name { color: var(--muted); }
+/* 08.x The previewed row is marked from the preview id alone. Carry never feeds this
+   class -- and the mark is an outline, not a filled checkbox, so the two states stay
+   legible side by side. */
+.theme-row.previewing {
+    border-color: var(--blue-bright);
+    box-shadow: inset 3px 0 0 var(--blue-bright);
+    background: var(--panel);
+}
 
 /* 08.2 The four states read as four states, not as two shades of grey. */
 .theme-state {
@@ -890,37 +938,49 @@ button:disabled { opacity: .45; cursor: not-allowed; }
    ============================================================ */
 
 .settings-page {
-    position: fixed;
-    inset: 0;
-    z-index: 40;
-    overflow: auto;
-    padding: 20px 24px 28px;
-    background: var(--bg);
-}
-
-.settings-head {
+    flex: 1 1 auto;
+    min-height: 0;
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 14px;
+    flex-direction: column;
+    overflow: auto;
+    padding: 0;
+    background: var(--bg);
+    /* Phase 12 GUI closeout：设置页与主页共用同一个正文基准，
+       否则它会回到浏览器默认的 16px，看起来像另一个应用。 */
+    font-size: 13px;
 }
-
-.settings-head h2 { margin: 0; font-size: 18px; color: var(--text); }
-
-.settings-body { display: flex; flex-direction: column; gap: 14px; }
-
+.app.settings-open > .status-strip,
+.app.settings-open > .main { display: none; }
+.settings-body {
+    display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(320px, .8fr);
+    align-items: stretch; gap: var(--gap); width: 100%; margin: 0;
+}
 .settings-block {
-    padding: 14px 16px;
-    border: 1px solid var(--border-soft);
-    border-radius: var(--radius);
-    background: var(--panel);
+    min-width: 0; padding: 18px 20px; border: 1px solid var(--border);
+    border-radius: var(--radius-lg); background: var(--panel);
+    box-shadow: 0 2px 6px rgba(0,0,0,.04);
 }
-
-.settings-block h3 { margin: 0 0 8px; font-size: 14px; color: var(--text-secondary); }
-
-.settings-hint { margin: 0 0 10px; font-size: 12px; color: var(--muted); }
+.settings-block-primary {
+    grid-column: 1; grid-row: 1 / span 3;
+    display: flex; flex-direction: column;
+}
+.settings-block-storage,
+.settings-block-about,
+.settings-block-danger { grid-column: 2; }
+.settings-block h3 {
+    margin: 0 0 14px; padding-bottom: 10px; border-bottom: 2px solid var(--blue-bright);
+    color: var(--blue-deep); font-size: 16px; font-weight: 900;
+}
+.settings-hint { margin: 0 0 12px; font-size: 13px; line-height: 1.55; color: var(--text-secondary); }
 .settings-hint code { word-break: break-all; }
+/* The detailed paths sit behind a native disclosure: the page stays short, and the facts
+   themselves are still rendered (and read) exactly as before. */
+#settings-storage-details { margin-top: 4px; }
+#settings-storage-details > summary {
+    padding: 4px 0; cursor: pointer; font-size: 12px; font-weight: 700;
+    color: var(--text-secondary);
+}
+#settings-storage-details[open] > summary { margin-bottom: 6px; }
 
 .settings-theme-list { display: flex; flex-direction: column; gap: var(--gap-xs); }
 
@@ -946,7 +1006,11 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 .settings-theme-row .theme-remove { margin-left: auto; }
 
-.settings-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.settings-actions { display: flex; flex-wrap: wrap; gap: 10px 12px; margin-top: 16px; }
+.settings-actions button {
+    flex: 0 1 auto; min-width: 180px; max-width: 100%; min-height: var(--button-height); height: auto;
+    padding: 9px 16px; line-height: 1.4; text-align: center; white-space: normal;
+}
 
 .settings-facts { display: flex; flex-direction: column; gap: 6px; }
 
@@ -956,17 +1020,23 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 .fact-value { flex: 1; min-width: 0; color: var(--text); word-break: break-all; }
 
-.settings-empty { margin: 0; font-size: 12px; color: var(--muted); }
+.settings-empty:not(.hidden) {
+    flex: 1; min-height: 160px; display: flex; align-items: center; justify-content: center;
+    margin: 4px 0 0; padding: 24px; border: 1px dashed var(--border);
+    border-radius: var(--radius); background: var(--panel-alt);
+    color: var(--muted); font-size: 14px; line-height: 1.6; text-align: center;
+}
 
 .btn-danger {
     color: var(--red);
     background: var(--panel-alt);
     border: 1px solid var(--border-soft);
 }
+.settings-block-danger { border-left: 4px solid var(--red); }
+.settings-block-danger h3 { color: var(--red); border-bottom-color: var(--red); }
 
 .btn-danger:disabled { opacity: 0.55; cursor: not-allowed; }
 
-/* Phase 11: the confirmation reuses the settings-page overlay, so only the card needs styling. */
 .settings-confirm {
     max-width: 560px;
     margin: 60px auto 0;
@@ -977,3 +1047,21 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 }
 
 .settings-confirm h2 { margin: 0 0 12px; font-size: 18px; color: var(--text); }
+
+@media (max-width: 860px) {
+    .settings-body { grid-template-columns: minmax(0, 1fr); }
+    .settings-block-primary { grid-column: 1; grid-row: auto; }
+    .settings-block-storage,
+    .settings-block-about,
+    .settings-block-danger { grid-column: 1; }
+}
+
+.settings-confirm-overlay {
+    position: fixed; inset: 0; z-index: 50; overflow: auto;
+    padding: 20px; background: var(--bg);
+}
+@media (max-width: 520px) {
+    .settings-body { gap: 10px; }
+    .settings-block { padding: 14px; }
+    .settings-actions button { flex: 1 1 100%; min-width: 0; }
+}

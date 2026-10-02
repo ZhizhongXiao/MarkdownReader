@@ -12,6 +12,7 @@ exactly once"; that payload contract now lives in
 
 import ast
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -320,8 +321,19 @@ def test_the_gui_registry_comes_from_the_asset_layer():
     # dropdown asks for the builtin set explicitly until Phase 9 adds their surface.
     # Phase 8C keeps the theme state aggregation in core/external_themes.py, so the
     # bridge does not read the registry itself -- only the two names it always did.
-    assert imported_from("gui/api.py", "core.viewer_assets") == {
-        "builtin_theme_ids",
-        "normalize_theme_id",
-    }
+    #
+    # 重基线（Phase 12 GUI closeout）：GUI 不再有内置转换选择器，`get_templates()` 删除后
+    # `builtin_theme_ids` 在 bridge 里已没有消费者（把它从 import 列表移除是整理，不是换来源）。
+    # 判据未变，而且被加强：bridge 仍只经资产层解析主题名，页面上的内置主题清单必须逐个
+    # 都是资产层承认的 builtin id —— 页面不得自造一个注册表。
+    assert imported_from("gui/api.py", "core.viewer_assets") == {"normalize_theme_id"}
     assert "TEMPLATES_DIR" not in (ROOT / "gui" / "api.py").read_text(encoding="utf-8")
+
+    javascript = (ROOT / "gui" / "assets" / "gui.js").read_text(encoding="utf-8")
+    match = re.search(r"var BUILTIN_THEMES\s*=\s*\[(.*?)\];", javascript, re.DOTALL)
+    assert match, "the preview cycle must declare its builtin theme order"
+    nav = re.findall(r"['\"]([^'\"]+)['\"]", match.group(1))
+
+    assert nav == SELECTABLE, "内置预览清单必须就是可选择的 builtin 主题，且顺序一致"
+    for theme_id in nav:
+        assert viewer_assets.theme_source(theme_id) == viewer_assets.SOURCE_BUILTIN, theme_id

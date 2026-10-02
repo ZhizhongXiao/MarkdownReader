@@ -630,6 +630,44 @@ samples/demo.html                         → 未改动，快照契约仍成立
   * **截图审计**：当前仓库没有 GUI 文档截图（受控图片只有 splash / ico / `samples/assets/demo.svg`，`docs/screenshots/`
     不存在，USAGE 无截图引用），因此不存在 stale screenshot 可刷新，9B2 不为满足旧计划文字而新增截图。
 
+- 2026-09-29（Phase 12 GUI closeout：内置转换选择器退场，主页面只剩预览与携带两个状态）：产品模型冻结为四件事
+  —— 阅读端偏好（HTML 自己的 `localStorage["markdownreader-theme-id"]`，GUI 从不写）、bootstrap 主题
+  （`gui/api.py::BOOTSTRAP_TEMPLATE = "modern"`，转换边界唯一来源，不进 config）、预览（session only）、
+  携带（只写 `config.json::external_themes`）。
+  * **删除的只是控制**：`get_templates()` 删除，页面不再渲染内置主题下拉（`#template-select-*` /
+    `buildTemplateDropdown` / `selectTemplate` / `updateTemplatePreview` 与 portal 机制全部移除）；
+    `BridgeApi.convert()` **忽略**客户端送来的 `template`，因此旧页面或手写调用都无法让退役控件复活。
+    `core` 侧兼容面一字未改：`process_single` / `process_batch` 的 `template` 参数、`config.json::template`、
+    v1 回退（`renderer_version`）与 Phase 10 的 legacy 一次性迁移语义全部保留。
+  * **预览与携带正交**：`#theme-preview` 是唯一预览面；内置主题走 `preview-<id>` 类，外置主题把 6 个声明式
+    token 作为 `--preview-*` CSS 变量写在同一个元素上（GUI 永不执行用户 CSS）；`.theme-row.previewing`
+    只由 `_previewTheme` 推导（静态守卫锁死：不得借用 checked / selected / configured）。预览不写 config，
+    也不写阅读端偏好的那个键。
+  * **可选 preview 元数据**：`metadata.json` 可声明 `preview`（恰好 6 个颜色 token，`#rgb` / `#rrggbb`）；
+    `core.external_themes.preview_facts()` 返回 `{name, description, preview, preview_status, preview_reason}`，
+    `theme_state()["previews"]` 只含**已安装且合法**的主题。schema canonical 且 fail-closed，但只影响预览：
+    缺失或写错 → GUI 隐藏整张静态示意图，文字通知填满原预览区域并居中；主题仍可携带、可转换（validity 与 preview 严格分离）。
+  * **模板与标本**：`themes/template/` 增加 `decorations.css`（本地资源钩子）与 `preview` 元数据；仓库内新增
+    `samples/qa-themes/{qa-ornamented,qa-no-preview}`；`packaging/validate_release.py` 的 REQUIRED 清单加上
+    `themes/template/decorations.css`（缺失即模板不可导入）。
+  * **契约与证据**：新增 `tests/js/gui_preview.test.js`（GP1–GP14）+ `tests/test_gui_preview_contract.py`
+    （独立 wrapper，锁 14 条记录）、`tests/test_gui_bootstrap_contract.py`、`tests/test_theme_preview_contract.py`、
+    `tests/test_qa_theme_fixtures_contract.py`；`tests/js/gui.test.js` 保持 49 条记录。红阶段 **40 red**（含修正轮新增的「素材必须自带标本」契约）；
+    实现后 JS **49/49** 与 **14/14**、全量 **800 passed / 1 skipped / 0 failed**、ruff / pyright / MCP `python_review`
+    （两批 `batch_ok` 且 `scope_complete`）全 0。
+  * **重基线（8 组 12 处，全部在文件内写明旧断言 → 新断言 → 理由）**：JS `GU0`（init 不得再问模板列表）、
+    `GU1`（convert 请求不再带 `template`）、`GT15`（run 的第二个 set_configs 不再写 `template`）；
+    `test_gui_contract.py` 两条守卫从「断言控件存在」翻成「断言控件不存在 + 新词汇存在」；
+    `test_gui_theme_state_contract.py` 三条文档默认主题断言改为直测 core（payload 不再有 `default` 键）；
+    `test_external_theme_contract.py` 模板 `files` 加入 `decorations.css`；`test_qa_guide_structure_contract.py`
+    的 B7 / D 组 TOKENS 与配方步骤从 D1 移到 D6；`test_viewer_assets_contract.py` 的 bridge 导入集合改为
+    `{normalize_theme_id}`，并**加强**为「页面上的内置预览清单必须逐个是资产层承认的 builtin id」。
+  * **验收阶段划分（流程约束）**：GUI closeout acceptance（source 模式）与正式 35 项 release QA 是两个阶段；
+    后者只能对「从 GUI seal commit 重新完整构建出来的 exact candidate artifacts」执行，
+    `docs/QA-CHECKLIST-1.0.0-rc1-v2.md` 与「QA 结论：通过」只在 candidate QA 之后填写。旧 `dist/` 因缺
+    `themes/template/decorations.css` 且不含新 GUI production，已 obsolete，不复用、不修补。
+
+
 ## texmath 审计记录（Phase 4B，为什么不复用 `markdown-it-texmath`）
 
 `markdown-it-texmath@1.0.0` 的注册方式是固定的：

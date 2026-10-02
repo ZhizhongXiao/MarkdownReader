@@ -1,0 +1,10 @@
+/* QA specimen: a working theme with no preview metadata at all. Nothing about it may
+   be refused anywhere -- import, carry, conversion and reading all stay normal. */
+html[data-theme-id="qa-no-preview"] body {
+    background: #ffffff;
+    color: #1f2933;
+}
+html[data-theme-id="qa-no-preview"] h1,
+html[data-theme-id="qa-no-preview"] h2 {
+    color: #102a43;
+}

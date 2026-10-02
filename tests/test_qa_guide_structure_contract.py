@@ -53,16 +53,24 @@ TOKENS = {
     ("B", 4): "保留目录结构",
     ("B", 5): "索引页",
     ("B", 6): "Mermaid",
-    ("B", 7): "三套模板",
+    # 重基线（Phase 12 GUI closeout）：B7 从「三套模板各转换一次」改成阅读端主题切换 —— GUI 不再有
+    # 内置主题选择器，三套内置主题永远随产物，选择发生在阅读页面里。
+    ("B", 7): "主题切换",
     ("C", 1): "profile",
     ("C", 2): "存储信息",
     ("C", 3): "runtime",
     ("C", 4): "改名",
     ("C", 5): "复制",
     ("C", 6): "删除整个应用目录",
-    ("D", 1): "导出主题模板",
-    ("D", 2): "重启",
-    ("D", 3): "卸载",
+    # 重基线（Phase 12 GUI closeout）：D 组从「导出模板 -> 改名 -> 导入」改成
+    # 「导入仓库内两个验收标本 -> 预览/携带正交 -> 转换 -> 持久化 -> 卸载 -> 导出-编辑-导入」。
+    # 判据未变：每个条目仍必须有一个能执行的向导步骤与之对应。
+    ("D", 1): "qa-ornamented",
+    ("D", 2): "互不干扰",
+    ("D", 3): "内嵌",
+    ("D", 4): "重启",
+    ("D", 5): "卸载",
+    ("D", 6): "导出主题模板",
     ("E", 1): "入口",
     ("E", 2): "5 秒",
     ("E", 3): "空根",
@@ -75,9 +83,12 @@ TOKENS = {
 }
 
 # The external-theme validator scopes every rule to `html[data-theme-id="<metadata.id>"]`, so a
-# recipe that only renames the metadata id produces a theme that cannot be imported. D1 has to
+# recipe that only renames the metadata id produces a theme that cannot be imported. D6 has to
 # name both halves of the rename, while staying free of CSS file names: the file list may change
 # with the template, the two selector forms may not.
+#
+# Phase 12 GUI closeout: the export -> edit -> import loop kept its own step (D6) instead of
+# sharing D1 with it, because D1 is now the in-repo fixture import.
 THEME_RECIPE = (
     "metadata.json",
     "my-theme",
@@ -195,6 +206,13 @@ def test_each_record_item_has_a_matching_guide_step() -> None:
     assert not missing, "the guide does not cover these record items: " + "; ".join(missing)
 
 
+def test_no_preview_step_describes_the_full_area_text_fallback() -> None:
+    step = _guide_steps(_guide_text()).get(("D", 1), "")
+
+    for expected in ("隐藏整张示意图", "水平、垂直居中", "填满默认预览区域"):
+        assert expected in step, "D1 does not describe the no-preview fallback: " + expected
+
+
 def test_the_guide_names_the_record_discovery_selects() -> None:
     spec = importlib.util.spec_from_file_location(
         "release_freeze_under_test", ROOT / "packaging" / "release_freeze.py"
@@ -222,11 +240,13 @@ def test_the_theme_recipe_is_executable() -> None:
 
     The guide has to send the reviewer through both halves: the metadata id and the selector
     that carries it in the CSS.
+
+    重基线（Phase 12 GUI closeout）：配方本身未变，只是从 D1 移到了 D6（D1 现在是导入仓库内标本）。
     """
-    recipe = _guide_steps(_guide_text()).get(("D", 1), "")
+    recipe = _guide_steps(_guide_text()).get(("D", 6), "")
     missing = [token for token in THEME_RECIPE if token not in recipe]
 
-    assert not missing, "the D1 theme recipe is not executable: " + ", ".join(missing)
+    assert not missing, "the D6 theme recipe is not executable: " + ", ".join(missing)
 
 
 @pytest.mark.parametrize("mark", [" ", "x", "X", " x ", "y"])
@@ -241,7 +261,7 @@ def test_the_mapping_holds_when_the_record_is_ticked() -> None:
     """12C ticks every box, so the mapping must be invariant under the checkbox state.
 
     Counting only unchecked boxes would turn "the acceptance run finished" into a structural
-    failure. The guide contract stays green from 0/32 to 32/32; whether the run itself passed
+    failure. The guide contract stays green from 0/35 to 35/35; whether the run itself passed
     remains `release_freeze.qa_gate`'s decision.
     """
     original = CHECKLIST.read_text(encoding="utf-8")

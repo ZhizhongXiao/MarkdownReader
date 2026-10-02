@@ -165,7 +165,10 @@ def main():
         "resizable": True,
         "easy_drag": False,
         "background_color": "#ffffff",
-        "hidden": True,
+        # Keep the WinForms host visible while WebView2 creates its controller.
+        # Waiting to show it until the page's `loaded` event can leave startup
+        # stuck behind a hidden host when WebView2 initialization fails.
+        "hidden": False,
     }
     kwargs["html"] = html_content
     window = webview.create_window("MarkdownReader — Markdown to HTML", **kwargs)

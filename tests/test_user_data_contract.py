@@ -687,8 +687,10 @@ def test_an_accepted_request_closes_the_log_before_it_destroys_the_window(
 # ── the application owns the order, and nothing recreates what was removed ───────────
 
 
-def test_the_app_closes_logging_before_deleting_and_recreates_nothing(onefile_tree, monkeypatch):
-    """P11-10：accepted → close_file_logging → destroy → start() 返回 → remove_user_data → exit。
+def test_the_app_starts_visible_and_closes_logging_before_deleting_and_recreates_nothing(
+    onefile_tree, monkeypatch
+):
+    """P11-10：应用可见启动；accepted → close_file_logging → destroy → start() 返回 → 删除 → 退出。
 
     这条契约同时是「删除不得发生在活着的 WebView2 里」的判据：真实删除必须发生在
     `webview.start()` 返回之后，而日志文件必须在删除前就已经关闭，之后也不能被重新创建。
@@ -738,7 +740,13 @@ def test_the_app_closes_logging_before_deleting_and_recreates_nothing(onefile_tr
     monkeypatch.setattr(gui_app, "BridgeApi", StubApi)
     monkeypatch.setattr(gui_app, "load_gui_document", lambda: "<html><body></body></html>")
     monkeypatch.setattr(gui_app, "close_splash", lambda: None)
-    monkeypatch.setattr(gui_app.webview, "create_window", lambda *_args, **_kwargs: StubWindow())
+    window_options: dict[str, Any] = {}
+
+    def fake_create_window(*_args, **kwargs):
+        window_options.update(kwargs)
+        return StubWindow()
+
+    monkeypatch.setattr(gui_app.webview, "create_window", fake_create_window)
     monkeypatch.setattr("core.renderer_node.validate_renderer_runtime_for", lambda _version: None)
 
     def fake_start(**_kwargs):
@@ -777,6 +785,7 @@ def test_the_app_closes_logging_before_deleting_and_recreates_nothing(onefile_tr
         root.setLevel(previous_level)
 
     assert events == ["start", "request", "close_log", "delete"], events
+    assert window_options.get("hidden") is False
     assert not os.path.exists(log_path), "the log must not be recreated after the removal"
     assert not onefile_tree["profile"].exists()
     assert not onefile_tree["runtime"].exists()

@@ -248,6 +248,91 @@ def validate_installed_theme(theme_id: str) -> str:
     return directory
 
 
+# Phase 12 GUI closeout: the optional palette a theme may declare for the GUI's static preview.
+# Six tokens, nothing more -- this is a convenience for the GUI, not a theme language.
+PREVIEW_KEYS = ("background", "surface", "text", "muted", "accent", "border")
+PREVIEW_STATUS_AVAILABLE = "available"
+PREVIEW_STATUS_MISSING = "missing"
+PREVIEW_STATUS_INVALID = "invalid"
+
+
+def _is_preview_colour(value: object) -> bool:
+    """Return True for `#rgb` / `#rrggbb`, the only colour forms the preview schema allows."""
+    if not isinstance(value, str) or not value.startswith("#"):
+        return False
+    digits = value[1:]
+    if len(digits) not in (3, 6):
+        return False
+    return all(character in "0123456789abcdefABCDEF" for character in digits)
+
+
+def _preview_facts(metadata: dict) -> dict:
+    """Return the preview facts of one validated metadata document (never raising).
+
+    The schema is canonical and fails closed, but only for the preview: a typo makes the static
+    preview unavailable, and says why, without touching the theme's own validity.
+    """
+    if "preview" not in metadata:
+        return {
+            "preview": None,
+            "preview_status": PREVIEW_STATUS_MISSING,
+            "preview_reason": "metadata.json 未提供 preview",
+        }
+    raw = metadata.get("preview")
+    if not isinstance(raw, dict):
+        return {
+            "preview": None,
+            "preview_status": PREVIEW_STATUS_INVALID,
+            "preview_reason": "preview 必须是对象",
+        }
+    unknown = sorted(set(raw) - set(PREVIEW_KEYS))
+    if unknown:
+        return {
+            "preview": None,
+            "preview_status": PREVIEW_STATUS_INVALID,
+            "preview_reason": "preview 含未知键：" + ", ".join(unknown),
+        }
+    absent = [key for key in PREVIEW_KEYS if key not in raw]
+    if absent:
+        return {
+            "preview": None,
+            "preview_status": PREVIEW_STATUS_INVALID,
+            "preview_reason": "preview 缺少键：" + ", ".join(absent),
+        }
+    for key in PREVIEW_KEYS:
+        if not _is_preview_colour(raw[key]):
+            return {
+                "preview": None,
+                "preview_status": PREVIEW_STATUS_INVALID,
+                "preview_reason": "preview." + key + " 不是 #rgb/#rrggbb：" + str(raw[key]),
+            }
+    return {
+        "preview": {key: str(raw[key]) for key in PREVIEW_KEYS},
+        "preview_status": PREVIEW_STATUS_AVAILABLE,
+        "preview_reason": "",
+    }
+
+
+def preview_facts(theme_id: str) -> dict:
+    """Return what the GUI needs to show one installed theme as a preview target.
+
+    Preview problems never raise here: whether a theme works stays `validate_installed_theme`'s
+    verdict, so a theme whose preview is missing or broken is still a theme the user can carry and
+    convert -- only the static preview is unavailable (Phase 12 GUI closeout).
+
+    Raises:
+        ExternalThemeError: when the theme itself is not installed or no longer valid.
+    """
+    directory = validate_installed_theme(theme_id)
+    metadata = validate_theme_directory(directory)
+    facts = _preview_facts(metadata)
+    return {
+        "name": str(metadata.get("name") or theme_id),
+        "description": str(metadata.get("description") or ""),
+        **facts,
+    }
+
+
 def theme_root() -> str:
     """Return the directory external themes are installed in."""
     return viewer_assets.external_themes_root()
@@ -309,7 +394,8 @@ def export_template(destination: str) -> str:
 
     The template is a real theme, so exporting it produces a folder that already
     imports cleanly: "edit it and import it back" needs no scaffolding (Phase 7
-    acceptance 1 and 2).
+    acceptance 1 and 2). The exported directory's modification time is refreshed;
+    individual files retain the packaged template's modification times.
     """
     template = viewer_assets.theme_template_root()
     if not os.path.isdir(template):
@@ -320,6 +406,9 @@ def export_template(destination: str) -> str:
     if os.path.exists(target):
         raise ExternalThemeError(f"导出目标已存在：{target}")
     shutil.copytree(template, target)
+    # copytree preserves source directory metadata too; make the directory timestamp
+    # describe this export while leaving each copied file's modification time intact.
+    os.utime(target, None)
     _logger.info("已导出主题模板：%s -> %s", template, target)
     return target
 
@@ -421,9 +510,15 @@ def theme_state(configured: list[str] | None = None, *, default: str | None = No
     classified -- one bad theme must neither hide the ones that are fine nor the ones
     that are simply missing.
 
-    Returns ``{"installed", "selected", "missing", "invalid", "installed_invalid", "warnings"}``.
+    Returns ``{"installed", "selected", "missing", "invalid", "installed_invalid", "previews",
+    "warnings"}``.
     ``selected`` is a subsequence of the configured list, so it keeps the user's own
     order; the bundle's ``external_ids`` keeps its own deterministic sort.
+
+    ``previews`` (Phase 12 GUI closeout) holds the static-preview facts of every installed theme
+    that is *valid*, so the GUI can offer them as preview targets without reading theme files, and
+    without treating an unusable installation as one. Preview facts never influence validity: a
+    theme whose preview is missing or malformed stays carryable and convertible.
 
     ``invalid`` stays what Phase 8C defined -- the *configured* ids that cannot be used today.
     ``installed_invalid`` is the additive installation-side fact: every installed id that fails the
@@ -470,12 +565,24 @@ def theme_state(configured: list[str] | None = None, *, default: str | None = No
     default_warning = _document_default_warning(default)
     if default_warning:
         warnings.append(default_warning)
+
+    previews: dict = {}
+    for theme_id in sorted(installed):
+        try:
+            previews[theme_id] = preview_facts(theme_id)
+        except Exception:
+            # Any refusal is a fact about this theme, never a failure of the caller -- the same
+            # rule `theme_inventory()` follows one screen down. An unusable installation is simply
+            # not a preview target; its verdict belongs to `installed_invalid`.
+            continue
+
     return {
         "installed": sorted(installed),
         "selected": selected,
         "missing": missing,
         "invalid": invalid,
         "installed_invalid": installed_invalid,
+        "previews": previews,
         "warnings": warnings,
     }
 

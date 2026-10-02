@@ -9,6 +9,15 @@
     "variables.css",
     "content.css",
     "components.css",
-    "print.css"
-  ]
+    "print.css",
+    "decorations.css"
+  ],
+  "preview": {
+    "background": "#f7f7f5",
+    "surface": "#ffffff",
+    "text": "#1f2328",
+    "muted": "#6b7280",
+    "accent": "#2563eb",
+    "border": "#d8dce2"
+  }
 }

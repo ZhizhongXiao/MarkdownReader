@@ -182,10 +182,11 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
   契约清单与"哪些可以改"见 [Viewer 契约](VIEWER_CONTRACT.md)。
 
 - 主题 bundle 与切换（Phase 6C）：生产文档固定内嵌 `builtin_theme_css_text()`（base + modern + office + vscode，
-  各一次），`config.json` 的 `template` 只决定**文档默认主题**（写进 `<html data-theme-id>` 与 `body class`，
-  它也是 localStorage 里偏好失效时的回落）。阅读器用 `viewer/js/theme-switcher.js` 切换，状态在
+  各一次），因此阅读端的三套内置主题不依赖任何配置。阅读器用 `viewer/js/theme-switcher.js` 切换，状态在
   `html[data-theme-id]` + `body.theme-*` + `localStorage["markdownreader-theme-id"]`；boot 时恢复已保存偏好，
-  因此"持久化主题 ≠ 文档默认主题"时会有一次可见切换（不存在的是"无主题"首屏）。
+  因此"持久化主题 ≠ 回落主题"时会有一次可见切换（不存在的是"无主题"首屏）。回落值来自 GUI 边界的
+  `BOOTSTRAP_TEMPLATE` 常量（`gui/api.py`，现为 `modern`）：它是转换请求里 `template` 的**唯一**来源，
+  `config.json` 的 `template` 只作为 v1 兼容字段被读入，不再是 GUI 的产品概念（Phase 12 GUI closeout）。
   **新增或修改主题时必须把 token、组件规则与打印规则
   scoped 到 `html[data-theme-id="<id>"]`**，否则会污染其他主题；完整契约见 [Viewer 契约](VIEWER_CONTRACT.md)。
 
@@ -214,7 +215,8 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
   迁移只在 `_migrate_legacy_config_if_needed()` 里发生，且**显式路径不触发迁移**；该 helper 返回
    `(handled, snapshot)` —— `handled` 表示「本次的 legacy 输入已经处理完」，`load_config()` 据此直接使用 snapshot
    而不再 `_find_config()`，因此成功 / 写失败 / 不可解析三条支路都只真实读取 legacy 一次（Phase 10 audit follow-up）。
-  `build.template`（文档默认主题）与 `build.external_themes`（额外携带列表）是两个独立概念，只写 id、永不写路径；
+  `build.template`（v1 兼容字段：文档回落主题，Phase 12 起不再由 GUI 选择）与 `build.external_themes`（额外携带列表）
+  是两个独立概念，只写 id、永不写路径；
   `BridgeApi.get_theme_state()` 区分 `configured` / `selected` / `missing` / `invalid`（后两者分别是「不在 registry」与「在
   registry 但过不了 use-time gate」），判定与转换同源于 `external_themes._classify_configured_theme()`；GUI 控件属 Phase 9。
 
@@ -224,8 +226,8 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
   `configured` 是记忆，工作集初始为其副本，只有用户显式取消勾选或点「移除」才会缩小，保存 payload 永远是完整工作集
   （不是 `selected`）。写入串行化：至多一个在途写、后续改动合并为最新、旧 payload 不会覆盖新 payload；被拒的保存不「翻回
   checkbox」，而是丢弃假定态并重新拉取 `get_theme_state()` 重建。选择唯一生效通道是 `config.json` 的
-  `build.external_themes`，因此 `convert` 请求形状与 `gui/api.py` 均未改动；`get_templates()` 仍是 builtin-only
-  （模板下拉 = 文档默认主题，外置主题 = 本次额外携带，AGENTS §17 的两件事）。设置页与设置入口整体属 9B。
+  `build.external_themes`，因此 `convert` 请求形状与 `gui/api.py` 的主题路径均未因此改动。
+  设置页与设置入口整体属 9B。
 
 - Phase 9A follow-up（远端审计 9A-4/5/6 = FOLLOW-UP REQUIRED 的收口）：`runConvert()` 现在把「主题选择是否
   已确认落盘」当作启动前提 —— `drainThemeSaves()` 返回 `true|false`，`waitForThemeSaves()` 把它交给转换，
@@ -265,6 +267,30 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
   收到结构化 `{ok:false}` 时页面回滚 provisional terminal lock 并允许再次确认（Promise rejection 不回滚，
   因为 accepted 请求本就会销毁窗口）；`core.user_data.remove_user_data()` 自身也拒绝非 onefile 布局。
   窗口销毁失败同样是一次**可恢复的拒绝**：回滚终止标志、不执行删除、页面可重试，file logging 保持关闭。
+- Phase 12 GUI closeout（内置转换选择器退场；主页面只剩「预览（session）」与「携带（persisted）」两个主题状态）：
+
+  * **删掉的是控制，不是能力**：`gui/api.py` 不再提供 `get_templates()`，页面不再渲染内置主题下拉
+    （`#template-select-*`、`buildTemplateDropdown`、`selectTemplate`、`updateTemplatePreview` 与整个 portal
+    机制一并删除），转换请求也不再带 `template`。回落主题改由 bridge 边界的 `BOOTSTRAP_TEMPLATE = "modern"`
+    注入：`BridgeApi.convert()` 忽略客户端送来的 `template`，因此旧页面或手写调用都无法让退役控件复活。
+    `core` 侧不变：converter 参数、`config.json::template`、v1 回退与 legacy 迁移语义全部保留。
+  * **预览与携带正交**：右侧舞台是唯一预览面（`#theme-preview`；内置主题走 `preview-<id>` 类，外置主题把 6 个
+    声明式 token 作为 `--preview-*` CSS 变量写在同一个元素上，GUI 永不执行用户 CSS）。预览状态只活在
+    `_previewTheme`，不写 config、也不写阅读端偏好（`markdownreader-theme-id` 仍只属于阅读端）；携带只由行内
+    复选框驱动，仍写 `config.json::external_themes`。`.theme-row.previewing` 只由 `_previewTheme` 推导，
+    静态守卫锁死「不得借用 checked / selected / configured」。
+  * **可选 preview 元数据**：`metadata.json` 可声明 `preview`（恰好 6 个颜色 token，`#rgb` / `#rrggbb`），
+    `core.external_themes.preview_facts()` 返回 `{name, description, preview, preview_status, preview_reason}`，
+    `theme_state()["previews"]` 只含**已安装且合法**的主题。schema canonical 且 fail-closed，但只作用于预览：
+    缺失或写错时 GUI 隐藏整张静态示意图，文字通知扩展填满预览区域并水平、垂直居中；主题仍可携带、可转换（validity 与 preview 严格分离）。
+  * **模板与标本**：`themes/template/` 增加 `decorations.css`（本地资源钩子，注释里给出 `url(assets/…)` 范式）
+    与 `preview` 元数据；仓库内新增 `samples/qa-themes/{qa-ornamented,qa-no-preview}` 两个可读验收标本
+    （前者带真实 PNG 装饰 + preview，后者无 preview 元数据）。`packaging/validate_release.py` 的 REQUIRED
+    清单随之加上 `themes/template/decorations.css`。验收分两个阶段、不可合并：GUI closeout acceptance
+    （source 模式）通过后才打 GUI SEALED，正式 35 项 release QA 只对从该提交重建的 exact candidate 执行
+    （阶段与顺序见 [重构路线图](REFACTOR_ROADMAP.md) 的 Phase 12 GUI closeout 段）。
+
+
 
 ## 命名与路径约定
 
@@ -293,5 +319,3 @@ python -m PyInstaller --clean --noconfirm --workpath "packaging\.pyinstaller-bui
 - 发布冻结：`python packaging/release_freeze.py --check-only` 校验版本与验收证据，`--tag` 在证据齐全后重建产物并打 tag。
 
 细节见 [打包说明](../packaging/README.md)。
-
-

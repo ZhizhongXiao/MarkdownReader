@@ -26,7 +26,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from core import config as core_config  # noqa: E402
-from core import paths  # noqa: E402
+from core import (  # noqa: E402
+    external_themes,
+    paths,
+)
 from core.external_themes import ExternalThemeError  # noqa: E402
 from gui.api import BridgeApi  # noqa: E402
 
@@ -109,11 +112,14 @@ def test_a_deleted_default_theme_keeps_its_config_value_and_warns(sandbox, monke
     pretend_registry(monkeypatch, [])
     core_config.save_config({"template": "ghost"})
 
-    state = BridgeApi().get_theme_state()
+    # 重基线（Phase 12 GUI closeout）：同一套 core 规则改为直测，payload 侧改成“不再有这个键”。
+    core_state = external_themes.theme_state([], default="ghost")
+    payload = BridgeApi().get_theme_state()
 
-    assert state["default"] == "ghost"
+    assert any("ghost" in warning for warning in core_state["warnings"])
     assert core_config.load_config()["template"] == "ghost"
-    assert any("ghost" in warning for warning in state["warnings"])
+    assert "default" not in payload, "文档默认主题不再是 GUI 状态"
+    assert payload["installed"] == []
 
 
 def test_a_default_theme_whose_css_broke_is_reported_and_kept(sandbox, tmp_path, monkeypatch):
@@ -135,13 +141,15 @@ def test_a_default_theme_whose_css_broke_is_reported_and_kept(sandbox, tmp_path,
     tampered += 'background-image:image-set("https://e.invalid/x.png" 1x)}'
     (directory / "theme.css").write_text(tampered, encoding="utf-8")
 
-    state = BridgeApi().get_theme_state()
+    # 重基线（Phase 12 GUI closeout）：文档默认主题的告警属于 core，payload 不再承载这个键。
+    core_state = external_themes.theme_state([], default="paper")
+    payload = BridgeApi().get_theme_state()
 
-    assert state["default"] == "paper"
+    assert any("paper" in warning for warning in core_state["warnings"])
     assert core_config.load_config()["template"] == "paper"
-    assert state["configured"] == []
-    assert state["selected"] == []
-    assert any("paper" in warning for warning in state["warnings"])
+    assert payload["configured"] == []
+    assert payload["selected"] == []
+    assert "default" not in payload, "文档默认主题不再是 GUI 状态"
 
 
 def test_a_default_theme_that_is_not_selectable_warns(sandbox, monkeypatch):
@@ -149,11 +157,13 @@ def test_a_default_theme_that_is_not_selectable_warns(sandbox, monkeypatch):
     pretend_registry(monkeypatch, [])
     core_config.save_config({"template": "base"})
 
-    state = BridgeApi().get_theme_state()
+    # 重基线（Phase 12 GUI closeout）：``base`` 的拒绝仍由 core 说出来，payload 不再承载它。
+    core_state = external_themes.theme_state([], default="base")
+    payload = BridgeApi().get_theme_state()
 
-    assert state["default"] == "base"
+    assert any("base" in warning for warning in core_state["warnings"])
     assert core_config.load_config()["template"] == "base"
-    assert any("base" in warning for warning in state["warnings"])
+    assert "default" not in payload, "文档默认主题不再是 GUI 状态"
 
 
 def test_the_state_read_never_prunes_the_configuration(sandbox, monkeypatch):

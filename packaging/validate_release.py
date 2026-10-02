@@ -45,6 +45,9 @@ RUNTIME_FILES = (
     ("themes", "builtin", "vscode", "theme.css"),
     ("themes", "template", "metadata.json"),
     ("themes", "template", "variables.css"),
+    # Phase 12 GUI closeout: the template grew a decoration hook, and `metadata.json` declares it,
+    # so a package that lost the file would ship a template that cannot be imported.
+    ("themes", "template", "decorations.css"),
     ("templates", "index", "index.js"),
     ("gui", "assets", "index.html"),
 )

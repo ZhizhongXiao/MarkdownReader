@@ -1,0 +1,26 @@
+/* Your decoration hooks (optional).
+
+   A theme may decorate headings and blocks with the assets it ships. Keep the asset inside this
+   theme (assets/...) and reference it with a relative url(): every generated document embeds it
+   as a data URI, so a page keeps its decoration after the theme is deleted from MarkdownReader.
+
+   Delete this file and its entry in `metadata.json: files` when your theme needs no assets.
+
+   Example -- copy it, uncomment it, and put the file in assets/:
+
+   html[data-theme-id="my-theme"] h1::after {
+       content: "";
+       display: block;
+       width: 72px;
+       height: 12px;
+       margin-top: 8px;
+       background-image: url(assets/ornament.png);
+       background-repeat: repeat-x;
+   }
+
+   The rule below is a decoration that needs no asset at all; replace it with your own. */
+
+html[data-theme-id="my-theme"] h1,
+html[data-theme-id="my-theme"] h2 {
+    letter-spacing: 0.01em;
+}

@@ -46,13 +46,15 @@ Markdown 文件
 - **主题 bundle（Phase 6C）**：每份文档固定携带 base + modern + office + vscode（`builtin_theme_css_text()`）。
   主题是独立于明暗的第二维：`html[data-theme-id]` 选 token、`body.theme-<id>` 选组件规则，`viewer/js/theme-switcher.js`
   在阅读器里即时切换（只改标记与一个 localStorage 键，不重新渲染正文）。初始主题写在标记里、菜单由装配期生成，
-  因此不存在"无主题"首屏；已保存的阅读器偏好由 boot 恢复（可能与文档默认主题不同，此时有一次可见切换）。
+  因此不存在"无主题"首屏；已保存的阅读器偏好由 boot 恢复（可能与文档回落主题不同，此时有一次可见切换）。
+  Phase 12 起该回落值来自 GUI 边界常量 `BOOTSTRAP_TEMPLATE`（GUI 不再有内置主题选择器），阅读端语义不变。
 - `default`→`base` 只提供 token；三个可选主题**必须**把自己的 token、组件规则与打印规则 scoped 到
   `html[data-theme-id="<id>"]`，否则会污染其他主题（Office 曾经如此）。
 - **外置主题（Phase 7）**：用户主题是用户资产，装在 `core/paths.py::external_themes_root()`
   （`assets/themes/external/<id>/`），与随包的 `themes/builtin/` 永不混放；同一个 loader 读两者，
   `external_themes.theme_bundle()` 决定每份文档携带哪些（base + 全部 builtin + 本次选中且已安装的外置）。
-  校验 / 安装 / 删除 / 导出模板在 `core/external_themes.py`，`themes/template/` 是随包发布的官方模板。
+  校验 / 安装 / 删除 / 导出模板在 `core/external_themes.py`（含可选的 `preview` 元数据与本地装饰资源），
+  `themes/template/` 是随包发布的官方模板。
 - `viewer.js` 承载全部阅读交互：目录跳转与定位、折叠、状态持久化、代码复制、图片灯箱、明暗、编号与打印。
   拆分（Phase 6B）只能在**装配期**合并成一个 classic script：交付物以 `file://` 打开，ES module 会被 CORS 拦下。
 - `print.css` 负责共用打印机械项（隐藏交互控件、分页与缩放规则），纸面观感由各主题自己的打印规则决定。

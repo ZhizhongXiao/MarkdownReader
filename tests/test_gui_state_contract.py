@@ -47,11 +47,12 @@ API_PY = ROOT / "gui" / "api.py"
 # second countdown on frozen time, cancel, the terminal lock, the single request, and the
 # explicit-refusal recovery). Phase 9B2 adds GT19 (an installed broken theme is neither
 # selectable nor removable, and the summary counts what it renders). During the red phase the
-# suite reports the failures instead of the passes below -- these two numbers are the green
-# target the lock enforces.
-EXPECTED_PASS = 49
+# suite reports the failures instead of the passes below. Phase 12 adds GU0b: the light/dark
+# toggle keeps fixed SVG icon boxes while the mode changes; settings reuses the shared header.
+# These are the green targets.
+EXPECTED_PASS = 50
 EXPECTED_XFAIL = 0
-EXPECTED_CONTRACTS = 49
+EXPECTED_CONTRACTS = 50
 
 
 def _single_request_shape(method: str) -> int:

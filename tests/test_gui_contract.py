@@ -1,4 +1,6 @@
+import re
 import sys
+from html.parser import HTMLParser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,14 +38,24 @@ def test_gui_exposes_multiselect_drop_and_conversion_list_contract():
     assert "_one_dialog_at_a_time" in api
 
 
-def test_template_selection_returns_to_preview_tab():
-    javascript = (ROOT / "gui" / "assets" / "gui.js").read_text(encoding="utf-8")
-    select_template_body = javascript.split("function selectTemplate(name)", 1)[1].split(
-        "function ensureDropdownPortal", 1
-    )[0]
+def test_the_page_has_no_builtin_theme_selector():
+    """Phase 12 GUI closeout: the builtin "template" control left the product.
 
-    assert "updateTemplatePreview(name)" in select_template_body
-    assert "showPreviewTab()" in select_template_body
+    A builtin theme is a reader preference -- the reader keeps the last one per document
+    (`viewer/js/theme-switcher.js`) -- so the GUI has no builtin conversion selector. What
+    remains is a preview navigation that only changes what the static stage shows, and the
+    external theme rows that decide what a document carries.
+    """
+    html = (ROOT / "gui" / "assets" / "index.html").read_text(encoding="utf-8")
+    javascript = (ROOT / "gui" / "assets" / "gui.js").read_text(encoding="utf-8")
+
+    assert "template-select" not in html, "the retired builtin selector must not come back"
+    assert "template-select" not in javascript
+    assert "buildTemplateDropdown" not in javascript
+    assert "selectTemplate" not in javascript
+    assert "get_templates" not in javascript
+    assert "function selectPreviewTheme(" in javascript
+    assert "function showPreviewTab()" in javascript
 
 
 def test_runtime_gui_document_inlines_current_css_and_javascript():
@@ -144,10 +156,12 @@ def test_the_auto_open_path_uses_the_same_file_uri_helper():
 
 
 def test_gui_exposes_the_external_theme_selection_surface():
-    """Phase 9A：主页有自己的外置主题选择面，而不是把选择塞进模板下拉。
+    """Phase 9A: the main page has its own external-theme surface.
 
-    模板下拉是「文档默认主题」，只出 builtin（`get_templates()` 的 docstring 已冻结）；
-    外置主题是「本文档额外携带哪些」，两者是不同的概念（AGENTS §17）。
+    Phase 12 GUI closeout sharpened the vocabulary the docstring used to carry: there is no
+    builtin selector at all (a builtin theme is a reader preference), while an external theme has
+    a carry state -- "does this document embed it" -- and that is what this surface drives
+    (AGENTS §17).
     """
     html = (ROOT / "gui" / "assets" / "index.html").read_text(encoding="utf-8")
     javascript = (ROOT / "gui" / "assets" / "gui.js").read_text(encoding="utf-8")
@@ -231,4 +245,227 @@ def test_removing_user_data_is_promised_only_behind_the_onefile_fact():
 
     assert "request_user_data_removal" in api
     assert "shutil.rmtree" not in api, "the bridge must not delete files itself"
+
+
+def test_the_theme_closeout_surfaces_are_in_place():
+    """Phase 12 GUI closeout: the new vocabulary exists, and the reader keeps its own state.
+
+    The preview navigation, the row anatomy and the settings disclosure are the surfaces the GUI
+    contracts drive; this guard keeps them from disappearing while the behaviour tests stay green
+    for other reasons.
+    """
+    html = (ROOT / "gui" / "assets" / "index.html").read_text(encoding="utf-8")
+    css = (ROOT / "gui" / "assets" / "gui.css").read_text(encoding="utf-8")
+    javascript = (ROOT / "gui" / "assets" / "gui.js").read_text(encoding="utf-8")
+
+    assert 'id="theme-preview"' in html, "the static preview stage"
+    assert html.count('class="theme-icon theme-icon-moon"') == 1
+    assert html.count('class="theme-icon theme-icon-sun"') == 1
+    assert "☾" not in html and "☼" not in html, "fixed SVG boxes prevent glyph-width shifts"
+    assert 'html[data-theme="dark"] .theme-btn .theme-icon-sun { display: block; }' in css
+    assert 'id="btn-preview-prev"' in html
+    assert 'id="btn-preview-next"' in html
+    assert 'aria-label="上一个主题预览"' in html
+    assert 'aria-label="下一个主题预览"' in html
+    assert 'id="btn-random-preview"' not in html
+    assert 'id="preview-fallback"' in html, "a theme without preview metadata needs its notice"
+    assert re.search(r"<details[^>]*id=\"settings-storage-details\"", html), (
+        "the detailed storage paths belong behind a native disclosure"
+    )
+    assert "theme-row-check" in javascript
+    assert "theme-row-name" in javascript
+    assert "theme-row-desc" in javascript
+    assert "markdownreader-theme-id" not in javascript, (
+        "the reader owns its preference: the GUI must not write it"
+    )
+    assert html.count('<header class="header">') == 1, "both views reuse one title bar"
+    assert "settings-head" not in html
+    assert '<h1>MarkdownReader</h1>' in html
+    assert html.count("Markdown 到离线 HTML 阅读器") == 1
+    assert 'class="theme-btn settings-view-toggle" id="btn-settings"' in html
+    assert 'id="themeToggleBtnSettings"' not in html
+    assert "function setSettingsView(isOpen)" in javascript
+    assert "function toggleSettings()" in javascript
+    assert 'title = isOpen ? "返回主页面" : "设置"' in javascript
+    assert 'aria-label", isOpen ? "返回主页面" : "打开设置"' in javascript
+    assert re.search(r"\.theme-btn\s*\{[^}]*width:\s*36px[^}]*height:\s*32px", css)
+    assert 'class="settings-return-icon"' in html
+    assert 'transform="translate(0 1.5)"' in html
+    assert (
+        ".app.settings-open .settings-view-toggle .settings-return-icon { display: block; }"
+        in css
+    )
+    assert html.index("settings-block-primary") < html.index("settings-block-storage")
+    assert html.index("settings-block-storage") < html.index("settings-block-about")
+    assert html.index("settings-block-about") < html.index("settings-block-danger")
+    assert re.search(r"\.settings-body\s*\{[^}]*width:\s*100%", css)
+    assert re.search(r"\.settings-body\s*\{[^}]*align-items:\s*stretch", css)
+    assert re.search(
+        r"\.settings-block-primary\s*\{[^}]*grid-column:\s*1\s*;\s*grid-row:\s*1\s*/\s*span\s*3",
+        css,
+    )
+    assert "max-width: 1160px" not in css, "settings uses the same page width as the main surface"
+    assert re.search(r"\.settings-actions button\s*\{[^}]*min-width:\s*180px", css)
+    assert ".settings-block-danger { border-left: 4px solid var(--red); }" in css
+    assert re.search(r'<details[^>]*id="settings-storage-details"[^>]*\bopen(?:\s|>)', html)
+
+
+def test_the_previewing_mark_comes_from_the_preview_id():
+    """Phase 12 GUI closeout: the marked row is the previewed one, never the carried one.
+
+    The behaviour contract (GP10) proves the two states stay independent while carry changes;
+    this one keeps the implementation honest about where the mark comes from.
+    """
+    javascript = (ROOT / "gui" / "assets" / "gui.js").read_text(encoding="utf-8")
+    marked = [line.strip() for line in javascript.splitlines() if "previewing" in line]
+
+    assert marked, "the previewed row must be marked"
+    assert all("_previewTheme" in line for line in marked), (
+        "the previewing mark must derive from the preview id (_previewTheme), not from carry: "
+        + " | ".join(marked)
+    )
+
     assert "rmtree" not in javascript, "and neither may the page"
+
+
+# ── 结构守卫（Phase 12 人工验收发现的回归） ─────────────────────
+#
+# 2026-09-30 两次人工验收各撞出一个「标签配平、但嵌套错」的回归：
+#   ① index.html 多一个 `</div>` → `.left-column` 提前闭合：左栏只剩一段、「外置主题」/「选项」掉到
+#      `.left-wrapper`下，`.workspace-panel` 直接落到 `body`（两栏搁成上下两行）；
+#   ② fallback 块替换掉了 `#preview-page` 的收尾 `</div>` → `#log-page` 成为它的子节点，
+#      日志页永远显示不出来。
+# 当时所有守卫都是字符串级的（类名与文案是否存在），没有一条问「谁是谁的孩子」，
+# 所以两个形状都漏了过去。下面按**整页顶层映射**断言：每个容器必须拥有它应有的直接子节点。
+
+VOID_ELEMENTS = frozenset(
+    {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta",
+     "source", "track", "wbr"}
+)
+
+
+class _ElementParser(HTMLParser):
+    """Record every element with its parent, the way a browser nests them."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.elements: list = []
+        self.stack: list = []
+
+    def handle_starttag(self, tag, attrs):
+        attributes = dict(attrs)
+        self.elements.append({
+            "tag": tag,
+            "id": attributes.get("id") or "",
+            "classes": (attributes.get("class") or "").split(),
+            "parent": self.stack[-1] if self.stack else None,
+        })
+        if tag not in VOID_ELEMENTS:
+            self.stack.append(len(self.elements) - 1)
+
+    def handle_endtag(self, tag):
+        for position in range(len(self.stack) - 1, -1, -1):
+            if self.elements[self.stack[position]]["tag"] == tag:
+                del self.stack[position:]
+                return
+
+
+def _elements(markup: str) -> list:
+    parser = _ElementParser()
+    parser.feed(markup)
+    return parser.elements
+
+
+def _describe(node: dict) -> str:
+    label = node["tag"]
+    if node["id"]:
+        label += "#" + node["id"]
+    if node["classes"]:
+        label += "." + ".".join(node["classes"])
+    return label
+
+
+def _children(elements: list, index: int) -> list:
+    return [node for node in elements if node["parent"] == index]
+
+
+def _first(elements: list, *, classes: tuple = (), element_id: str = "") -> int:
+    for index, node in enumerate(elements):
+        if element_id and node["id"] != element_id:
+            continue
+        if classes and not set(classes) <= set(node["classes"]):
+            continue
+        return index
+    raise AssertionError("element not found: " + (("#" + element_id) if element_id else
+    ".".join(classes)))
+
+
+def _chain(elements: list, index: int) -> list:
+    chain = []
+    parent = elements[index]["parent"]
+    while parent is not None:
+        chain.append(elements[parent])
+        parent = elements[parent]["parent"]
+    return chain
+
+
+def test_the_page_keeps_its_structural_map():
+    """整页顶层映射：每个容器必须直接拥有它应有的子节点。
+
+    这一条抓的是「标签配平 ≠ 嵌套正确」：两次回归都是 div 总数平的，
+    但容器关系已经错了。
+    """
+    markup = (ROOT / "gui" / "assets" / "index.html").read_text(encoding="utf-8")
+    elements = _elements(markup)
+
+    app = _first(elements, classes=("app",))
+    assert [_describe(node) for node in _children(elements, app)] == [
+        "header.header",
+        "section.status-strip",
+        "main.main",
+        "div#settings-page.settings-page.hidden",
+    ], "`.app` 必须只直接拥有 header / status-strip / main / settings-page"
+
+    main = _first(elements, classes=("main",))
+    assert [_describe(node) for node in _children(elements, main)] == [
+        "div.left-wrapper",
+        "section.workspace-panel",
+    ], "两栏布局必须仍是 <main> 的两个直接子节点"
+
+    left_column = _first(elements, classes=("left-column",))
+    left_children = _children(elements, left_column)
+    assert [_describe(node) for node in left_children] == ["details.accordion"] * 3, (
+        "左栏必须直接拥有三段（文件与输出 / 外置主题 / 选项），实际 "
+        + str([_describe(node) for node in left_children])
+    )
+
+    panel = _first(elements, classes=("workspace-panel",))
+    assert [_describe(node) for node in _children(elements, panel)] == [
+        "div#workspace-tabs.workspace-tabs",
+        "div#conversion-page.workspace-page.conversion-page",
+        "div#preview-page.workspace-page.preview-page.active",
+        "div#log-page.workspace-page.log-page",
+    ], "右侧工作区必须是 tabs + 三个页的平级结构"
+
+    body_index = next(
+        index for index, node in enumerate(elements) if node["tag"] == "body"
+    )
+    body_children = _children(elements, body_index)
+    body_ids = [node["id"] for node in body_children]
+    assert _describe(body_children[0]) == "div.app"
+    for element_id in ("user-data-confirm", "drop-overlay"):
+        assert element_id in body_ids, (
+            "#" + element_id + " 必须是 body 的直接子节点，实际："
+            + str([_describe(node) for node in body_children])
+        )
+
+    for element_id in ("external-theme-list", "chk-auto-open", "chk-build-index"):
+        node = _first(elements, element_id=element_id)
+        assert any("left-column" in ancestor["classes"] for ancestor in _chain(elements, node)), (
+            "#" + element_id + " 必须仍在 .left-column 里"
+        )
+
+    log_area = _first(elements, element_id="log-area")
+    assert any(ancestor["id"] == "log-page" for ancestor in _chain(elements, log_area)), (
+        "#log-area 必须在 #log-page 里（日志页不得被套进预览页）"
+    )

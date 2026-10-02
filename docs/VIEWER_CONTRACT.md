@@ -26,7 +26,8 @@ tests/browser/*.test.mjs               真实浏览器：离线资源、Mermaid�
 - 二者正交：`Office + dark`、`Modern + light` 都必须成立（6 个组合都在浏览器矩阵里实测）。
 - **主题由两个标记共同表达**：`html[data-theme-id]` 选中该主题的 token，`body.theme-<id>` 选中它的组件规则。CSS 两处都要求，因此即使将来一边没更新，也不会两套主题同时命中。
 - 不要复用 `data-theme` 表示主题名：它已经被 viewer、print.css、layout.css、三个主题 CSS 与 GUI 共同当作明暗使用。
-- 主题状态属于**阅读器偏好**（全局）；文档相关状态一律带文档身份（见第 5 节）。文档自己的**默认主题**是作者在转换时选的那个（`config.json` 的 `template`），它以标记形式写进 HTML：
+- 主题状态属于**阅读器偏好**（全局）；文档相关状态一律带文档身份（见第 5 节）。文档自己的**回落主题**是写进 HTML 标记的那个值：Phase 12 起 GUI 不再有内置主题选择器，转换请求的 `template` 由 GUI 边界常量
+  `BOOTSTRAP_TEMPLATE`（现为 `modern`）注入，`config.json` 的 `template` 只作 v1 兼容字段 —— 阅读端语义完全不变：
 
 ```text
 生成 HTML 在 JS 执行前就带有有效的文档默认主题（html[data-theme-id] + body class）
@@ -86,7 +87,7 @@ tests/browser/*.test.mjs               真实浏览器：离线资源、Mermaid�
 | `markdownreader-toc-collapsed-v2` | 阅读器 | 目录折叠集合 |
 | `markdownreader-toc-panel-collapsed` | 阅读器 | 侧栏是否收起 |
 | `markdownreader-theme` | 阅读器 | 明暗（`light` / `dark`） |
-| `markdownreader-theme-id` | 阅读器 | 主题 id；值不在本页携带的主题里时回落到**文档默认主题** |
+| `markdownreader-theme-id` | 阅读器 | 主题 id；值不在本页携带的主题里时回落到文档的**回落主题** |
 | `markdownreader-autonumbering` | 阅读器 | 自动编号开关 |
 | `markdownreader-toc-width` | 阅读器 | 目录宽度（180–500px） |
 | `markdownreader-expandlevel` | 阅读器 | **只读遗留**：仅在文档没有 v2 状态时作种子，永不写入 |
@@ -185,7 +186,7 @@ CSS 分析在 `core/css_audit.py`：validator / inliner / closure checker 共用
   一旦被发现（`installed` 里有它），use-time gate（`validate_installed_theme()`：目录名 == metadata id、slug 与保留 ID 规则、
   声明文件与资源的 containment、CSS 策略与体积预算）失败 → `invalid`。一个手工复制进来、id 非法的目录因此是
   `installed` + `invalid`，不是 `missing`；「非法 id 必须失败」只在转换侧执行（文档不能带一个无法按 id 作用域生效的主题）。
-  文档默认主题（`template`）单独判定，顺序与装配期一致：先 `viewer_assets.validate_theme()`
+  文档回落主题（`template`，Phase 12 起由 GUI 边界常量 `BOOTSTRAP_TEMPLATE` 注入）单独判定，顺序与装配期一致：先 `viewer_assets.validate_theme()`
   （不存在 / `hidden` / 非可选 / 继承不成立），仅当它是外置主题时再跑 use-time gate；失败只给 warning，配置值永不改写，
   转换期仍是 hard failure。
 - **extends 只能是 `base` 或 null**（Phase 7 audit follow-up 收紧）。selectable builtin（modern/office/vscode）在 6C 之后把

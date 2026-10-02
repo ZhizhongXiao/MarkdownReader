@@ -53,5 +53,6 @@ htmlcov/
 .codex/
 
 # ===== 运行时配置（由程序写入，不进版本库）=====
+.runtime/
 config.json
 MarkdownReader.log

@@ -62,10 +62,34 @@ contract("GU0 liveness: the real GUI initialised against the stub", "pass", asyn
     assert.equal(sentinels.conversionList, true);
     assert.equal(sentinels.logArea, true);
     assert.equal(sentinels.statusBadge, true);
-    assert.ok(sentinels.templatesAsked !== 0, "init must ask for the templates");
+    assert.equal(sentinels.templatesAsked, 0, (
+      "Phase 12 GUI closeout: the builtin conversion selector is gone, so init must not ask "
+      + "for a template list"));
     assert.ok(sentinels.configAsked !== 0, "init must ask for the config");
     assert.ok(sentinels.logLines !== 0, "init must have written a log line");
     assert.equal(session.conversionRows(), 0);
+  } finally { session.close(); }
+});
+
+contract("GU0b theme toggle: repeated light/dark changes keep the same SVG boxes", "pass", async () => {
+  const session = await bootGui();
+  try {
+    const ids = ["themeToggleBtn"];
+    assert.equal(session.list("themeToggleBtnSettings"), null,
+      "the shared title bar keeps one day/night control");
+    const markupBefore = ids.map((id) => session.list(id).innerHTML);
+    assert.ok(markupBefore.every((markup) => markup.includes("theme-icon-moon")));
+    assert.ok(markupBefore.every((markup) => markup.includes("theme-icon-sun")));
+
+    for (const mode of ["dark", "light", "dark", "light"]) {
+      session.window.applyTheme(mode);
+      for (let index = 0; index < ids.length; index += 1) {
+        const button = session.list(ids[index]);
+        assert.equal(button.innerHTML, markupBefore[index], "theme changes must not replace icon elements");
+        assert.equal(button.title, mode === "dark" ? "浅色模式" : "深色模式");
+        assert.equal(button.getAttribute("aria-label"), button.title);
+      }
+    }
   } finally { session.close(); }
 });
 
@@ -101,12 +125,16 @@ contract("GU1 bridge shape: both conversion calls send one structured request", 
     const convertRequest = convertCall.args[0];
     assert.equal(typeof convertRequest, "object", "convert takes an object request");
     assert.equal(Array.isArray(convertRequest), false, "the request must not be an array");
+    // Phase 12 GUI closeout: the page no longer sends a template. The bridge owns the internal
+    // bootstrap theme, so a request that still carried one would be the retired control coming
+    // back through the bridge instead of through the UI.
     assert.deepEqual(Object.keys(convertRequest).sort(),
       ["auto_open", "build_index", "inputs", "output_dir", "overwrite",
-       "preserve_structure", "template"]);
+       "preserve_structure"]);
     assert.deepEqual(Array.from(convertRequest.inputs), [first]);
     assert.equal(convertRequest.output_dir, "output");
-    assert.equal(convertRequest.template, "modern");
+    assert.equal("template" in convertRequest, false,
+      "the page must not send a template: the bridge owns the bootstrap theme");
     assert.equal(convertRequest.overwrite, true);
     assert.equal(convertRequest.build_index, true);
     assert.equal(convertRequest.auto_open, true);
@@ -808,8 +836,11 @@ contract("GT15 conversion waits for confirmed theme persistence", "pass", async 
 
     await session.resolve("prepare_conversion", PLAN_ONE);
     await session.flush(2);
-    assert.ok(session.savePayloads()[1] && session.savePayloads()[1].template,
-      "the run persists its own settings only after the theme write settled");
+    // Phase 12 GUI closeout: the run persists its own settings, and a template is not one of
+    // them any more -- the retired control would otherwise keep writing config.template here.
+    assert.deepEqual(Object.keys(session.savePayloads()[1]).sort(),
+      ["auto_open", "build_index", "input", "output", "preserve_structure"],
+      "the run persists its own settings only after the theme write settled, and never a template");
     await session.resolve("set_configs", null);
     await session.flush(2);
     await session.resolve("convert", CONVERT_OK);
@@ -989,13 +1020,21 @@ contract("GS1 settings shell: the entry opens the page and back returns intact",
     const summaryBefore = session.themeSummary();
     const tabBefore = session.doc.querySelector(".workspace-tab.active").id;
 
-    session.window.openSettings();
+    session.window.toggleSettings();
     await session.flush(4);
     assert.equal(session.settingsVisible(), true, "the entry opens the settings page");
+    assert.equal(session.doc.querySelector(".app").classList.contains("settings-open"), true,
+      "the settings view reuses the main application shell");
+    assert.equal(session.list("btn-settings").title, "返回主页面",
+      "the gear control becomes the return action");
+    assert.equal(session.list("btn-settings").getAttribute("aria-label"), "返回主页面");
 
-    session.window.closeSettings();
+    session.window.toggleSettings();
     await session.flush(4);
     assert.equal(session.settingsVisible(), false, "back returns to the main page");
+    assert.equal(session.doc.querySelector(".app").classList.contains("settings-open"), false);
+    assert.equal(session.list("btn-settings").title, "设置");
+    assert.equal(session.list("btn-settings").getAttribute("aria-label"), "打开设置");
     assert.equal(session.doc.querySelector(".workspace-tab.active").id, tabBefore,
       "the workspace tab the user was on survives the trip");
     assert.deepEqual(session.themeSummary(), summaryBefore,
@@ -1286,7 +1325,7 @@ contract("GS12 returning from settings re-reads the state before it reveals the 
     assert.equal(session.pendingOf("get_theme_state").length, 1, "the re-read is still in flight");
     assert.equal(session.settingsVisible(), true,
       "the main page must not be revealed before the new state arrives");
-    assert.equal(session.list("btn-settings-back").disabled, true, "a second Back is refused");
+    assert.equal(session.list("btn-settings").disabled, true, "a second Back is refused");
     assert.equal(session.list("btn-import-theme").disabled, true,
       "management stays frozen while the page is closing");
 
@@ -1300,7 +1339,7 @@ contract("GS12 returning from settings re-reads the state before it reveals the 
     assert.equal(session.settingsVisible(), false, "the page closes once the state is known");
     assert.equal(session.themeRow("zeta").state, "missing",
       "the main page shows the new state at the moment it appears");
-    assert.equal(session.list("btn-settings-back").disabled, false);
+    assert.equal(session.list("btn-settings").disabled, false);
     assert.equal(session.list("btn-import-theme").disabled, false,
       "closing must not leave the management surface locked");
 
@@ -1316,7 +1355,7 @@ contract("GS12 returning from settings re-reads the state before it reveals the 
     assert.equal(session.settingsVisible(), true,
       "a failed re-read must not reveal a stale main page");
     assert.ok(session.logErrorCount() > failuresBefore, "the failure is reported");
-    assert.equal(session.list("btn-settings-back").disabled, false, "Back can be pressed again");
+    assert.equal(session.list("btn-settings").disabled, false, "Back can be pressed again");
 
     session.window.closeSettings();
     await session.flush(2);
@@ -1591,7 +1630,7 @@ contract("GR7 an explicit refusal reopens the page instead of locking it", "pass
       "a refusal keeps the confirmation visible");
     assert.equal(session.list("btn-import-theme").disabled, false,
       "the page works again once the backend refuses");
-    assert.equal(session.list("btn-settings-back").disabled, false);
+    assert.equal(session.list("btn-settings").disabled, false);
     assert.equal(session.list("btn-user-data-confirm").disabled, false,
       "no second countdown is needed: the confirmation gate was already passed");
 

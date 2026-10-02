@@ -1,0 +1,11 @@
+{
+  "id": "qa-no-preview",
+  "name": "QA No Preview",
+  "author": "MarkdownReader QA",
+  "version": "1.0.0",
+  "description": "验收标本：完全可用，但没有 preview 元数据。",
+  "extends": "base",
+  "files": [
+    "theme.css"
+  ]
+}

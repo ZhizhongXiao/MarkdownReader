@@ -2,8 +2,11 @@
 var _lastOutputDir = "output";
 var _lastOutputFile = "";
 var _themeMode = "auto";
-var _selectedTemplate = "modern";
-var _templates = ["modern"];
+// Phase 12 GUI closeout: the builtin conversion selector is gone. A builtin theme is a reader
+// preference now (the reader keeps the last one per document), so this page owns only the
+// *preview* state below -- and the theme a document falls back to is a bridge-side constant.
+var BOOTSTRAP_THEME = "modern";
+var BUILTIN_THEMES = ["modern", "office", "vscode"];
 var _inputSources = [];
 var _conversionItems = [];
 var _planWarnings = [];
@@ -36,6 +39,12 @@ var _themeSaveDrain = null;
 // The last selection known to be persisted. A failed write falls back to this, never to
 // the startup snapshot: a save may already have succeeded since the page loaded.
 var _themeConfirmed = [];
+// The preview state (Phase 12 GUI closeout). `_themePreviews` is the bridge's preview facts,
+// keyed by theme id; `_previewTheme` is what the right-hand stage shows. The preview belongs to
+// this session: it changes the stage and nothing else -- no configuration write, and no reader
+// preference, because the reader owns that.
+var _previewTheme = BOOTSTRAP_THEME;
+var _themePreviews = {};
 
 function pathKey(value) {
     return String(value || "").replace(/\\/g, "/").toLowerCase();
@@ -58,17 +67,15 @@ function applyTheme(mode) {
     }
 
     var btn = document.getElementById("themeToggleBtn");
-    if (mode === "dark") {
-        btn.textContent = "☼";
-        btn.title = "浅色模式";
-    } else {
-        btn.textContent = "☾";
-        btn.title = "深色模式";
+    if (btn) {
+        btn.title = mode === "dark" ? "浅色模式" : "深色模式";
+        btn.setAttribute("aria-label", btn.title);
     }
     try { localStorage.setItem("gui-theme", mode); } catch (e) {}
 }
 
-document.getElementById("themeToggleBtn").addEventListener("click", function() {
+var themeToggleButton = document.getElementById("themeToggleBtn");
+if (themeToggleButton) themeToggleButton.addEventListener("click", function () {
     applyTheme(_themeMode === "dark" ? "light" : "dark");
 });
 
@@ -97,8 +104,6 @@ function setConversionRunning(running) {
     _conversionRunning = running;
     var runButton = document.querySelector(".btn-run");
     if (runButton) runButton.disabled = running;
-    var templateButton = document.getElementById("template-select-btn");
-    if (templateButton) templateButton.disabled = running;
     var output = document.getElementById("output-path");
     if (output) output.disabled = running;
     ["chk-build-index", "chk-auto-open", "chk-preserve-structure"].forEach(function (id) {
@@ -166,121 +171,142 @@ function showConversionTab() { setWorkspaceTab("conversion"); }
 function showPreviewTab() { setWorkspaceTab("preview"); }
 function showLogTab() { setWorkspaceTab("log"); }
 
-function updateTemplatePreview(name) {
-    var preview = document.getElementById("template-preview");
-    if (!preview) return;
+// ── Theme preview (Phase 12 GUI closeout) ──────────────────────────────────────
+//
+// The right-hand stage answers "what does this theme look like" before any document exists. It is
+// a session view: switching the preview changes the stage and nothing else. A builtin theme is
+// switched by class, an external theme's six declarative tokens arrive as CSS variables on the
+// stage -- the GUI never runs user CSS -- and a theme whose preview metadata is missing or broken
+// degrades to a notice, because it is still a theme this document may carry and convert.
 
-    var normalized = (name || "modern").toLowerCase();
-    preview.classList.remove("preview-modern", "preview-office", "preview-vscode");
-    if (normalized === "office") {
-        preview.classList.add("preview-office");
-    } else if (normalized === "vscode") {
-        preview.classList.add("preview-vscode");
-    } else {
-        preview.classList.add("preview-modern");
-    }
+var PREVIEW_CLASSES = ["preview-modern", "preview-office", "preview-vscode", "preview-external"];
+var PREVIEW_TOKENS = ["background", "surface", "text", "muted", "accent", "border"];
+
+function previewFacts(id) {
+    var facts = _themePreviews ? _themePreviews[id] : null;
+    return facts && typeof facts === "object" ? facts : null;
 }
 
-// Custom template select
-function buildTemplateDropdown(items) {
-    if (!Array.isArray(items) || items.length === 0) {
-        items = ["modern"];
-        log("WARNING", "模板列表为空，已回退为 modern");
-    }
-    _templates = items;
-    if (_templates.indexOf(_selectedTemplate) === -1) _selectedTemplate = _templates[0];
+function isBuiltinTheme(id) { return BUILTIN_THEMES.indexOf(id) !== -1; }
 
-    var dd = document.getElementById("template-select-dropdown");
-    dd.innerHTML = "";
-    _templates.forEach(function(templateName) {
-        var item = document.createElement("div");
-        item.className = "dropdown-item";
-        item.classList.toggle("selected", templateName === _selectedTemplate);
-        item.textContent = templateName;
-        item.onclick = function(event) {
-            event.stopPropagation();
-            selectTemplate(templateName);
-        };
-        dd.appendChild(item);
+function selectPreviewTheme(id) {
+    if (!id) return;
+    _previewTheme = id;
+    renderThemePreview();
+}
+
+// External preview targets: the installed, usable themes the bridge reported preview facts for.
+// An unusable installation is not a preview target, and neither is an id without facts.
+function previewTargetIds() {
+    var state = _themeState || {};
+    var unusable = (state.invalid || []).concat(state.installed_invalid || []);
+    var ids = [];
+    (state.installed || []).forEach(function (id) {
+        if (ids.indexOf(id) === -1 && unusable.indexOf(id) === -1 && previewFacts(id)) ids.push(id);
     });
-    document.getElementById("template-select-text").textContent = _selectedTemplate;
-    updateTemplatePreview(_selectedTemplate);
+    return ids;
 }
 
-function selectTemplate(name) {
-    if (_conversionRunning) return;
-    _selectedTemplate = name;
-    document.getElementById("template-select-text").textContent = name;
-    updateTemplatePreview(name);
-    document.querySelectorAll("#template-select-dropdown .dropdown-item").forEach(function(item) {
-        item.classList.toggle("selected", item.textContent === name);
+function previewTargetAvailable(id) {
+    if (isBuiltinTheme(id)) return true;
+    return !!previewFacts(id) && previewTargetIds().indexOf(id) !== -1;
+}
+
+function previewableThemeIds() {
+    var ids = BUILTIN_THEMES.slice();
+    previewTargetIds().forEach(function (id) {
+        if (ids.indexOf(id) === -1) ids.push(id);
     });
-    closeTemplateDropdown();
-    showPreviewTab();
+    return ids;
 }
 
-function ensureDropdownPortal() {
-    var dropdown = document.getElementById("template-select-dropdown");
-    if (dropdown.parentElement !== document.body) document.body.appendChild(dropdown);
+function previewThemeName(id) {
+    var builtinNames = { modern: "Modern", office: "Office", vscode: "VS Code" };
+    if (builtinNames[id]) return builtinNames[id];
+    var facts = previewFacts(id);
+    return (facts && facts.name) || id;
 }
 
-function positionTemplateDropdown() {
-    var dropdown = document.getElementById("template-select-dropdown");
-    var button = document.getElementById("template-select-btn");
-    var rect = button.getBoundingClientRect();
-    var gap = 4;
-    var viewportPadding = 8;
-    var maxHeight = 180;
-    dropdown.style.left = rect.left + "px";
-    dropdown.style.width = rect.width + "px";
+function renderPreviewNav() {
+    var name = document.getElementById("preview-theme-name");
+    if (name) {
+        name.textContent = previewThemeName(_previewTheme);
+        var facts = previewFacts(_previewTheme);
+        name.title = (facts && facts.description) || _previewTheme;
+    }
+    renderPreviewMarks();
+}
 
-    var spaceBelow = window.innerHeight - rect.bottom - viewportPadding;
-    var spaceAbove = rect.top - viewportPadding;
-    if (spaceBelow < 120 && spaceAbove > spaceBelow) {
-        dropdown.style.maxHeight = Math.max(80, Math.min(maxHeight, spaceAbove - gap)) + "px";
-        dropdown.style.top = "";
-        dropdown.style.bottom = (window.innerHeight - rect.top + gap) + "px";
-    } else {
-        dropdown.style.maxHeight = Math.max(80, Math.min(maxHeight, spaceBelow - gap)) + "px";
-        dropdown.style.bottom = "";
-        dropdown.style.top = (rect.bottom + gap) + "px";
+function stepPreviewTheme(direction) {
+    var ids = previewableThemeIds();
+    if (ids.length < 2) return;
+    var index = ids.indexOf(_previewTheme);
+    if (index < 0) index = direction > 0 ? -1 : 0;
+    var nextIndex = (index + direction + ids.length) % ids.length;
+    selectPreviewTheme(ids[nextIndex]);
+}
+
+function bindPreviewNav() {
+    var previous = document.getElementById("btn-preview-prev");
+    var next = document.getElementById("btn-preview-next");
+    if (previous) previous.addEventListener("click", function () { stepPreviewTheme(-1); });
+    if (next) next.addEventListener("click", function () { stepPreviewTheme(1); });
+}
+
+// Both marks come from `_previewTheme` alone. The carry checkbox never feeds them, so a carried
+// theme and the previewed theme stay visibly separate: a row can be checked without being shown,
+// and the preview never changes what a document carries.
+function renderPreviewMarks() {
+    var rows = document.querySelectorAll(".theme-row[data-theme-id]");
+    for (var i = 0; i < rows.length; i += 1) {
+        var rowId = rows[i].getAttribute("data-theme-id");
+        rows[i].classList.toggle("previewing", rowId === _previewTheme);
     }
 }
 
-function toggleTemplateDropdown() {
-    var dropdown = document.getElementById("template-select-dropdown");
-    var button = document.getElementById("template-select-btn");
-    ensureDropdownPortal();
-    if (dropdown.classList.contains("hidden")) {
-        positionTemplateDropdown();
-        dropdown.classList.remove("hidden");
-        button.classList.add("open");
-        setTimeout(function() {
-            document.addEventListener("click", closeOnClickOutside);
-            window.addEventListener("resize", positionTemplateDropdown);
-            var leftColumn = document.querySelector(".left-column");
-            if (leftColumn) leftColumn.addEventListener("scroll", closeTemplateDropdown);
-        }, 50);
-    } else {
-        closeTemplateDropdown();
+function renderThemePreview() {
+    var notice = previewNotice(_previewTheme);
+    var stage = document.getElementById("theme-preview");
+    if (stage) {
+        var facts = previewFacts(_previewTheme);
+        var tokens = facts && facts.preview ? facts.preview : null;
+        stage.classList.toggle("hidden", !!notice);
+        PREVIEW_CLASSES.forEach(function (name) { stage.classList.remove(name); });
+        stage.classList.add(
+            isBuiltinTheme(_previewTheme) ? "preview-" + _previewTheme : "preview-external"
+        );
+        stage.setAttribute("data-preview-theme", _previewTheme);
+        PREVIEW_TOKENS.forEach(function (token) {
+            if (tokens) {
+                stage.style.setProperty("--preview-" + token, String(tokens[token]));
+            } else {
+                stage.style.removeProperty("--preview-" + token);
+            }
+        });
     }
+
+    var fallback = document.getElementById("preview-fallback");
+    if (fallback) {
+        fallback.classList.toggle("hidden", !notice);
+        var reason = document.getElementById("preview-fallback-reason");
+        if (notice && reason) reason.textContent = notice;
+        if (!notice && reason) reason.textContent = "";
+    }
+    renderPreviewNav();
 }
 
-function closeTemplateDropdown() {
-    var dropdown = document.getElementById("template-select-dropdown");
-    var button = document.getElementById("template-select-btn");
-    if (dropdown) dropdown.classList.add("hidden");
-    if (button) button.classList.remove("open");
-    document.removeEventListener("click", closeOnClickOutside);
-    window.removeEventListener("resize", positionTemplateDropdown);
-    var leftColumn = document.querySelector(".left-column");
-    if (leftColumn) leftColumn.removeEventListener("scroll", closeTemplateDropdown);
-}
-
-function closeOnClickOutside(event) {
-    var wrap = document.getElementById("template-select-wrap");
-    var dropdown = document.getElementById("template-select-dropdown");
-    if (!wrap.contains(event.target) && !dropdown.contains(event.target)) closeTemplateDropdown();
+// A missing or malformed preview is a GUI inconvenience, never a broken theme: the theme still
+// converts, it simply has no palette to show, so this reads as a notice instead of an error.
+function previewNotice(id) {
+    if (isBuiltinTheme(id)) return "";
+    var facts = previewFacts(id);
+    var status = facts ? String(facts.preview_status || "missing") : "missing";
+    if (status === "available") return "";
+    if (status === "invalid") {
+        var reason = facts ? String(facts.preview_reason || "") : "";
+        return "预览配色不合法" + (reason ? "（" + reason + "）" : "") + "；主题本身仍然可用。";
+    }
+    return "主题可以照常携带与转换，这里只显示默认外观。";
 }
 
 // ── External theme selection (phase 9A) ────────────────────────────────────────
@@ -340,24 +366,42 @@ function renderThemeSelection() {
     var rows = themeRowOrder();
     rows.forEach(function (id) {
         var rowState = themeRowState(id);
+        var facts = previewFacts(id);
         var row = document.createElement("div");
         row.className = "theme-row";
         row.setAttribute("data-theme-id", id);
         row.setAttribute("data-theme-state", rowState);
 
-        var label = document.createElement("label");
-        label.className = "theme-check";
+        // One row, two independent controls (Phase 12 GUI closeout): the checkbox carries the
+        // theme into the next document, and the row body shows it on the preview stage.
         var box = document.createElement("input");
         box.type = "checkbox";
+        box.className = "theme-row-check";
         box.setAttribute("data-theme-id", id);
         box.checked = rowState === "selected";
         box.setAttribute("data-theme-state", rowState);
         box.addEventListener("change", function () { toggleExternalTheme(id); });
-        label.appendChild(box);
+        row.appendChild(box);
+
         var name = document.createElement("span");
-        name.textContent = id;
-        label.appendChild(name);
-        row.appendChild(label);
+        name.className = "theme-row-name";
+        name.textContent = (facts && facts.name) || id;
+        row.appendChild(name);
+
+        var desc = document.createElement("span");
+        desc.className = "theme-row-desc";
+        desc.textContent = (facts && facts.description) || "";
+        row.appendChild(desc);
+
+        row.addEventListener("click", function (event) {
+            // A click on the checkbox is the carry control, never a row click: the two meanings
+            // must not leak into each other.
+            if (event.target && event.target.closest &&
+                    event.target.closest("input.theme-row-check")) {
+                return;
+            }
+            selectPreviewTheme(id);
+        });
 
         var badge = document.createElement("span");
         badge.className = "theme-state theme-state-" + rowState;
@@ -505,7 +549,17 @@ function applyThemeState(state) {
     _themeState = state || {};
     _themeSelection = (_themeState.configured || []).slice();
     _themeConfirmed = _themeSelection.slice();
+    _themePreviews = (_themeState.previews && typeof _themeState.previews === "object")
+        ? _themeState.previews
+        : {};
+    // Phase 12 GUI closeout: the preview facts travel with the state, and the preview stage keeps
+    // the theme the user is looking at while it is still available. A fresh session starts at the
+    // bootstrap theme because that is where `_previewTheme` begins -- and it never reads the
+    // payload's own default, which is not a GUI state any more.
+    if (!previewTargetAvailable(_previewTheme)) _previewTheme = BOOTSTRAP_THEME;
+    renderPreviewNav();
     renderThemeSelection();
+    renderThemePreview();
     (_themeState.warnings || []).forEach(function (message) { log("WARNING", message); });
 }
 
@@ -559,10 +613,30 @@ var ABOUT_FACT_LABELS = [
     ["mode", "运行模式"]
 ];
 
+function setSettingsView(isOpen) {
+    var app = document.querySelector(".app");
+    var button = document.getElementById("btn-settings");
+    if (app) app.classList.toggle("settings-open", isOpen);
+    if (button) {
+        button.title = isOpen ? "返回主页面" : "设置";
+        button.setAttribute("aria-label", isOpen ? "返回主页面" : "打开设置");
+    }
+}
+
+function toggleSettings() {
+    var app = document.querySelector(".app");
+    if (app && app.classList.contains("settings-open")) {
+        closeSettings();
+        return;
+    }
+    openSettings();
+}
+
 function openSettings() {
     var page = document.getElementById("settings-page");
     if (!page || _settingsClosing) return;
     page.classList.remove("hidden");
+    setSettingsView(true);
     applySettingsControlLock();
     loadSettingsFacts();
 }
@@ -580,6 +654,7 @@ async function closeSettings() {
         await reloadThemeState();
         var page = document.getElementById("settings-page");
         if (page) page.classList.add("hidden");
+        setSettingsView(false);
     } catch (error) {
         log("ERROR", "读取外置主题状态失败：" + error);
     } finally {
@@ -817,7 +892,7 @@ function applySettingsControlLock() {
             var button = document.getElementById(id);
             if (button) button.disabled = locked;
         });
-    var back = document.getElementById("btn-settings-back");
+    var back = document.getElementById("btn-settings");
     if (back) back.disabled = _settingsClosing || _removalTerminal;
     // The removal entry waits for a quieter moment than the rest: an action that is still
     // writing has to finish before the confirmation may even be opened.
@@ -1237,7 +1312,6 @@ async function runConvert() {
     setConversionRunning(true);
     var runInputs = _inputSources.slice();
     var runOutput = document.getElementById("output-path").value.trim() || "output";
-    var runTemplate = getSelectedTemplate();
     var runBuildIndex = document.getElementById("chk-build-index").checked;
     var runAutoOpen = document.getElementById("chk-auto-open").checked;
     var runPreserveStructure = document.getElementById("chk-preserve-structure").checked;
@@ -1265,7 +1339,6 @@ async function runConvert() {
 
         await pywebview.api.set_configs({
             input: runInputs[0] || "",
-            template: runTemplate,
             output: runOutput,
             build_index: runBuildIndex,
             auto_open: runAutoOpen,
@@ -1282,7 +1355,6 @@ async function runConvert() {
             result = await pywebview.api.convert({
                 inputs: runInputs.slice(),
                 output_dir: runOutput,
-                template: runTemplate,
                 overwrite: true,
                 build_index: runBuildIndex,
                 auto_open: runAutoOpen,
@@ -1305,7 +1377,6 @@ async function runConvert() {
             document.getElementById("statusBadge").textContent = "DONE";
             document.getElementById("statusText").textContent = "转换完成 - " + result.files.length + " 个文件";
             log("INFO", "转换完成：共生成 " + result.files.length + " 个文件");
-            log("INFO", "使用模板：" + runTemplate);
             _lastOutputDir = result.output_dir || runOutput;
             log("INFO", "输出目录：" + _lastOutputDir);
             if (result.files.length !== 0) {
@@ -1339,8 +1410,6 @@ async function runConvert() {
         setConversionRunning(false);
     }
 }
-
-function getSelectedTemplate() { return _selectedTemplate; }
 
 // Actions
 async function openFile() {
@@ -1376,7 +1445,9 @@ async function init() {
         if (savedTheme) applyTheme(savedTheme);
     } catch (e) {}
 
-    buildTemplateDropdown(["modern"]);
+    renderPreviewNav();
+    renderThemePreview();
+    bindPreviewNav();
     updateInputSummary();
     renderConversionList();
     renderThemeSelection();
@@ -1393,11 +1464,11 @@ async function init() {
     }
 
     try {
-        var templates = await pywebview.api.get_templates();
-        buildTemplateDropdown(templates);
+        // Phase 12 GUI closeout: no template list is asked for, and `config.template` is not read.
+        // The page's theme surfaces are the preview stage and the carry selection; the theme a
+        // document falls back to is the bridge's own bootstrap constant.
         var config = await pywebview.api.get_config();
         config = config || {};
-        selectTemplate(config.template || "modern");
         document.getElementById("output-path").value = config.output || "output";
         document.getElementById("chk-auto-open").checked = config.auto_open !== false;
         document.getElementById("chk-build-index").checked = config.build_index !== false;
@@ -1408,7 +1479,8 @@ async function init() {
         showPreviewTab();
     } catch (error) {
         log("ERROR", "Init failed: " + error);
-        buildTemplateDropdown(["modern"]);
+        _previewTheme = BOOTSTRAP_THEME;
+        renderThemePreview();
     }
 }
 

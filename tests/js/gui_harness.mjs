@@ -19,7 +19,11 @@ const GUI_SOURCE = readFileSync(requiredEnv("MR_GUI_JS"), "utf8").replace(/^\uFE
 // Methods init() needs to finish; everything else stays pending until a test
 // resolves it, which is what lets the contracts hold a call open and act on it.
 const AUTO_RESOLVE = {
+  // Phase 12 GUI closeout: the page must not ask for a template list any more, so this stub
+  // exists only as a monitor -- GU0 counts the calls and fails if one comes back.
   get_templates: function () { return ["default", "modern", "office", "vscode"]; },
+  // `template` stays in the reply on purpose: the page must ignore it now, so a fixture that
+  // still carries it is the test of that, not an accident.
   get_config: function () {
     return { template: "modern", output: "output", auto_open: true,
              build_index: true, preserve_structure: false };
@@ -28,7 +32,8 @@ const AUTO_RESOLVE = {
 
 // A fresh installation: no user theme is installed or remembered. It is the default
 // theme-state reply so the contracts that are not about themes keep the behaviour
-// they had before this surface existed.
+// they had before this surface existed. Phase 12 adds `previews` (empty here: nothing
+// is installed) and `installed_invalid`, so the page never has to guess a missing key.
 export const EMPTY_THEME_STATE = {
   default: "modern",
   installed: [],
@@ -36,6 +41,8 @@ export const EMPTY_THEME_STATE = {
   selected: [],
   missing: [],
   invalid: [],
+  installed_invalid: [],
+  previews: {},
   warnings: [],
 };
 

@@ -1,0 +1,13 @@
+/* The local decoration: a real PNG in assets/ that every generated document has to
+   inline. That is what proves the whole chain -- theme validation, data URI inlining,
+   standalone HTML -- in one visible rule. */
+html[data-theme-id="qa-ornamented"] h1::after {
+    content: "";
+    display: block;
+    width: 72px;
+    height: 12px;
+    margin-top: 8px;
+    background-image: url(assets/ornament.png);
+    background-repeat: repeat-x;
+    background-size: 24px 12px;
+}

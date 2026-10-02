@@ -1,0 +1,20 @@
+{
+  "id": "qa-ornamented",
+  "name": "QA Ornamented",
+  "author": "MarkdownReader QA",
+  "version": "1.0.0",
+  "description": "验收标本：带本地装饰资源与 static preview 配色的可读主题。",
+  "extends": "base",
+  "files": [
+    "theme.css",
+    "decorations.css"
+  ],
+  "preview": {
+    "background": "#f2eee5",
+    "surface": "#fffdf8",
+    "text": "#302b25",
+    "muted": "#81776b",
+    "accent": "#956439",
+    "border": "#d6c6b2"
+  }
+}

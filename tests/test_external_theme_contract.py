@@ -10,6 +10,7 @@ generated document working after the theme has been deleted from MarkdownReader.
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -46,13 +47,18 @@ def install_root(tmp_path, monkeypatch):
 
 
 def test_the_packaged_template_is_a_valid_theme():
-    """AGENTS section 16：themes/template/ 是官方开发模板，导出后即可用。"""
+    """AGENTS section 16：themes/template/ 是官方开发模板，导出后即可用。
+
+    重基线（Phase 12 GUI closeout）：模板新增 `decorations.css`（本地资源钩子）与 `preview`
+    元数据，所以 `files` 期望值按新模板列出——判据（"模板必须是一份可导入的合法主题"）未变。
+    """
     for name in (
         "metadata.json",
         "variables.css",
         "content.css",
         "components.css",
         "print.css",
+        "decorations.css",
         "README.md",
     ):
         assert (TEMPLATE / name).is_file(), name
@@ -60,7 +66,13 @@ def test_the_packaged_template_is_a_valid_theme():
 
     metadata = external_themes.validate_theme_directory(str(TEMPLATE))
     assert metadata["id"] == "my-theme"
-    assert metadata["files"] == ["variables.css", "content.css", "components.css", "print.css"]
+    assert metadata["files"] == [
+        "variables.css",
+        "content.css",
+        "components.css",
+        "print.css",
+        "decorations.css",
+    ]
 
 
 def test_a_valid_theme_can_be_imported_and_removed(tmp_path, install_root):
@@ -174,10 +186,15 @@ def test_assets_are_inlined_so_a_deleted_theme_still_renders(tmp_path, install_r
 
 def test_export_then_import_round_trips(tmp_path, install_root):
     """Phase 7 验收 1+2：可以导出主题模板；用户改完之后可以重新导入。"""
+    source_metadata_mtime = (TEMPLATE / "metadata.json").stat().st_mtime
+    started_at = time.time()
     written = external_themes.export_template(str(tmp_path / "exported"))
+    finished_at = time.time()
 
     assert Path(written).is_dir()
     assert (Path(written) / "metadata.json").is_file()
+    assert started_at - 2 <= Path(written).stat().st_mtime <= finished_at + 2
+    assert abs((Path(written) / "metadata.json").stat().st_mtime - source_metadata_mtime) < 1
     assert external_themes.import_theme(written) == "my-theme"
     assert viewer_assets.external_theme_ids() == ["my-theme"]
 

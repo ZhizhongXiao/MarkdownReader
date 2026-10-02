@@ -1200,6 +1200,80 @@ onefile
 ## 验收
 
 两种包执行同一组 smoke tests。
+## 12 GUI closeout：内置转换选择器退场（预览 / 携带两个状态）
+
+主页面不再有「文档默认主题」这个 GUI 概念，只保留两个正交的主题状态：
+
+```text
+预览 preview   session only：只改右侧舞台，不写 config、不写阅读端偏好
+携带 carry     persisted   ：只由行内复选框驱动，写 config.json::external_themes
+```
+
+- 删除的是控制，不是能力：`gui/api.py::get_templates()` 删除；`#template-select-*`、`buildTemplateDropdown`、
+  `selectTemplate`、`updateTemplatePreview` 与 portal 机制从 `gui/assets/*` 全部移除；转换请求不再带 `template`。
+  回落主题由边界常量 `BOOTSTRAP_TEMPLATE = "modern"` 注入（`convert()` 忽略客户端送来的 `template`）。
+  `core` 不变：converter 参数、`config.json::template`、v1 回退、legacy 迁移语义全部保留。
+- 可选 `preview` 元数据：`core.external_themes.preview_facts()` / `theme_state()["previews"]`；6 个颜色
+  token（`#rgb` / `#rrggbb`）canonical + fail-closed，但与 theme validity 严格分离
+  （`preview_status ∈ {available,missing,invalid}` 只降级预览，不阻止携带与转换）。
+- 标本与模板：新增仓库内标本 `samples/qa-themes/{qa-ornamented,qa-no-preview}`（前者带真实 PNG 装饰）；
+  `themes/template/` 增加 `decorations.css` + `preview`；`packaging/validate_release.py` 的 REQUIRED 加该文件。
+- 契约：新增 `tests/js/gui_preview.test.js`（GP1–GP14）与独立 wrapper；`tests/js/gui.test.js` 原有 49 条，本次昼夜图标固定框回归守卫增加后为 50 条；
+  新增 bootstrap / preview schema / QA 标本三个 Python 契约文件。
+
+证据：红阶段 **40 red**（GP 14 + preview schema 10 + QA 标本 6 + bootstrap 3 + `gui.test.js` 3 条合法重基线 +
+`test_gui_contract.py` 3 条守卫 + 修正轮的素材自带契约 1）。实现后：`gui.test.js` **49/49**、
+`gui_preview.test.js` **14/14**、全量 **800 passed / 1 skipped / 0 failed**、ruff（项目闸 + MCP 规则集）0、pyright 0、MCP `python_review`
+两批 `batch_ok: true` 且 `scope_complete: true`。重基线 8 组 12 处断言，全部在文件内写明
+「旧断言 → 新断言 → 理由」。
+
+**两个验收阶段（不可合并）**：
+
+```text
+① GUI closeout acceptance（source 模式，人工）：主界面结构 / 预览与携带正交 / 两个标本 /
+   转换产物 / 阅读端主题 / 设置页四区与折叠路径 / 深浅色 / 旧 template:"office" 的 bridge 行为
+      → GUI SEALED commit
+② 从该 commit 完整重建 candidate（npm ci / npm run build / onefile + onedir / validate_release /
+   artifact smoke）→ candidate manifest + SHA-256 + tool/build identity
+③ clean Win11 上对这份 exact candidate 做正式 35 项 QA → **此时才**填
+   `docs/QA-CHECKLIST-1.0.0-rc1-v2.md` 与「QA 结论：通过」→ evidence commit → 冻结 / 打 tag
+```
+
+- 正式 checklist 绑定的对象只能是 ② 重新构建出来的 exact artifacts：旧 `dist/` 缺
+  `themes/template/decorations.css` 且不含新 GUI production，因此在 seal 之前不可能合法地勾完 35 项。
+- 双形态（onefile / onedir）、无 Python·Node、缺 WebView2、`_internal/renderer/dist/renderer.cjs` 缺失、
+  移除用户数据、Defender / SmartScreen、Edge 打印、onedir 移动与删除生命周期都属于 ③。
+- **状态**：实现完成、门禁全绿；GUI closeout acceptance 由人工在 source 模式执行，通过且**无 production
+  修订**即在本批提交上打 GUI SEALED；随后才是 ②③。旧 `dist/` 视为 obsolete，不复用、不修补。
+
+
+**GUI closeout acceptance（source 模式，人工；9 项）**：先生成素材
+`python packaging/qa_prepare.py --output "<素材目录>" --force`（例如 `D:/QA`；本机没有 D: 盘时用默认的
+`~/Documents/MarkdownReader-QA-1.0.0-rc1`），再用源码启动（`python main.py`），逐项确认：
+
+1. 主界面结构：左栏为「文件与输出 → 外置主题 → 选项」，右侧第二个页签是「主题预览」，**没有** builtin template selector。
+2. 预览栏显示当前主题；点左右三角按钮按 Modern → Office → VS Code → 可用外置主题的安装列表顺序逐项前进或后退，并在两端循环；每次切换都更新右侧舞台，外置主题行仍可直接预览。
+   反复浏览内置与已安装主题；预览不改 carry 集合或 `profile/config.json`。
+3. 从 `<素材目录>/主题标本` 导入 `qa-ornamented` 与 `qa-no-preview`（材料副本，不是仓库路径）。
+4. external：行体点击只 preview、checkbox 只 carry；`.theme-row.previewing` 与勾选态肉眼可分；description 正确；
+   `qa-ornamented` 的 token 生效；`qa-no-preview` 隐藏整张示意图，fallback 文字居中并填满预览区域；preview 不写 config。
+   心理模型细看一次：**只**点行体（右侧变、左侧出现 previewing、checkbox 仍为空），随后勾选（checkbox 变、
+   previewing 不跳走）。
+5. 勾 `qa-ornamented` 转换一次：HTML 含 `theme-qa-ornamented` 与 `data:image/png;base64,`；把 HTML 单独拷到别处打开，装饰仍在。
+6. Viewer：三套内置即时切换；刷新恢复最后阅读主题；**另生成一份 HTML**，阅读偏好仍按
+   `localStorage["markdownreader-theme-id"]` 生效；再验一次**失效偏好**（localStorage 里留下一个已删除或不可用的
+   external id）→ 应回落到有效 builtin，而不是空白或一个不存在的主题。这一步用一次性浏览器 profile /
+   独立用户数据做，别动日常浏览状态。
+7. Settings：与主页共用唯一标题栏和昼夜控件；设置态齿轮变为居中的折返返回箭头，宽屏外置主题优先，存储 / 关于 / 用户数据依次排列，操作按钮文字完整，danger 区视觉独立。
+   Storage 默认展开显示主要路径，折叠后只显示概览；config / 外置主题目录 / runtime 路径正确；import / export / open theme dir 正常。
+8. 浅色 / 深色各扫一遍主页面与 Settings。
+9. 旧字段：含 `template: "office"` 的 legacy config 迁移后 GUI 没有 selector；生成 HTML 的 markup 仍是
+   `data-theme-id="modern"`；Viewer preference 不受旧 `template` 复活影响。source 布局与 onefile 的
+   「EXE 同级 legacy」位置不同，**不人为模拟 frozen 布局**，完整 F1 / F2 留在 ③。
+
+结果：<seal 时填入：通过 / 发现的问题与处置>。
+
+
 
 ---
 

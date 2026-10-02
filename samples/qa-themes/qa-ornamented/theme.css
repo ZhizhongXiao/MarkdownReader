@@ -1,0 +1,16 @@
+/* QA specimen: tokens and reading rules only. The decoration hook lives in
+   decorations.css, so the two halves of a theme stay separately reviewable. */
+html[data-theme-id="qa-ornamented"] {
+    --qa-page-bg: #f7f2e8;
+    --qa-text: #302b25;
+}
+html[data-theme-id="qa-ornamented"] body {
+    background: var(--qa-page-bg);
+    color: var(--qa-text);
+}
+html[data-theme-id="qa-ornamented"] h1 {
+    letter-spacing: 0.02em;
+}
+html[data-theme-id="qa-ornamented"] blockquote {
+    border-left: 3px solid #956439;
+}
