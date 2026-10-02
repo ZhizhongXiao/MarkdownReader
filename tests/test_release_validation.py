@@ -8,6 +8,7 @@ profile actually looks like), and the packaged payload carries both renderers.
 """
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -46,6 +47,13 @@ def test_the_release_payload_carries_both_renderers():
     assert ("node", "node.exe") in files, "内置 Node 也是 v2 renderer 的运行时"
     assert ("node_renderer", "render.js") in files, "v1 回退路径必须继续随包发布"
     assert ("node_renderer", "node_modules") in files
+    manifest = json.loads(
+        (ROOT / "gui" / "assets" / "js" / "manifest.json").read_text(encoding="utf-8")
+    )
+    gui_script_files = {"manifest.json", *manifest["files"]}
+    assert {
+        ("gui", "assets", "js", name) for name in gui_script_files
+    } <= set(files)
 
 
 @pytest.fixture(autouse=True)

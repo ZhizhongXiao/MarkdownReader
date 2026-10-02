@@ -30,9 +30,10 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from gui.app import load_gui_javascript  # noqa: E402
+
 JS_DIR = ROOT / "tests" / "js"
 GUI_HTML = ROOT / "gui" / "assets" / "index.html"
-GUI_JS = ROOT / "gui" / "assets" / "gui.js"
 
 # Phase 12 GUI closeout adds GP1-GP14. During the red phase the suite reports failures instead of
 # the passes below; these numbers are the green target the lock enforces.
@@ -57,10 +58,12 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def test_gui_preview_contracts():
+def test_gui_preview_contracts(tmp_path):
     """Run the jsdom preview suite and enforce its reported outcome."""
+    javascript_path = tmp_path / "gui.bundle.js"
+    javascript_path.write_text(load_gui_javascript(), encoding="utf-8")
     environment = dict(os.environ)
-    environment.update({"MR_GUI_HTML": str(GUI_HTML), "MR_GUI_JS": str(GUI_JS)})
+    environment.update({"MR_GUI_HTML": str(GUI_HTML), "MR_GUI_JS": str(javascript_path)})
     completed = subprocess.run(
         ["node", "--test", "gui_preview.test.js"],
         cwd=str(JS_DIR),

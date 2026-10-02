@@ -1,4 +1,4 @@
-// Stage 6.6a - jsdom harness for the real GUI (index.html + gui.js) driven
+// Stage 6.6a - jsdom harness for the real GUI (index.html + assembled script) driven
 // through a controllable pywebview stub. Test-only; no production code here.
 // Phase 9A adds the external theme surface: its state is a bridge reply like every
 // other fact on the page, so the harness owns that reply and a contract can hand the
@@ -224,7 +224,7 @@ export class GuiSession {
     return true;
   }
 
-  // ── DOM probes (state via the DOM, never via gui.js internals) ───
+  // ── DOM probes (state via the DOM, never via GUI script internals) ───
   list(id) { return this.doc.getElementById(id); }
 
   text(id) { const node = this.list(id); return node ? node.textContent.trim() : null; }

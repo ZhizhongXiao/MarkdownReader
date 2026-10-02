@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "files": [
+    "app-state.js",
+    "appearance.js",
+    "workspace.js",
+    "theme-preview.js",
+    "theme-selection.js",
+    "settings.js",
+    "conversion-plan.js",
+    "conversion.js",
+    "bootstrap.js"
+  ]
+}

@@ -88,13 +88,39 @@ def close_splash():
         _logger.debug("启动图已关闭。", exc_info=True)
 
 
+def load_gui_javascript() -> str:
+    """Assemble the GUI's ordered classic-script fragments from its manifest."""
+    assets_dir = os.path.join(BUNDLE_ROOT, "gui", "assets")
+    script_dir = os.path.join(assets_dir, "js")
+    manifest_path = os.path.join(script_dir, "manifest.json")
+    with open(manifest_path, encoding="utf-8") as handle:
+        manifest = json.load(handle)
+    if not isinstance(manifest, dict) or manifest.get("version") != 1:
+        raise ValueError(f"GUI 脚本清单格式无效：{manifest_path}")
+    files = manifest.get("files")
+    if not isinstance(files, list) or not files:
+        raise ValueError(f"GUI 脚本清单缺少 files 列表：{manifest_path}")
+
+    chunks: list[str] = []
+    for name in files:
+        if not isinstance(name, str) or os.path.basename(name) != name or not name.endswith(".js"):
+            raise ValueError(f"GUI 脚本清单包含无效文件名：{name!r}")
+        path = os.path.join(script_dir, name)
+        with open(path, encoding="utf-8") as handle:
+            chunk = handle.read()
+        if not chunk or not chunk.endswith("\n"):
+            raise ValueError(f"GUI 脚本模块缺失、为空或未以换行结尾：{path}")
+        chunks.append(chunk)
+    return "\n".join(chunks)
+
+
 def load_gui_document() -> str:
     """Load and inline GUI assets so WebView2 cannot reuse stale file URLs."""
     assets_dir = os.path.join(BUNDLE_ROOT, "gui", "assets")
     html_path = os.path.join(assets_dir, "index.html")
     css_path = os.path.join(assets_dir, "gui.css")
-    js_path = os.path.join(assets_dir, "gui.js")
-    required = (html_path, css_path, js_path)
+    manifest_path = os.path.join(assets_dir, "js", "manifest.json")
+    required = (html_path, css_path, manifest_path)
     if not all(os.path.isfile(path) for path in required):
         return "<html><body><h1>MarkdownReader</h1><p>HTML asset not found.</p></body></html>"
 
@@ -102,8 +128,10 @@ def load_gui_document() -> str:
         document = handle.read()
     with open(css_path, encoding="utf-8") as handle:
         css = handle.read()
-    with open(js_path, encoding="utf-8") as handle:
-        javascript = handle.read()
+    try:
+        javascript = load_gui_javascript()
+    except (OSError, ValueError):
+        return "<html><body><h1>MarkdownReader</h1><p>HTML asset not found.</p></body></html>"
 
     document = document.replace(
         '<link rel="stylesheet" href="gui.css">',
@@ -111,7 +139,7 @@ def load_gui_document() -> str:
         1,
     )
     document = document.replace(
-        '<script src="gui.js"></script>',
+        "<!-- GUI_SCRIPT -->",
         f"<script>\n{javascript}\n</script>",
         1,
     )

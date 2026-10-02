@@ -51,7 +51,7 @@ core/                 转换计划、front matter、TOC、渲染调度、索引�
 core/viewer_assets.py 阅读器/主题资产的唯一来源（外壳、脚本、样式链、注册表）
 gui/api.py            稳定的 pywebview façade
 gui/services/         GUI 对话框/输入、转换、主题与生命周期/存储服务
-gui/assets/           GUI 静态资源（index.html、CSS、JavaScript）
+gui/assets/           GUI 静态资源（index.html、CSS、js/ 中按清单装配的 JavaScript）
 renderer/             生产 renderer（v2 adapter，产物 renderer/dist 随包发布）
 node_renderer/        v1 回退 renderer（markdown-it、footnote、texmath、KaTeX）
 viewer/viewer.html    阅读器外壳（工具栏、目录、正文容器）
@@ -225,8 +225,8 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
   `BridgeApi.get_theme_state()` 区分 `configured` / `selected` / `missing` / `invalid`（后两者分别是「不在 registry」与「在
   registry 但过不了 use-time gate」），判定与转换同源于 `external_themes._classify_configured_theme()`；GUI 控件属 Phase 9。
 
-- 外置主题选择（Phase 9A）：主页面新增「外置主题」面（`gui/assets/{index.html,gui.js,gui.css}`，不新增资源文件 ⇒
-  打包面零改动），消费 Phase 8 封板的 `configured / selected / missing / invalid` 状态模型。四态全部推导自桥接字段：
+- 外置主题选择（Phase 9A）：主页面新增「外置主题」面（当前界面资源位于 `gui/assets/`，脚本由 `gui/assets/js/manifest.json`
+  按序装配），消费 Phase 8 封板的 `configured / selected / missing / invalid` 状态模型。四态全部推导自桥接字段：
   `missing` / `invalid` 决定「保留在列表但不可勾选」，`selected` / `available` 表达工作集成员关系，**不解析 warning 文本**；
   `configured` 是记忆，工作集初始为其副本，只有用户显式取消勾选或点「移除」才会缩小，保存 payload 永远是完整工作集
   （不是 `selected`）。写入串行化：至多一个在途写、后续改动合并为最新、旧 payload 不会覆盖新 payload；被拒的保存不「翻回

@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 
 from gui.api import BridgeApi
+from gui.app import load_gui_javascript
 from gui.services.conversion import ConversionService
 from gui.services.dialogs import DialogInputService
 from gui.services.lifecycle import LifecycleStorageService
@@ -47,7 +48,7 @@ def test_bridge_keeps_its_complete_public_method_and_parameter_surface():
         parameters = list(inspect.signature(getattr(BridgeApi, name)).parameters)
         assert parameters == expected, name
 
-    javascript = (ROOT / "gui" / "assets" / "gui.js").read_text(encoding="utf-8")
+    javascript = load_gui_javascript()
     bridge_calls = set(re.findall(r"pywebview\.api\.([A-Za-z_]\w*)", javascript))
     assert bridge_calls <= public_methods
 

@@ -5,6 +5,7 @@
 ```text
 core/           Python 调度：配置、转换计划、front matter、目录、渲染调度、索引生成、阅读器资产定位
 gui/            pywebview 桌面界面；api.py 是稳定 façade，services/ 按对话框、转换、主题和生命周期/存储分工
+                assets/js/ 的 GUI 脚本按职责拆分，由 manifest 按序组装成内联 classic script
 renderer/       Node 渲染服务（v2 production adapter；产物 renderer/dist 随包发布）
 node_renderer/  Node 渲染服务（v1 回退：markdown-it 与插件、KaTeX）
 viewer/         阅读器外壳、布局与打印样式、交互模块（装配期合并成一个 classic script）
@@ -34,7 +35,9 @@ Markdown 文件
 - `gui/api.py` 是稳定的 pywebview façade，保留 `pywebview.api.*` 方法与数据契约；内部由 `gui/services/` 的
   对话框/输入、转换、主题、生命周期/存储服务承接工作。
 - 生命周期服务统一管理终止移除状态与在途操作 gate；对话框服务独立串行化 Tk 对话框。服务拆分不改变 GUI bridge
-  方法、参数、返回 shape 或 `gui.js`。
+  方法、参数或返回 shape。
+- GUI 前端脚本位于 `gui/assets/js/`，由 `manifest.json` 固定装载顺序。`gui/app.py` 将片段组装为一个内联 classic
+  script，避免运行时请求本地模块；该结构只调整源码组织，不改变 DOM、bridge API 或初始化顺序。
 
 ### Node 渲染器
 

@@ -31,6 +31,7 @@ from core.config import (  # noqa: E402
     PLACEHOLDER_TOC,
 )
 from core.html_assembly import assemble_document  # noqa: E402
+from gui.app import load_gui_javascript  # noqa: E402
 
 # Phase 6B unified these three: the selector, the metadata id and the directory
 # name are the same lowercase id under `themes/builtin/`.
@@ -339,7 +340,7 @@ def test_the_gui_registry_comes_from_the_asset_layer():
     }
     assert "TEMPLATES_DIR" not in (ROOT / "gui" / "api.py").read_text(encoding="utf-8")
 
-    javascript = (ROOT / "gui" / "assets" / "gui.js").read_text(encoding="utf-8")
+    javascript = load_gui_javascript()
     match = re.search(r"var BUILTIN_THEMES\s*=\s*\[(.*?)\];", javascript, re.DOTALL)
     assert match, "the preview cycle must declare its builtin theme order"
     nav = re.findall(r"['\"]([^'\"]+)['\"]", match.group(1))

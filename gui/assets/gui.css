@@ -68,7 +68,7 @@
     }
 }
 
-/* 01.3 Manual theme overrides written by gui.js on <html data-theme="...">. */
+/* 01.3 Manual theme overrides written by the GUI runtime on <html data-theme="...">. */
 [data-theme="dark"] {
     --bg: #020617;
     --panel: #0f172a;

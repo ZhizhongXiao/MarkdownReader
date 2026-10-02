@@ -1,6 +1,6 @@
 // Stage 6.6a - GUI behaviour contracts (G0 liveness, GU1-GU7).
 //
-// Every contract drives the real gui.js through its public functions and
+// Every contract drives the real assembled GUI script through its public functions and
 // observes the DOM and the recorded bridge calls. Expectations are declared the
 // same way as the viewer layer: "pass" must hold today, "xfail" is a strict
 // known-broken contract that fails the suite if it starts passing.

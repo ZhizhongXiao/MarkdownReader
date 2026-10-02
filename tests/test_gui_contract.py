@@ -7,12 +7,12 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from gui.app import load_gui_document  # noqa: E402
+from gui.app import load_gui_document, load_gui_javascript  # noqa: E402
 
 
 def test_gui_exposes_multiselect_drop_and_conversion_list_contract():
     html = (ROOT / "gui" / "assets" / "index.html").read_text(encoding="utf-8")
-    javascript = (ROOT / "gui" / "assets" / "gui.js").read_text(encoding="utf-8")
+    javascript = load_gui_javascript()
     api = (ROOT / "gui" / "api.py").read_text(encoding="utf-8")
     dialogs = (ROOT / "gui" / "services" / "dialogs.py").read_text(encoding="utf-8")
 
@@ -49,7 +49,7 @@ def test_the_page_has_no_builtin_theme_selector():
     external theme rows that decide what a document carries.
     """
     html = (ROOT / "gui" / "assets" / "index.html").read_text(encoding="utf-8")
-    javascript = (ROOT / "gui" / "assets" / "gui.js").read_text(encoding="utf-8")
+    javascript = load_gui_javascript()
 
     assert "template-select" not in html, "the retired builtin selector must not come back"
     assert "template-select" not in javascript
@@ -68,7 +68,7 @@ def test_runtime_gui_document_inlines_current_css_and_javascript():
     assert "function updateLogAttention()" in document
     assert "function acceptDroppedInputs" in document
     assert 'href="gui.css"' not in document
-    assert 'src="gui.js"' not in document
+    assert "<!-- GUI_SCRIPT -->" not in document
 
 
 def test_native_window_minimum_width_matches_two_column_layout():
@@ -169,7 +169,7 @@ def test_gui_exposes_the_external_theme_selection_surface():
     (AGENTS §17).
     """
     html = (ROOT / "gui" / "assets" / "index.html").read_text(encoding="utf-8")
-    javascript = (ROOT / "gui" / "assets" / "gui.js").read_text(encoding="utf-8")
+    javascript = load_gui_javascript()
 
     assert 'id="external-theme-list"' in html
     assert 'id="external-theme-summary"' in html
@@ -201,7 +201,7 @@ def test_the_settings_surface_exists_and_the_main_page_still_does_not_manage_the
     函数里不得出现任何管理动作 —— 主页读到的是「携带集合」，不是「安装清单」。
     """
     html = (ROOT / "gui" / "assets" / "index.html").read_text(encoding="utf-8")
-    javascript = (ROOT / "gui" / "assets" / "gui.js").read_text(encoding="utf-8")
+    javascript = load_gui_javascript()
 
     assert 'id="btn-settings"' in html
     assert 'id="settings-page"' in html
@@ -230,7 +230,7 @@ def test_removing_user_data_is_promised_only_behind_the_onefile_fact():
     状态的 owner，而删文件只发生在 `webview.start()` 返回之后。
     """
     html = (ROOT / "gui" / "assets" / "index.html").read_text(encoding="utf-8")
-    javascript = (ROOT / "gui" / "assets" / "gui.js").read_text(encoding="utf-8")
+    javascript = load_gui_javascript()
     api = (ROOT / "gui" / "api.py").read_text(encoding="utf-8")
 
     for token in (
@@ -261,7 +261,7 @@ def test_the_theme_closeout_surfaces_are_in_place():
     """
     html = (ROOT / "gui" / "assets" / "index.html").read_text(encoding="utf-8")
     css = (ROOT / "gui" / "assets" / "gui.css").read_text(encoding="utf-8")
-    javascript = (ROOT / "gui" / "assets" / "gui.js").read_text(encoding="utf-8")
+    javascript = load_gui_javascript()
 
     assert 'id="theme-preview"' in html, "the static preview stage"
     assert html.count('class="theme-icon theme-icon-moon"') == 1
@@ -321,7 +321,7 @@ def test_the_previewing_mark_comes_from_the_preview_id():
     The behaviour contract (GP10) proves the two states stay independent while carry changes;
     this one keeps the implementation honest about where the mark comes from.
     """
-    javascript = (ROOT / "gui" / "assets" / "gui.js").read_text(encoding="utf-8")
+    javascript = load_gui_javascript()
     marked = [line.strip() for line in javascript.splitlines() if "previewing" in line]
 
     assert marked, "the previewed row must be marked"

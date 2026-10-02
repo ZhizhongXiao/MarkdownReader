@@ -1,6 +1,6 @@
 """GUI state contracts (Stage 6.6).
 
-These contracts drive the real GUI (index.html + gui.js) in jsdom through a
+These contracts drive the real GUI (index.html + manifest-assembled script) in jsdom through a
 controllable pywebview stub, and observe the DOM plus the recorded bridge calls.
 They are the only place where the GUI state machine is exercised, because the
 existing gui contract test only reads the sources as text.
@@ -32,9 +32,10 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from gui.app import load_gui_javascript  # noqa: E402
+
 JS_DIR = ROOT / "tests" / "js"
 GUI_HTML = ROOT / "gui" / "assets" / "index.html"
-GUI_JS = ROOT / "gui" / "assets" / "gui.js"
 API_PY = ROOT / "gui" / "api.py"
 
 # Locked counts: a vanished or renamed contract must fail instead of silently
@@ -96,13 +97,15 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def test_gui_state_contracts():
+def test_gui_state_contracts(tmp_path):
     """Run the jsdom GUI contract suite and enforce its reported outcome."""
+    javascript_path = tmp_path / "gui.bundle.js"
+    javascript_path.write_text(load_gui_javascript(), encoding="utf-8")
     environment = dict(os.environ)
     environment.update(
         {
             "MR_GUI_HTML": str(GUI_HTML),
-            "MR_GUI_JS": str(GUI_JS),
+            "MR_GUI_JS": str(javascript_path),
             "MR_PREPARE_SINGLE_REQUEST": str(_single_request_shape("prepare_conversion")),
             "MR_CONVERT_SINGLE_REQUEST": str(_single_request_shape("convert")),
             # Phase 9B1: the settings page sends one request dict for the two actions
