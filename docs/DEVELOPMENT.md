@@ -172,7 +172,7 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
   spec 的 `REQUIRED_FILES` 与 `packaging/validate_release.py::RUNTIME_FILES` 两处断言；`release_freeze.py`
   在 PyInstaller 之前自动 `npm ci` + `npm run build`（只构建一次，两种形态共用）。构建期用**将被打包的**
   `node.exe` 对 v1 与 v2 各冒烟一次。实机验收记录必须与当前 production renderer 对应
-  （`docs/QA-CHECKLIST-1.0.0-rc1-v2.md`；v1 时代记录只作历史，`release_freeze` 只认 `--qa-record` 指定的那份）。
+  （当前记录为 `docs/QA-CHECKLIST-1.0.1-v2.md`；v1 时代记录只作历史。`release_freeze` 默认按 QA identity 发现唯一匹配项，也支持 `--qa-record` 显式指定）。
 
 - 阅读器资产层（Phase 6A/6B）：`core/viewer_assets.py` 是"阅读器由哪些文件组成"的唯一来源（页面外壳、
   viewer 脚本、打印样式、样式链、主题注册表）。`core/config.py` 只管 config.json 与 bundle 路径，且

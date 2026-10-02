@@ -7,6 +7,7 @@ MarkdownReader 是一个离线 Markdown 转 HTML 阅读器生成工具：把 Mar
 
 - 单文件、Windows 原生多选与文件夹批量转换，支持从资源管理器拖入文件或目录。
 - 三套内置阅读主题：Modern（通用阅读）、Office（正式文档与打印）、VS Code（技术文档）；每份 HTML 都携带三套，阅读时可切换。
+- 设置页管理外置主题；转换时选择要随 HTML 携带的主题，阅读端再决定实际使用哪套主题。
 - 生成的 HTML 单文件自包含：阅读器样式、脚本、目录、公式样式与字体都在文件内；不使用 CDN、
   不需要服务器；本地图片内嵌，离线可直接打开。
 - 阅读器交互：目录跳转与滚动定位、目录与正文折叠、阅读位置恢复、代码复制、
@@ -17,9 +18,9 @@ MarkdownReader 是一个离线 Markdown 转 HTML 阅读器生成工具：把 Mar
 
 ## 开始使用
 
-1. 下载 `MarkdownReader-1.0.0-rc1-win-x64.exe` 放入可写目录后双击运行；或解压便携版 ZIP，运行其中的 EXE。
-2. 添加 Markdown 文件或文件夹，选择输出目录与主题。
-3. 点「开始转换」，完成后用浏览器打开生成的 HTML。
+1. 下载 `MarkdownReader-1.0.1-win-x64.exe` 放入可写目录后双击运行；或解压便携版 ZIP，运行其中的 EXE。
+2. 添加 Markdown 文件或文件夹，选择输出目录；如已安装外置主题，可选择要随 HTML 携带的主题。
+3. 点「开始转换」，完成后用浏览器打开生成的 HTML，再从阅读器工具栏切换主题。
 
 需要 Windows 10 / 11（64 位）与 Microsoft Edge WebView2 Runtime；EXE 已内置 Python、Node.js 与渲染依赖。
 逐步操作、输出规则与常见问题见 [使用说明](docs/USAGE.md)。
@@ -40,7 +41,7 @@ MarkdownReader 是一个离线 Markdown 转 HTML 阅读器生成工具：把 Mar
 | [开发与构建](docs/DEVELOPMENT.md) | 环境、测试、目录、命名约定、打包与发布 |
 | [路线图](docs/ROADMAP.md) | 当前状态与下一步方向 |
 | [更新日志](docs/CHANGELOG.md) | 各版本变更记录 |
-| [实机验收清单](docs/QA-CHECKLIST.md) | 1.0.0-rc1 的实机验收记录（历史证据） |
+| [实机验收清单](docs/QA-CHECKLIST-1.0.1-v2.md) | 1.0.1 v2 renderer 的实机验收记录 |
 | [打包说明](packaging/README.md) | 构建形态与发布流程细节 |
 
 ## 环境与主要限制
@@ -54,7 +55,6 @@ MarkdownReader 是一个离线 Markdown 转 HTML 阅读器生成工具：把 Mar
 
 ## 当前状态
 
-1.0.0-rc1 已完成 33 项实机验收并通过，结论与测试机器信息记录在 [实机验收清单](docs/QA-CHECKLIST.md)；
-发布物是 `dist/` 下的 EXE、便携 ZIP、`SHA256SUMS.txt` 与构建记录。升为 1.0.0 待许可证与正式发布决定。
+当前源码版本为 1.0.1；发布产物、SHA256SUMS.txt 与构建记录以 GitHub Release 的对应版本页为准。验收记录见 [1.0.1 实机验收清单](docs/QA-CHECKLIST-1.0.1-v2.md)。
 
 项目面向个人使用与内部发布；暂未选择开源许可证，代码与资源保留全部权利。

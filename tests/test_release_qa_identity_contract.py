@@ -259,7 +259,7 @@ def test_a_malformed_identity_is_refused_by_the_gate(tmp_path: pathlib.Path) -> 
 
 def test_the_current_record_declares_the_expected_identity() -> None:
     """The record that belongs to the current production renderer must say so."""
-    record = ROOT / "docs" / "QA-CHECKLIST-1.0.0-rc1-v2.md"
+    record = ROOT / "docs" / "QA-CHECKLIST-1.0.1-v2.md"
     assert record.is_file(), "the current acceptance record must exist"
 
     resolve = capability("resolve_qa_record")

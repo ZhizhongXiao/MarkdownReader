@@ -1,27 +1,25 @@
-# MarkdownReader v1.0.0-rc1
+# MarkdownReader v1.0.1
 
-Windows 便携式 Markdown 转 HTML 阅读器生成工具，无需安装器。
+Windows 便携式 Markdown 转离线阅读 HTML 工具，不需要安装器。
 
 ## 下载与运行
 
-1. 下载 `MarkdownReader-1.0.0-rc1-win-x64.exe`，放入可写目录后双击运行。
-2. 也可以使用 `MarkdownReader-1.0.0-rc1-portable-win-x64.zip`：解压后运行其中的 EXE。ZIP 为便携备选形态（onedir），启动更快、更不容易被杀软拦截，代价是需要保留整个目录。
-3. 需要 Windows 10/11（64 位）及 Microsoft Edge WebView2 Runtime。
-4. 已内置 Python、Node.js 和渲染依赖，无需另行安装开发环境。
+- `MarkdownReader-1.0.1-win-x64.exe`：onefile 版本，单个可执行文件。
+- `MarkdownReader-1.0.1-portable-win-x64.zip`：onedir 便携版本，解压后运行 `MarkdownReader.exe`。
+- 需要 Windows 10/11（64 位）与 Microsoft Edge WebView2 Runtime；Python、Node.js 和渲染依赖已内置。
 
 ## 使用
 
-添加或拖入 `.md` / `.markdown` 文件、文件夹，选择输出目录及 Modern、Office 或 VS Code 模板，点击“开始转换”。完成后点击“打开 HTML”阅读。
+添加或拖入 `.md` / `.markdown` 文件或文件夹，选择输出目录，并按需勾选要随 HTML 携带的外置主题，然后开始转换。每份 HTML 都包含 Modern、Office 和 VS Code 三套内置主题；阅读时可切换主题与明暗模式。
 
-支持目录导航、折叠、代码复制、公式、脚注、明暗模式、图片灯箱缩放和打印；打印输出为白纸加跟随正文的主题块与左右两条框线（关闭「背景图形」时仅保留框线）。批量转换可生成索引并保留目录结构。设置在首次保存时写入 EXE 同级目录的 `config.json`（单纯启动不会创建）。
+阅读器支持目录导航与折叠、阅读位置恢复、代码复制、公式、脚注、图片灯箱缩放、批量索引与打印。生成的 HTML 无需服务器；本地图片和阅读器资源会尽可能内嵌，以便离线阅读。
 
 ## 注意事项
 
 - 同名输出 HTML 会被覆盖。
-- 阅读器样式、脚本和公式资源内置于 HTML；标准 Markdown 引用的本地图片会自动内嵌为 data URI，网络图片与原始 HTML 中的资源仍按源文档引用，需保证输出环境能访问它们。
-- 打印分页和字体效果取决于浏览器及本机环境。
-- 本版本通过 130 项自动化测试（三层行为契约 viewer 22 / GUI 9 / index 9，harness 自检 5 条，其余为前后端单元与集成用例），并由 `packaging/validate_release.py` 对打包产物做启动与资源校验；本版本已在目标机器完成 33 项实机验收（见 `docs/QA-CHECKLIST.md`）并通过。
-
-本次发布统一项目名称、更新示例文档和明暗模式截图。可使用随附的 `SHA256SUMS.txt` 核验发布物（EXE 与可选 ZIP 均在其内）。
+- 网络图片及源文档中的原始 HTML 资源仍可能引用外部地址；无网络时转换继续，并保留无法获取的原始 URL。
+- 打印分页与字体替换取决于浏览器及本机环境。
+- onefile 用户数据位于 `%LOCALAPPDATA%\MarkdownReader\`；onedir 数据位于应用目录的 `data\`。设置页显示具体路径。
+- 可使用随附的 `SHA256SUMS.txt` 核验 EXE 与便携 ZIP。
 
 暂未选择开源许可证，代码与资源保留全部权利。

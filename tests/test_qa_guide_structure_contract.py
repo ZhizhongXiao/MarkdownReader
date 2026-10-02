@@ -1,7 +1,8 @@
 """Phase 12A-2 follow-up: the acceptance guide and the acceptance record must describe one run.
 
 `packaging/qa_prepare.py` writes the operating guide a person follows, and
-`docs/QA-CHECKLIST-1.0.0-rc1-v2.md` is the record `release_freeze.py` actually gates on. When
+`docs/QA-CHECKLIST-<current-version>-v2.md` is the record `release_freeze.py` actually gates on.
+When
 the record was re-baselined for Phase 12A the guide kept its old grouping (C document features,
 D reader, E index page) and its old A numbering, so following the guide could not produce the
 evidence the gate requires: storage lifecycle, external theme persistence, onefile removal and
@@ -23,12 +24,17 @@ rewording a sentence keeps the contract, dropping or merging an item breaks it.
 import importlib.util
 import pathlib
 import re
+import tomllib
 
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
-CHECKLIST = ROOT / "docs" / "QA-CHECKLIST-1.0.0-rc1-v2.md"
+PROJECT_VERSION = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))[
+    "project"
+]["version"]
+VERSION = str(PROJECT_VERSION).replace("rc", "-rc")
+CHECKLIST = ROOT / "docs" / f"QA-CHECKLIST-{VERSION}-v2.md"
 SECTION = re.compile(r"^## ([A-H])[. ]")
 # Any checkbox line is one record item, whatever its mark holds: `[ ]`, `[x]`, `[X]`, `[ x ]`
 # and even a mistyped `[y]` are all list items. Whether an item *passes* is the release gate's
@@ -110,7 +116,7 @@ def _guide_text() -> str:
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return module.GUIDE
+    return module.render_guide()
 
 
 def _split_sections(text: str) -> list:

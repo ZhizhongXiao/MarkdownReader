@@ -101,8 +101,12 @@ def write_theme(root, theme_id, files=None, **metadata):
     return directory
 
 
-def test_the_selectable_builtin_registry_is_exactly_the_three_builtins():
+def test_the_selectable_builtin_registry_is_exactly_the_three_builtins(tmp_path, monkeypatch):
     """Phase 7B：`theme_ids()` 变成「已安装的可选主题」；没装外置主题时等价于 builtin。"""
+    external = tmp_path / "external"
+    external.mkdir()
+    monkeypatch.setattr(viewer_assets, "external_themes_root", lambda: str(external))
+
     assert viewer_assets.builtin_theme_ids() == SELECTABLE
     assert viewer_assets.external_theme_ids() == []
     assert viewer_assets.theme_ids() == SELECTABLE
@@ -224,8 +228,12 @@ def test_the_base_theme_is_hidden_and_never_selectable():
     assert BASE in viewer_assets.theme_ids(include_hidden=True)
 
 
-def test_every_builtin_lives_under_its_own_id():
+def test_every_builtin_lives_under_its_own_id(tmp_path, monkeypatch):
     """Phase 6B：注册表项 == metadata.id == 目录名，三重身份合一。"""
+    external = tmp_path / "external"
+    external.mkdir()
+    monkeypatch.setattr(viewer_assets, "external_themes_root", lambda: str(external))
+
     for theme_id in viewer_assets.theme_ids(include_hidden=True):
         assert viewer_assets.theme_metadata(theme_id)["id"] == theme_id, theme_id
         assert (ROOT / "themes" / "builtin" / theme_id).is_dir(), theme_id

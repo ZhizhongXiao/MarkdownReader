@@ -1,4 +1,4 @@
-"""Prepare the material for the 1.0.0-rc1 acceptance run.
+"""Prepare the material for the current release acceptance run.
 
 Writes a sample document set and an operating guide to a directory **outside** this
 repository, because the release freeze refuses to build from a dirty worktree and
@@ -12,10 +12,17 @@ import argparse
 import shutil
 import struct
 import sys
+import tomllib
 import zlib
 from pathlib import Path
 
-DEFAULT_OUTPUT = Path.home() / "Documents" / "MarkdownReader-QA-1.0.0-rc1"
+ROOT = Path(__file__).resolve().parents[1]
+PROJECT_VERSION = str(
+    tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+)
+DISPLAY_VERSION = PROJECT_VERSION.replace("rc", "-rc")
+CHECKLIST_PATH = Path("docs") / f"QA-CHECKLIST-{DISPLAY_VERSION}-v2.md"
+DEFAULT_OUTPUT = Path.home() / "Documents" / f"MarkdownReader-QA-{DISPLAY_VERSION}"
 
 
 def write(path: Path, text: str) -> None:
@@ -188,14 +195,12 @@ def build_themes(root: Path) -> None:
         shutil.copytree(ROOT / "samples" / "qa-themes" / name, root / "主题标本" / name)
 
 
-ROOT = Path(__file__).resolve().parents[1]
-
-GUIDE = """# MarkdownReader 1.0.0-rc1 实机验收操作指引
+GUIDE = """# MarkdownReader __VERSION__ 实机验收操作指引
 
 被测产物（先确认存在）：
 
-    dist/MarkdownReader-1.0.0-rc1-win-x64.exe
-    dist/MarkdownReader-1.0.0-rc1-portable-win-x64.zip
+    __DIST_DIR__/MarkdownReader-__VERSION__-win-x64.exe
+    __DIST_DIR__/MarkdownReader-__VERSION__-portable-win-x64.zip
 
 两种形态都要跑：onefile 用那个 EXE；onedir 解压 ZIP 后运行其中的 MarkdownReader.exe。
 目标机不应安装 Python 或 Node/npm（否则先换干净机器，或把 Node 临时移出 PATH）。
@@ -205,7 +210,7 @@ GUIDE = """# MarkdownReader 1.0.0-rc1 实机验收操作指引
 内置主题不需要在转换时选择：每份产物固定携带 Modern / Office / VS Code，阅读时在页面上切换。
 观感基线：正文为左对齐；超长链接与裸文件名会在容器内折行，不会被裁掉；
 打印输出为白纸加跟随正文的主题块与左右两条框线。
-下面每一条按同一顺序对应 `docs/QA-CHECKLIST-1.0.0-rc1-v2.md` 中的条目。
+下面每一条按同一顺序对应 `__CHECKLIST_PATH__` 中的条目。
 
 阶段划分：本指引服务的是 **candidate 构建之后的正式 release QA**。GUI closeout 的人工验收是另一次、
 在 **source 模式**下进行的检查（记录见 `docs/REFACTOR_ROADMAP.md` 的 Phase 12 GUI closeout 段）：
@@ -313,17 +318,26 @@ exact artifacts** 负责 —— 旧 `dist/`（缺 `themes/template/decorations.c
   unknown-publisher / reputation 提示按实际情况记录，不要求完全没有提示。
 
 
-全部通过后，把 `docs/QA-CHECKLIST-1.0.0-rc1-v2.md` 里的全部条目勾选，并写下结论行「QA 结论：通过」
+全部通过后，把 `__CHECKLIST_PATH__` 里的全部条目勾选，并写下结论行「QA 结论：通过」
 （`release_freeze.py` 按字面量匹配，这七个字必须完整出现）。该文件的 `QA identity` 块必须与当前
 版本和当前 production renderer 一致 —— gate 就是按它发现记录的，v1 时代的记录因为没有身份块
 而无法被复用。然后：
 
-    git add docs/QA-CHECKLIST-1.0.0-rc1-v2.md
-    git commit -m "docs: record the 1.0.0-rc1 acceptance run"
+    git add __CHECKLIST_PATH__
+    git commit -m "docs: record the __VERSION__ acceptance run"
     git push origin main
     python packaging/release_freeze.py --check-only
     python packaging/release_freeze.py --tag
 """
+
+
+def render_guide(dist_dir: str = "dist") -> str:
+    """Render the operating guide for the version and candidate directory in this checkout."""
+    return (
+        GUIDE.replace("__VERSION__", DISPLAY_VERSION)
+        .replace("__CHECKLIST_PATH__", CHECKLIST_PATH.as_posix())
+        .replace("__DIST_DIR__", dist_dir)
+    )
 
 
 def main() -> int:
@@ -331,6 +345,11 @@ def main() -> int:
         description="Prepare the acceptance material outside the repository."
     )
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT))
+    parser.add_argument(
+        "--dist-dir",
+        default="dist",
+        help="directory containing the exact candidate artifacts",
+    )
     parser.add_argument("--force", action="store_true", help="replace an existing directory")
     args = parser.parse_args()
 
@@ -344,9 +363,12 @@ def main() -> int:
 
     build_documents(target)
     build_themes(target)
-    write(target / "操作指引.md", GUIDE)
+    artifact_dir = Path(args.dist_dir).expanduser()
+    if not artifact_dir.is_absolute():
+        artifact_dir = ROOT / artifact_dir
+    write(target / "操作指引.md", render_guide(str(args.dist_dir)))
 
-    exe = ROOT / "dist" / "MarkdownReader-1.0.0-rc1-win-x64.exe"
+    exe = artifact_dir / f"MarkdownReader-{DISPLAY_VERSION}-win-x64.exe"
     print("素材目录：" + str(target))
     print("主题标本：" + str(target / "主题标本"))
     print("操作指引：" + str(target / "操作指引.md"))

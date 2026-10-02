@@ -8,4 +8,4 @@ answer either. The About panel therefore reads this constant, and
 without that bond the two drift and About starts misreporting which build is running.
 """
 
-__version__ = "1.0.0rc1"
+__version__ = "1.0.1"

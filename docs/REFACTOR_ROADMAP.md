@@ -1227,7 +1227,7 @@ onefile
 两批 `batch_ok: true` 且 `scope_complete: true`。重基线 8 组 12 处断言，全部在文件内写明
 「旧断言 → 新断言 → 理由」。
 
-**两个验收阶段（不可合并）**：
+**三个验收阶段（不可合并）**：
 
 ```text
 ① GUI closeout acceptance（source 模式，人工）：主界面结构 / 预览与携带正交 / 两个标本 /
@@ -1236,7 +1236,7 @@ onefile
 ② 从该 commit 完整重建 candidate（npm ci / npm run build / onefile + onedir / validate_release /
    artifact smoke）→ candidate manifest + SHA-256 + tool/build identity
 ③ clean Win11 上对这份 exact candidate 做正式 35 项 QA → **此时才**填
-   `docs/QA-CHECKLIST-1.0.0-rc1-v2.md` 与「QA 结论：通过」→ evidence commit → 冻结 / 打 tag
+   `docs/QA-CHECKLIST-1.0.1-v2.md` 与「QA 结论：通过」→ evidence commit → 冻结 / 打 tag
 ```
 
 - 正式 checklist 绑定的对象只能是 ② 重新构建出来的 exact artifacts：旧 `dist/` 缺
@@ -1249,7 +1249,7 @@ onefile
 
 **GUI closeout acceptance（source 模式，人工；9 项）**：先生成素材
 `python packaging/qa_prepare.py --output "<素材目录>" --force`（例如 `D:/QA`；本机没有 D: 盘时用默认的
-`~/Documents/MarkdownReader-QA-1.0.0-rc1`），再用源码启动（`python main.py`），逐项确认：
+`~/Documents/MarkdownReader-QA-1.0.1`），再用源码启动（`python main.py`），逐项确认：
 
 1. 主界面结构：左栏为「文件与输出 → 外置主题 → 选项」，右侧第二个页签是「主题预览」，**没有** builtin template selector。
 2. 预览栏显示当前主题；点左右三角按钮按 Modern → Office → VS Code → 可用外置主题的安装列表顺序逐项前进或后退，并在两端循环；每次切换都更新右侧舞台，外置主题行仍可直接预览。
