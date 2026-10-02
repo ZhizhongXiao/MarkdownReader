@@ -79,9 +79,9 @@ packaging/assets/MarkdownReader.ico
 ## 校验与发布
 
 ```powershell
-python packaging/validate_release.py --mode both --wait 20   # 存在性、体积、资源与启动存活
-python packaging/release_freeze.py --check-only              # 版本一致性与实机验收证据
-python packaging/release_freeze.py --tag                     # 重建产物、写校验和与记录、打并推送 tag
+python packaging/validate_release.py --mode both --wait 20 --dist-dir "output/candidate/dist"
+python packaging/release_freeze.py --check-only
+python packaging/release_freeze.py --tag --artifact-dir "output/candidate/dist"
 ```
 
 `release_freeze.py` 要求工作区干净、HEAD 与 `origin/main` 一致，并读取**当前发布对应的**验收记录：
@@ -94,7 +94,12 @@ python packaging/release_freeze.py --tag                     # 重建产物、�
 但同样必须通过身份校验 —— 显式指定是选择文件，不是豁免检查。`docs/QA-CHECKLIST.md` 是 v1 时代的历史记录，
 没有身份块，因此永远不会被当成当前 release 的证据。
 
+`--tag` 必须指向验收清单绑定的候选 `dist/`。门禁会核对清单、候选 manifest 与 EXE / ZIP 的 SHA-256，
+重新运行两种形态的隔离启动校验，并在确认校验前后哈希不变后复用原文件打 tag；不会在验收后重新构建或重压 ZIP。
+候选构建之后只允许更新验收记录和发布门禁/说明文件；任何应用源码变化都会使候选失效，必须重新构建并重新验收。
+无 `--tag` 的构建仍可用于本机打包检查，但不能代替被验收的候选产物。
+
 校验过程本身也是隔离的：`validate_release.py` 在沙箱副本上运行 onedir 候选，并给 onefile 运行注入临时的
 `LOCALAPPDATA` / `APPDATA`，所以候选树与开发机的真实 profile 都不会被校验改动。如果
-`dist/MarkdownReader/` 里已经出现 `data/`（说明有人就地运行过候选），`package_artifacts()` 会拒绝打包，
+候选 `MarkdownReader/` 里已经出现 `data/`（说明有人就地运行过候选），候选绑定门禁会拒绝发布，
 而不是把用户数据从压缩包里过滤掉。

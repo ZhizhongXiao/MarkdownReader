@@ -1236,7 +1236,8 @@ onefile
 ② 从该 commit 完整重建 candidate（npm ci / npm run build / onefile + onedir / validate_release /
    artifact smoke）→ candidate manifest + SHA-256 + tool/build identity
 ③ clean Win11 上对这份 exact candidate 做正式 35 项 QA → **此时才**填
-   `docs/QA-CHECKLIST-1.0.1-v2.md` 与「QA 结论：通过」→ evidence commit → 冻结 / 打 tag
+   `docs/QA-CHECKLIST-1.0.1-v2.md` 与「QA 结论：通过」→ evidence commit →
+   `release_freeze.py --tag --artifact-dir <exact candidate dist>` 校验 SHA-256 后复用该候选 / 打 tag
 ```
 
 - 正式 checklist 绑定的对象只能是 ② 重新构建出来的 exact artifacts：旧 `dist/` 缺

@@ -160,10 +160,15 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Validate a built MarkdownReader release.")
     parser.add_argument("--mode", choices=("onefile", "onedir", "both"), default="both")
     parser.add_argument("--wait", type=int, default=25, help="seconds the app must survive")
+    parser.add_argument("--dist-dir", default="dist", help="directory containing build artifacts")
     args = parser.parse_args()
 
+    global DIST
+    dist_dir = Path(args.dist_dir)
+    DIST = (ROOT / dist_dir).resolve() if not dist_dir.is_absolute() else dist_dir.resolve()
+
     if not DIST.is_dir():
-        print("dist/ is missing: build a release first.")
+        print(str(DIST) + " is missing: build a release first.")
         return 1
 
     results = []

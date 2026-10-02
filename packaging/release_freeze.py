@@ -9,18 +9,18 @@ when the evidence is missing:
      declares a canonical QA identity (version / production_renderer / shapes / platform) and
      is discovered by that identity, so a finished record from an earlier renderer cannot be
      reused as current evidence;
-  3. dist/ is rebuilt from scratch, onefile and onedir;
-  4. packaging/validate_release.py passes for both shapes, on a sandbox copy of the onedir
-     candidate, so the tree that gets packaged is never executed in place;
-  5. the artefacts are renamed to their release names, SHA256SUMS.txt and a build
-     record are written next to them; a candidate that already carries user data is
-     refused here instead of being filtered;
-  6. only with --tag: an annotated tag is created and pushed.
+  3. non-tag builds rebuild dist/ from scratch, onefile and onedir;
+  4. --tag validates the exact candidate named in the QA record and reuses those files
+     without rebuilding them;
+  5. packaging/validate_release.py passes for both shapes, on a sandbox copy of the onedir
+     candidate, and the release hashes still match the accepted record;
+  6. SHA256SUMS.txt and the build record are written next to the artifacts;
+  7. only with --tag: an annotated tag is created and pushed.
 
 Usage:
     python packaging/release_freeze.py --check-only
     python packaging/release_freeze.py
-    python packaging/release_freeze.py --tag
+    python packaging/release_freeze.py --tag --artifact-dir output/candidate/dist
     python packaging/release_freeze.py --qa-record path/to/record.md
 """
 
@@ -56,6 +56,22 @@ RELEASE_SHAPES = ("onefile", "onedir")
 RELEASE_PLATFORM = "Windows x64"
 IDENTITY_MARKER = "QA identity"
 IDENTITY_KEYS = ("version", "production_renderer", "shapes", "platform")
+POST_CANDIDATE_METADATA_PATHS = frozenset(
+    {
+        "docs/AI_Rules.md",
+        "docs/ARCHITECTURE.md",
+        "docs/candidate-manifest-1.0.1.md",
+        "docs/DEVELOPMENT.md",
+        "docs/QA-CHECKLIST-1.0.1-v2.md",
+        "docs/REFACTOR_ROADMAP.md",
+        "packaging/README.md",
+        "packaging/qa_prepare.py",
+        "packaging/release_freeze.py",
+        "packaging/validate_release.py",
+        "tests/test_release_freeze.py",
+        "tests/test_release_isolation_contract.py",
+    }
+)
 
 
 class QaRecordError(Exception):
@@ -76,6 +92,10 @@ class PackagingError(Exception):
     def __init__(self, reason: str, message: str) -> None:
         super().__init__(message)
         self.reason = reason
+
+
+class CandidateBindingError(Exception):
+    """The candidate artifacts do not match the checked acceptance record."""
 
 
 def production_renderer_version() -> str:
@@ -291,6 +311,102 @@ def qa_gate(record_path: Path) -> bool:
     )
 
 
+def verify_candidate_binding(
+    record_path: Path, artifact_dir: Path, display: str
+) -> tuple[str, list[Path]]:
+    """Return the exact packaged files only when QA binds their hashes and source commit."""
+    text = read(record_path)
+
+    def unique(pattern: str, label: str) -> tuple[str, ...]:
+        matches = re.findall(pattern, text, re.MULTILINE)
+        if len(matches) != 1:
+            raise CandidateBindingError("QA record must contain exactly one " + label)
+        result = matches[0]
+        return (result,) if isinstance(result, str) else tuple(result)
+
+    source_match = unique(r"^- Source commit：`([0-9a-f]{40})`$", "source commit")
+    exe_match = unique(
+        r"^- Onefile：`([^`]+)`，SHA-256：`([0-9a-f]{64})`$",
+        "onefile artifact binding",
+    )
+    zip_match = unique(
+        r"^- Portable ZIP：`([^`]+)`，SHA-256：`([0-9a-f]{64})`$",
+        "portable ZIP artifact binding",
+    )
+    expected_exe = "MarkdownReader-" + display + "-win-x64.exe"
+    expected_zip = "MarkdownReader-" + display + "-portable-win-x64.zip"
+    if exe_match[0] != expected_exe or zip_match[0] != expected_zip:
+        raise CandidateBindingError("QA artifact names do not match the current release version")
+    manifest_match = unique(r"^- 候选构建记录：`([^`]+)`$", "candidate manifest path")
+    source_commit = source_match[0]
+    manifest_reference = Path(manifest_match[0])
+    if manifest_reference.is_absolute():
+        raise CandidateBindingError("candidate manifest path must be repository-relative")
+    manifest_path = (
+        artifact_dir.parent / manifest_reference
+        if len(manifest_reference.parts) == 1
+        else ROOT / manifest_reference
+    )
+    try:
+        manifest_path.resolve().relative_to(ROOT.resolve())
+    except ValueError as error:
+        raise CandidateBindingError("candidate manifest must be inside the repository") from error
+    if not manifest_path.is_file():
+        raise CandidateBindingError("candidate manifest is missing: " + str(manifest_path))
+    manifest = read(manifest_path)
+    if "- Source commit: `" + source_commit + "`" not in manifest:
+        raise CandidateBindingError("candidate manifest source commit does not match QA record")
+
+    artifacts = [
+        (artifact_dir / exe_match[0], exe_match[1]),
+        (artifact_dir / zip_match[0], zip_match[1]),
+    ]
+    for artifact, expected_hash in artifacts:
+        manifest_row = "| `" + artifact.name + "` | `" + expected_hash + "` |"
+        if manifest_row not in manifest:
+            raise CandidateBindingError(
+                "candidate manifest hash does not match QA record for " + artifact.name
+            )
+        if not artifact.is_file():
+            raise CandidateBindingError("candidate artifact is missing: " + str(artifact))
+        actual_hash = sha256(artifact)
+        if actual_hash != expected_hash:
+            raise CandidateBindingError(
+                "candidate hash mismatch for "
+                + artifact.name
+                + ": expected "
+                + expected_hash
+                + ", found "
+                + actual_hash
+            )
+
+    if not (artifact_dir / "MarkdownReader.exe").is_file():
+        raise CandidateBindingError("raw onefile build is missing from artifact directory")
+    if not (artifact_dir / "MarkdownReader" / "MarkdownReader.exe").is_file():
+        raise CandidateBindingError("raw onedir build is missing from artifact directory")
+    if (artifact_dir / "MarkdownReader" / "data").exists():
+        raise CandidateBindingError("onedir candidate contains user data")
+
+    if run(["git", "cat-file", "-e", source_commit + "^{commit}"]).returncode != 0:
+        raise CandidateBindingError("candidate source commit is not present in this repository")
+    if run(["git", "merge-base", "--is-ancestor", source_commit, "HEAD"]).returncode != 0:
+        raise CandidateBindingError(
+            "candidate source commit is not an ancestor of the release commit"
+        )
+    changed = run(["git", "diff", "--name-only", source_commit + "..HEAD"])
+    if changed.returncode != 0:
+        raise CandidateBindingError("could not compare candidate source with the release commit")
+    unexpected = sorted(set(changed.stdout.splitlines()) - POST_CANDIDATE_METADATA_PATHS)
+    if unexpected:
+        raise CandidateBindingError(
+            "application source changed after candidate build: " + ", ".join(unexpected)
+        )
+
+    print("candidate: exact onefile and portable ZIP hashes match the accepted QA record")
+    print("candidate: source commit " + source_commit)
+    return source_commit, [artifact for artifact, _ in artifacts]
+
+
 def run(command, **kwargs):
     return subprocess.run(
         command,
@@ -366,7 +482,16 @@ def build() -> bool:
 def validate() -> bool:
     print("validate:")
     result = run(
-        [sys.executable, "packaging/validate_release.py", "--mode", "both", "--wait", "20"]
+        [
+            sys.executable,
+            "packaging/validate_release.py",
+            "--mode",
+            "both",
+            "--wait",
+            "20",
+            "--dist-dir",
+            str(DIST),
+        ]
     )
     ok = report(result.returncode == 0, "packaging/validate_release.py")
     print(result.stdout)
@@ -432,7 +557,12 @@ def release_inputs() -> list:
     ]
 
 
-def write_record(display: str, artifacts: list, with_tag: bool) -> None:
+def write_record(
+    display: str,
+    artifacts: list,
+    with_tag: bool,
+    candidate_source_commit: str | None = None,
+) -> None:
     runtime = json.loads(read(ROOT / "packaging" / "node-runtime.json"))
     commit = run(["git", "rev-parse", "HEAD"]).stdout.strip()
     lines = [
@@ -450,6 +580,8 @@ def write_record(display: str, artifacts: list, with_tag: bool) -> None:
         "## 校验和",
         "",
     ]
+    if candidate_source_commit is not None:
+        lines[4:4] = ["- Candidate source commit：" + candidate_source_commit]
     lines += ["- " + a.name + "  " + sha256(a) for a in artifacts]
     lines += ["- " + label + "  " + value for label, value in release_inputs()]
     lines += [""]
@@ -506,8 +638,35 @@ def main() -> int:
         default=None,
         help="explicit acceptance record; without it the record is discovered by its identity",
     )
-    parser.add_argument("--tag", action="store_true", help="create and push the release tag")
+    parser.add_argument(
+        "--artifact-dir",
+        default=None,
+        help=(
+            "dist directory containing the exact candidate named in the QA record "
+            "(required with --tag)"
+        ),
+    )
+    parser.add_argument(
+        "--tag",
+        action="store_true",
+        help="validate and tag the already accepted candidate artifacts",
+    )
     args = parser.parse_args()
+
+    global DIST
+    if args.tag and not args.artifact_dir:
+        print("[FAIL] --tag requires --artifact-dir for the exact QA-accepted candidate")
+        return 1
+    if args.artifact_dir and not args.tag:
+        print("[FAIL] --artifact-dir is only used with --tag")
+        return 1
+    if args.tag:
+        artifact_dir = Path(args.artifact_dir)
+        DIST = (
+            (ROOT / artifact_dir).resolve()
+            if not artifact_dir.is_absolute()
+            else artifact_dir.resolve()
+        )
 
     if not repository_gate():
         print("release freeze: FAIL (repository state)")
@@ -524,6 +683,32 @@ def main() -> int:
         return 1
     if args.check_only:
         print("release freeze: evidence OK")
+        return 0
+    if args.tag:
+        try:
+            candidate_source_commit, artifacts = verify_candidate_binding(
+                record, DIST, facts["display"]
+            )
+        except CandidateBindingError as error:
+            print("[FAIL] " + str(error))
+            print("release freeze: FAIL (candidate binding)")
+            return 1
+        if not validate():
+            print("release freeze: FAIL (candidate validation)")
+            return 1
+        try:
+            candidate_source_commit, artifacts = verify_candidate_binding(
+                record, DIST, facts["display"]
+            )
+        except CandidateBindingError as error:
+            print("[FAIL] candidate changed during validation: " + str(error))
+            print("release freeze: FAIL (candidate binding)")
+            return 1
+        write_record(facts["display"], artifacts, True, candidate_source_commit)
+        if not create_tag(facts["display"]):
+            print("release freeze: FAIL (tag)")
+            return 1
+        print("release freeze: PASS")
         return 0
     if not build() or not validate():
         print("release freeze: FAIL (build or validation)")

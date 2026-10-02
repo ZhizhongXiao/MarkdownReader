@@ -28,4 +28,5 @@
 
 - 模板或渲染有改动：Demo 重新生成并一起提交。
 - 行为契约有改动：同步契约与实现，不要只改一侧让测试变绿。
-- 版本与发布：先 `python packaging/release_freeze.py --check-only`，通过后再 `--tag`。
+- 版本与发布：先 `python packaging/release_freeze.py --check-only`；打 tag 必须用
+  `--tag --artifact-dir <验收通过的候选 dist>`，门禁会核对验收哈希并复用原产物。

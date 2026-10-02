@@ -14,10 +14,10 @@ platform: Windows x64
 
 ## 精确候选绑定
 
-- Source commit：`待填写`
-- Onefile：`MarkdownReader-1.0.1-win-x64.exe`，SHA-256：`待填写`
-- Portable ZIP：`MarkdownReader-1.0.1-portable-win-x64.zip`，SHA-256：`待填写`
-- 候选构建记录：`candidate-manifest-1.0.1.md`
+- Source commit：`e084c57d9f026545cab91e8588d15cab59091046`
+- Onefile：`MarkdownReader-1.0.1-win-x64.exe`，SHA-256：`f2bbc8930898b73067151bbf67e118c83f55f514fda9a1c5c5529fb0a1999dd0`
+- Portable ZIP：`MarkdownReader-1.0.1-portable-win-x64.zip`，SHA-256：`3b042e2175d78ab3d04a025c23c8d2a3e90d4d7601c75c42d603850de4a8ce4a`
+- 候选构建记录：`docs/candidate-manifest-1.0.1.md`
 
 不要把其他版本或其他哈希产物的验收结果复制到本记录。
 

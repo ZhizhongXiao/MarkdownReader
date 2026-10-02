@@ -191,3 +191,14 @@ def test_a_pristine_candidate_keeps_its_runtime_payload(tmp_path, monkeypatch) -
         names = bundle.namelist()
     assert any(name.endswith("_internal/node/node.exe") for name in names), names
     assert not [name for name in names if name.startswith("MarkdownReader/data/")], names
+
+
+def test_validator_accepts_an_explicit_candidate_directory(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        ["validate_release.py", "--mode", "onefile", "--wait", "0", "--dist-dir", str(tmp_path)],
+    )
+    monkeypatch.setattr(validate_release, "check_onefile", lambda wait: True)
+
+    assert validate_release.main() == 0
+    assert tmp_path.resolve() == validate_release.DIST

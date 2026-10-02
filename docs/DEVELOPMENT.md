@@ -170,7 +170,8 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
   「包内缺 `renderer/dist`」或「Node < 18」会在**启动时**失败，而不是转换到一半。
 - 发布包与验收（Cutover C4）：`renderer/dist/`（`renderer.cjs` + `katex/` + `mermaid/`）是新的必需载荷，
   spec 的 `REQUIRED_FILES` 与 `packaging/validate_release.py::RUNTIME_FILES` 两处断言；`release_freeze.py`
-  在 PyInstaller 之前自动 `npm ci` + `npm run build`（只构建一次，两种形态共用）。构建期用**将被打包的**
+  普通构建模式在 PyInstaller 之前自动 `npm ci` + `npm run build`（只构建一次，两种形态共用）。
+  `--tag --artifact-dir` 会复用验收候选，不会在人工验收后重建产物。构建期用**将被打包的**
   `node.exe` 对 v1 与 v2 各冒烟一次。实机验收记录必须与当前 production renderer 对应
   （当前记录为 `docs/QA-CHECKLIST-1.0.1-v2.md`；v1 时代记录只作历史。`release_freeze` 默认按 QA identity 发现唯一匹配项，也支持 `--qa-record` 显式指定）。
 
@@ -316,6 +317,6 @@ python -m PyInstaller --clean --noconfirm --workpath "packaging\.pyinstaller-bui
 
 - 内置 Node 运行时放在 `packaging/node/node.exe`（不进版本库；缺失时构建直接失败）。
 - 校验产物：`python packaging/validate_release.py --mode both --wait 20`。
-- 发布冻结：`python packaging/release_freeze.py --check-only` 校验版本与验收证据，`--tag` 在证据齐全后重建产物并打 tag。
+- 发布冻结：`python packaging/release_freeze.py --check-only` 校验版本与验收证据；`--tag --artifact-dir <候选 dist>` 会核对已验收 EXE / ZIP 哈希并复用它们打 tag，不会重建产物。
 
 细节见 [打包说明](../packaging/README.md)。

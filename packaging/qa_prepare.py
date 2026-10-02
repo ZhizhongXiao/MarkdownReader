@@ -327,7 +327,7 @@ exact artifacts** 负责 —— 旧 `dist/`（缺 `themes/template/decorations.c
     git commit -m "docs: record the __VERSION__ acceptance run"
     git push origin main
     python packaging/release_freeze.py --check-only
-    python packaging/release_freeze.py --tag
+    python packaging/release_freeze.py --tag --artifact-dir "<exact candidate dist directory>"
 """
 
 
@@ -376,7 +376,10 @@ def main() -> int:
         "被测 EXE："
         + (str(exe) + "（存在）" if exe.is_file() else "dist 下尚未找到，请先构建或以源码运行")
     )
-    print("提示：验收记录提交到仓库后再运行 packaging/release_freeze.py --tag。")
+    print(
+        "提示：验收记录提交到仓库后，用 --tag --artifact-dir 指向已验收候选包目录；"
+        "该步骤会复核哈希并复用原产物。"
+    )
     return 0
 
 

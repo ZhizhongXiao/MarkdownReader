@@ -64,7 +64,7 @@ Markdown 文件
 ### 打包（packaging）
 
 - 同一 spec 支持 onefile 与 onedir；构建前做真实渲染器自检，产物由 `validate_release.py` 校验。
-- `release_freeze.py` 是发布门禁：先核对版本与验收证据，再重建产物、写校验和与构建记录、打并推送 tag。
+- `release_freeze.py` 是发布门禁：tag 发布前核对版本、验收身份与精确产物哈希，复用实机验收过的候选文件，写校验和与构建记录并推送 tag。
 
 ## 测试分层
 

@@ -6,8 +6,10 @@ the box means, so none of it may block a release. What the gate must still refus
 is a record that is unfinished, and one that only claims to be finished.
 """
 
+import hashlib
 import importlib.util
 import pathlib
+import sys
 
 import pytest
 
@@ -149,3 +151,153 @@ def test_a_failed_renderer_build_stops_the_release(tmp_path, monkeypatch):
 
     assert release_freeze.build() is False
     assert order == ["renderer"], "renderer 步骤失败后不得继续 PyInstaller"
+
+
+def _bound_candidate(tmp_path: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path, str]:
+    """Build small exact-hash fixtures for the tag path without invoking a packager."""
+    source = "a" * 40
+    display = "1.0.1"
+    artifact_dir = tmp_path / "candidate" / "dist"
+    artifact_dir.mkdir(parents=True)
+    exe_name = f"MarkdownReader-{display}-win-x64.exe"
+    zip_name = f"MarkdownReader-{display}-portable-win-x64.zip"
+    exe = artifact_dir / exe_name
+    bundle = artifact_dir / zip_name
+    exe.write_bytes(b"onefile artifact")
+    bundle.write_bytes(b"portable zip artifact")
+    (artifact_dir / "MarkdownReader.exe").write_bytes(b"raw onefile")
+    onedir = artifact_dir / "MarkdownReader"
+    onedir.mkdir()
+    (onedir / "MarkdownReader.exe").write_bytes(b"raw onedir")
+    exe_hash = hashlib.sha256(exe.read_bytes()).hexdigest()
+    zip_hash = hashlib.sha256(bundle.read_bytes()).hexdigest()
+    manifest = artifact_dir.parent / "candidate-manifest-1.0.1.md"
+    manifest.write_text(
+        "- Source commit: `" + source + "`\n\n"
+        "| File | SHA-256 |\n|---|---|\n"
+        f"| `{exe_name}` | `{exe_hash}` |\n"
+        f"| `{zip_name}` | `{zip_hash}` |\n",
+        encoding="utf-8",
+    )
+    record = tmp_path / "QA-CHECKLIST-1.0.1-v2.md"
+    record.write_text(
+        f"- Source commit：`{source}`\n"
+        f"- Onefile：`{exe_name}`，SHA-256：`{exe_hash}`\n"
+        f"- Portable ZIP：`{zip_name}`，SHA-256：`{zip_hash}`\n"
+        "- 候选构建记录：`candidate-manifest-1.0.1.md`\n",
+        encoding="utf-8",
+    )
+    return record, artifact_dir, source
+
+
+def test_candidate_binding_checks_manifest_source_and_both_artifact_hashes(tmp_path, monkeypatch):
+    record, artifact_dir, source = _bound_candidate(tmp_path)
+    monkeypatch.setattr(release_freeze, "ROOT", tmp_path)
+
+    class GitResult:
+        returncode = 0
+        stdout = ""
+
+    monkeypatch.setattr(release_freeze, "run", lambda command, **kwargs: GitResult())
+
+    found_source, artifacts = release_freeze.verify_candidate_binding(
+        record, artifact_dir, "1.0.1"
+    )
+
+    assert found_source == source
+    assert [path.name for path in artifacts] == [
+        "MarkdownReader-1.0.1-win-x64.exe",
+        "MarkdownReader-1.0.1-portable-win-x64.zip",
+    ]
+
+
+def test_candidate_binding_accepts_a_committed_manifest_path(tmp_path, monkeypatch):
+    record, artifact_dir, source = _bound_candidate(tmp_path)
+    monkeypatch.setattr(release_freeze, "ROOT", tmp_path)
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "candidate-manifest-1.0.1.md").write_bytes(
+        (artifact_dir.parent / "candidate-manifest-1.0.1.md").read_bytes()
+    )
+    record.write_text(
+        record.read_text(encoding="utf-8").replace(
+            "`candidate-manifest-1.0.1.md`", "`docs/candidate-manifest-1.0.1.md`"
+        ),
+        encoding="utf-8",
+    )
+
+    class GitResult:
+        returncode = 0
+        stdout = ""
+
+    monkeypatch.setattr(release_freeze, "run", lambda command, **kwargs: GitResult())
+
+    found_source, _ = release_freeze.verify_candidate_binding(record, artifact_dir, "1.0.1")
+
+    assert found_source == source
+
+
+def test_candidate_binding_rejects_a_modified_release_artifact(tmp_path, monkeypatch):
+    record, artifact_dir, _ = _bound_candidate(tmp_path)
+    monkeypatch.setattr(release_freeze, "ROOT", tmp_path)
+
+    class GitResult:
+        returncode = 0
+        stdout = ""
+
+    monkeypatch.setattr(release_freeze, "run", lambda command, **kwargs: GitResult())
+    (artifact_dir / "MarkdownReader-1.0.1-win-x64.exe").write_bytes(b"changed")
+
+    with pytest.raises(release_freeze.CandidateBindingError, match="hash mismatch"):
+        release_freeze.verify_candidate_binding(record, artifact_dir, "1.0.1")
+
+
+def test_candidate_binding_rejects_application_changes_after_build(tmp_path, monkeypatch):
+    record, artifact_dir, _ = _bound_candidate(tmp_path)
+    monkeypatch.setattr(release_freeze, "ROOT", tmp_path)
+
+    class GitResult:
+        returncode = 0
+        stdout = ""
+
+    def changed_runtime(command, **kwargs):
+        result = GitResult()
+        if command[1:3] == ["diff", "--name-only"]:
+            result.stdout = "main.py\n"
+        return result
+
+    monkeypatch.setattr(release_freeze, "run", changed_runtime)
+
+    with pytest.raises(release_freeze.CandidateBindingError, match="application source changed"):
+        release_freeze.verify_candidate_binding(record, artifact_dir, "1.0.1")
+
+
+def test_tag_path_reuses_bound_candidate_without_rebuilding(tmp_path, monkeypatch):
+    record, artifact_dir, source = _bound_candidate(tmp_path)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["release_freeze.py", "--tag", "--artifact-dir", str(artifact_dir)],
+    )
+    monkeypatch.setattr(release_freeze, "repository_gate", lambda: True)
+    monkeypatch.setattr(release_freeze, "resolve_qa_record", lambda explicit=None: record)
+    monkeypatch.setattr(release_freeze, "version_agreement", lambda facts: True)
+    monkeypatch.setattr(release_freeze, "qa_gate", lambda path: True)
+    monkeypatch.setattr(
+        release_freeze,
+        "verify_candidate_binding",
+        lambda path, directory, display: (
+            source,
+            [directory / "one.exe", directory / "portable.zip"],
+        ),
+    )
+    monkeypatch.setattr(release_freeze, "validate", lambda: True)
+    monkeypatch.setattr(release_freeze, "write_record", lambda *args: None)
+    monkeypatch.setattr(release_freeze, "create_tag", lambda display: True)
+    monkeypatch.setattr(
+        release_freeze,
+        "build",
+        lambda: pytest.fail("tagging must not rebuild the accepted candidate"),
+    )
+
+    assert release_freeze.main() == 0
