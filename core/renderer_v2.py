@@ -21,6 +21,8 @@ import json
 import logging
 import os
 import subprocess
+from collections.abc import Mapping
+from typing import Literal, NotRequired, TypedDict, cast
 
 from core.config import BUNDLE_ROOT
 
@@ -44,6 +46,62 @@ TIMEOUT_SECONDS = 120
 
 REQUIRED_ENVELOPE_KEYS = ("html", "headings", "features", "warnings", "resources")
 REQUIRED_RESOURCE_KEYS = ("items", "styles", "scripts", "author_references")
+
+
+class RendererFeatures(TypedDict):
+    katex: bool
+    mermaid: bool
+    plantuml: bool
+    checkbox: bool
+    callout: bool
+    wikilink: bool
+    mark: bool
+    obsidian_tag: bool
+
+
+class RendererResourceItem(TypedDict):
+    kind: str
+    source: str
+    ref: str
+    status: Literal["inlined", "kept", "failed"]
+    mime: NotRequired[str]
+    resolved: NotRequired[str]
+
+
+class RendererStyle(TypedDict):
+    id: str
+    css: str
+
+
+class RendererScript(TypedDict):
+    id: str
+    version: str
+    script: str
+    boot: str
+
+
+class AuthorReference(TypedDict):
+    ref: str
+    count: int
+
+
+class RendererResources(TypedDict):
+    items: list[RendererResourceItem]
+    styles: list[RendererStyle]
+    scripts: list[RendererScript]
+    author_references: list[AuthorReference]
+
+
+class RendererEnvelope(TypedDict):
+    """Successful v2 renderer response after the protocol gate."""
+
+    protocol_version: Literal[2]
+    ok: Literal[True]
+    html: str
+    headings: list[dict]
+    features: RendererFeatures
+    warnings: list[str]
+    resources: RendererResources
 
 # 冒烟输入是**显式**写的，不依赖 adapter 当前的默认值：`fetch_remote_resources=False` 让
 # 「绝不联网」成为输入保证；`math=True` 与公式样本一起证明 `dist/katex` 真的被加载
@@ -118,7 +176,7 @@ def _invoke_artifact(node_command: str, markdown: str, options, context) -> str:
     return result.stdout or ""
 
 
-def parse_envelope(stdout: str) -> dict:
+def parse_envelope(stdout: str) -> RendererEnvelope:
     """Validate one v2 envelope and return it unchanged.
 
     严格按 K26：选了 v2 就必须拿到 v2 —— 不探测协议、不把别的形状猜成成功、不压缩字段。
@@ -162,16 +220,25 @@ def parse_envelope(stdout: str) -> dict:
     invalid = [key for key in REQUIRED_RESOURCE_KEYS if not isinstance(resources.get(key), list)]
     if invalid:
         raise RuntimeError(f"v2 renderer 的 resources 缺少列表字段：{', '.join(invalid)}")
-    return output
+    # json.loads() has no schema-aware return type. The protocol gate above validates the
+    # success discriminant, required channels, HTML text, and resource channel containers;
+    # keep the original object (including additive fields) while assigning the pinned renderer
+    # contract to this JSON boundary.
+    return cast(RendererEnvelope, output)
 
 
-def render_markdown_v2(node_command, markdown, context=None, options=None) -> dict:
+def render_markdown_v2(
+    node_command: str,
+    markdown: str,
+    context: Mapping[str, object] | None = None,
+    options: Mapping[str, object] | None = None,
+) -> RendererEnvelope:
     """Call the v2 artifact once and return the complete validated envelope."""
     stdout = _invoke_artifact(node_command, markdown, options, context)
     return parse_envelope(stdout)
 
 
-def _require_smoke_evidence(envelope: dict) -> None:
+def _require_smoke_evidence(envelope: RendererEnvelope) -> None:
     """The smoke must prove more than "it returned JSON"."""
     if 'class="katex"' not in envelope["html"]:
         raise RuntimeError("v2 renderer 冒烟未产出公式：dist/katex 或 KaTeX 注册有问题。")

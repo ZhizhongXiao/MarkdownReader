@@ -18,6 +18,7 @@ import os
 import shutil
 import time
 from collections.abc import Callable
+from typing import NotRequired, TypedDict
 
 from core import config, paths
 
@@ -27,6 +28,19 @@ _logger = logging.getLogger(__name__)
 # bound is what turns a permanent failure into a reported one instead of a hang.
 RETRY_DEADLINE_SECONDS = 2.0
 RETRY_INTERVAL_SECONDS = 0.2
+
+
+class RemovalFailure(TypedDict):
+    path: str
+    error: str
+
+
+class RemovalReport(TypedDict):
+    ok: bool
+    removed: list[str]
+    failed: list[RemovalFailure]
+    user_data_root_removed: bool
+    error: NotRequired[str]
 
 # The three facts the confirmation shows. Every path comes from `core.paths`, so the promise the
 # page makes and the deletion the application performs cannot drift apart.
@@ -69,7 +83,7 @@ def removal_targets() -> list[str]:
     ]
 
 
-def remove_user_data() -> dict:
+def remove_user_data() -> RemovalReport:
     """Delete the user data and report what actually happened.
 
     Missing targets are no-ops. A path that cannot be removed is named in `failed` and makes
@@ -90,7 +104,7 @@ def remove_user_data() -> dict:
         }
 
     removed: list[str] = []
-    failed: list[dict] = []
+    failed: list[RemovalFailure] = []
 
     for target in removal_targets():
         if not os.path.exists(target):
@@ -112,7 +126,7 @@ def remove_user_data() -> dict:
         else:
             root_removed = True
 
-    report = {
+    report: RemovalReport = {
         "ok": not failed,
         "removed": removed,
         "failed": failed,

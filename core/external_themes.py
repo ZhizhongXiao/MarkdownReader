@@ -24,10 +24,45 @@ import logging
 import os
 import re
 import shutil
+from collections.abc import Mapping
+from typing import Final, Literal, TypedDict
 
 from core import css_audit, viewer_assets
 
 _logger = logging.getLogger(__name__)
+
+
+PreviewStatus = Literal["available", "missing", "invalid"]
+
+
+class PreviewPalette(TypedDict):
+    background: str
+    surface: str
+    text: str
+    muted: str
+    accent: str
+    border: str
+
+
+class PreviewStateFacts(TypedDict):
+    preview: PreviewPalette | None
+    preview_status: PreviewStatus
+    preview_reason: str
+
+
+class ThemePreviewFacts(PreviewStateFacts):
+    name: str
+    description: str
+
+
+class ThemeState(TypedDict):
+    installed: list[str]
+    selected: list[str]
+    missing: list[str]
+    invalid: list[str]
+    installed_invalid: list[str]
+    previews: dict[str, ThemePreviewFacts]
+    warnings: list[str]
 
 
 class ExternalThemeError(ValueError):
@@ -251,9 +286,9 @@ def validate_installed_theme(theme_id: str) -> str:
 # Phase 12 GUI closeout: the optional palette a theme may declare for the GUI's static preview.
 # Six tokens, nothing more -- this is a convenience for the GUI, not a theme language.
 PREVIEW_KEYS = ("background", "surface", "text", "muted", "accent", "border")
-PREVIEW_STATUS_AVAILABLE = "available"
-PREVIEW_STATUS_MISSING = "missing"
-PREVIEW_STATUS_INVALID = "invalid"
+PREVIEW_STATUS_AVAILABLE: Final[PreviewStatus] = "available"
+PREVIEW_STATUS_MISSING: Final[PreviewStatus] = "missing"
+PREVIEW_STATUS_INVALID: Final[PreviewStatus] = "invalid"
 
 
 def _is_preview_colour(value: object) -> bool:
@@ -266,7 +301,7 @@ def _is_preview_colour(value: object) -> bool:
     return all(character in "0123456789abcdefABCDEF" for character in digits)
 
 
-def _preview_facts(metadata: dict) -> dict:
+def _preview_facts(metadata: Mapping[str, object]) -> PreviewStateFacts:
     """Return the preview facts of one validated metadata document (never raising).
 
     The schema is canonical and fails closed, but only for the preview: a typo makes the static
@@ -306,14 +341,22 @@ def _preview_facts(metadata: dict) -> dict:
                 "preview_status": PREVIEW_STATUS_INVALID,
                 "preview_reason": "preview." + key + " 不是 #rgb/#rrggbb：" + str(raw[key]),
             }
+    palette: PreviewPalette = {
+        "background": str(raw["background"]),
+        "surface": str(raw["surface"]),
+        "text": str(raw["text"]),
+        "muted": str(raw["muted"]),
+        "accent": str(raw["accent"]),
+        "border": str(raw["border"]),
+    }
     return {
-        "preview": {key: str(raw[key]) for key in PREVIEW_KEYS},
+        "preview": palette,
         "preview_status": PREVIEW_STATUS_AVAILABLE,
         "preview_reason": "",
     }
 
 
-def preview_facts(theme_id: str) -> dict:
+def preview_facts(theme_id: str) -> ThemePreviewFacts:
     """Return what the GUI needs to show one installed theme as a preview target.
 
     Preview problems never raise here: whether a theme works stays `validate_installed_theme`'s
@@ -329,7 +372,9 @@ def preview_facts(theme_id: str) -> dict:
     return {
         "name": str(metadata.get("name") or theme_id),
         "description": str(metadata.get("description") or ""),
-        **facts,
+        "preview": facts["preview"],
+        "preview_status": facts["preview_status"],
+        "preview_reason": facts["preview_reason"],
     }
 
 
@@ -501,7 +546,9 @@ def _document_default_warning(default: str | None) -> str | None:
     return None
 
 
-def theme_state(configured: list[str] | None = None, *, default: str | None = None) -> dict:
+def theme_state(
+    configured: list[str] | None = None, *, default: str | None = None
+) -> ThemeState:
     """Return what the configured user themes are worth right now (Phase 8C).
 
     ``resolve_theme_selection()`` answers "what does this document carry" and fails on a
@@ -566,7 +613,7 @@ def theme_state(configured: list[str] | None = None, *, default: str | None = No
     if default_warning:
         warnings.append(default_warning)
 
-    previews: dict = {}
+    previews: dict[str, ThemePreviewFacts] = {}
     for theme_id in sorted(installed):
         try:
             previews[theme_id] = preview_facts(theme_id)

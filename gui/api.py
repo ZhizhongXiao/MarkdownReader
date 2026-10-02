@@ -10,14 +10,15 @@ import os
 import sys
 import threading
 import webbrowser
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from pathlib import Path
+from typing import NotRequired, Protocol, TypedDict
 
 from core import paths, user_data
 from core import version as core_version
 from core.config import PRODUCTION_RENDERER_VERSION, load_config, save_config
-from core.conversion_plan import build_conversion_plan, document_output_map
+from core.conversion_plan import ConversionPlan, build_conversion_plan, document_output_map
 from core.external_themes import (
     ensure_theme_root,
     export_template,
@@ -31,6 +32,24 @@ from core.logger import close_file_logging
 from core.viewer_assets import normalize_theme_id
 
 _logger = logging.getLogger("gui")
+
+
+class ConversionResult(TypedDict):
+    success: bool
+    files: list[str]
+    errors: list[str]
+    warnings: NotRequired[list[str]]
+    documents: NotRequired[Sequence[Mapping[str, object]]]
+    output_dir: NotRequired[str]
+    entry_file: NotRequired[str]
+
+
+class WebViewWindow(Protocol):
+    """Small pywebview window surface used by the bridge."""
+
+    def evaluate_js(self, script: str) -> object: ...
+
+    def destroy(self) -> None: ...
 
 # The exported template lands in a fixed child folder of the picked directory: the core
 # exporter refuses an existing target, so a stable name turns "already exported" into a
@@ -66,12 +85,12 @@ def _refused_path() -> dict:
     return {"ok": False, "path": "", "error": REMOVAL_REFUSAL}
 
 
-def _refused_conversion() -> dict:
+def _refused_conversion() -> ConversionResult:
     """Refuse a conversion request."""
     return {"success": False, "files": [], "errors": [REMOVAL_REFUSAL]}
 
 
-def _refused_plan() -> dict:
+def _refused_plan() -> ConversionPlan:
     """Refuse a preflight plan, in the shape the page already knows how to read."""
     return {
         "inputs": [],
@@ -186,9 +205,9 @@ class BridgeApi:
             with self._state_lock:
                 self._operations_in_flight -= 1
 
-    def attach_window(self, window) -> None:
+    def attach_window(self, window: WebViewWindow) -> None:
         """Attach the created webview window for conversion progress events."""
-        self._window = window
+        self._window: WebViewWindow | None = window
 
     def _notify_conversion_status(
         self,
@@ -267,7 +286,7 @@ class BridgeApi:
                 root.destroy()
                 return path if path else ""
 
-    def prepare_conversion(self, request: dict | None = None) -> dict:
+    def prepare_conversion(self, request: dict | None = None) -> ConversionPlan:
         """Expand inputs and return a read-only conversion plan for the GUI.
 
         The GUI sends one structured request, so ``inputs`` is a real list here
@@ -496,7 +515,7 @@ class BridgeApi:
 
     # ── Conversion ──────────────────────────────────────────
 
-    def convert(self, request: dict | None = None) -> dict:
+    def convert(self, request: dict | None = None) -> ConversionResult:
         """Run conversion and return a result dict for one structured request.
 
         Args:
@@ -512,7 +531,7 @@ class BridgeApi:
                 return _refused_conversion()
             return self._convert(request)
 
-    def _convert(self, request: dict | None = None) -> dict:
+    def _convert(self, request: dict | None = None) -> ConversionResult:
         """Convert one structured request; reached only through `convert()`."""
         try:
             from core.converter import process_batch, process_single
@@ -618,21 +637,21 @@ class BridgeApi:
                 entry_file = os.path.abspath(saved) if saved else ""
                 errors_list = [] if saved else ["生成 HTML 失败。"]
                 item_result = dict(item)
+                item_warnings: list[str] = render_report.get("warnings", [])
+                status = "warning" if item_warnings else ("success" if saved else "error")
                 item_result.update(
                     {
                         "path": saved or "",
-                        "status": "warning" if render_report.get("warnings") else (
-                            "success" if saved else "error"
-                        ),
-                        "warnings": render_report.get("warnings", []),
+                        "status": status,
+                        "warnings": item_warnings,
                     }
                 )
                 documents = [item_result]
-                warnings_list.extend(render_report.get("warnings", []))
+                warnings_list.extend(item_warnings)
                 self._notify_conversion_status(
                     inputs[0],
-                    item_result["status"],
-                    item_result["warnings"],
+                    status,
+                    item_warnings,
                     saved or out_path,
                 )
 

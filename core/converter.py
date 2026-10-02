@@ -23,6 +23,7 @@ from core.config import (
     normalize_template_name,
 )
 from core.conversion_plan import (
+    ConversionPlan,
     build_conversion_plan,
     collect_input_documents,
     document_output_map,
@@ -340,7 +341,7 @@ def process_batch(
     source_root: str | None = None,
     index_filename: str = DEFAULT_INDEX_FILENAME,
     collection_name: str = "",
-    plan: dict | None = None,
+    plan: ConversionPlan | None = None,
     progress_callback=None,
     *,
     renderer_version: str = PRODUCTION_RENDERER_VERSION,

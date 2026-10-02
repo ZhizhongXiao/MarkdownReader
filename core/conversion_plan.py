@@ -4,8 +4,50 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterable
+from typing import Literal, TypedDict
 
 MARKDOWN_EXTENSIONS = {".md", ".markdown"}
+
+
+class InputDocument(TypedDict):
+    """One Markdown file expanded from a direct file or directory input."""
+
+    source_path: str
+    input_path: str
+    origin: Literal["selected", "directory"]
+
+
+class ConversionItem(TypedDict):
+    """One pending source-to-output entry in a conversion plan."""
+
+    id: str
+    source_path: str
+    input_path: str
+    relative_path: str
+    output_path: str
+    output_relative: str
+    origin: Literal["selected", "directory"]
+    status: Literal["pending"]
+    warnings: list[str]
+
+
+class ConversionCounts(TypedDict):
+    selected: int
+    directory: int
+    dependency: int
+    total: int
+
+
+class ConversionPlan(TypedDict):
+    """Serializable preflight data shared by the GUI and converter."""
+
+    inputs: list[str]
+    items: list[ConversionItem]
+    source_root: str
+    output_dir: str
+    warnings: list[str]
+    errors: list[str]
+    counts: ConversionCounts
 
 
 def is_markdown_path(path: str) -> bool:
@@ -21,14 +63,16 @@ def _display_path(path: str) -> str:
     return os.path.normpath(path).replace("\\", "/")
 
 
-def collect_input_documents(paths: Iterable[str]) -> tuple[list[dict], list[str], list[str]]:
+def collect_input_documents(
+    paths: Iterable[str],
+) -> tuple[list[InputDocument], list[str], list[str]]:
     """Expand file and directory inputs into unique Markdown documents.
 
     Returns ``(documents, warnings, errors)``. Each document records the direct
     input that introduced it so the GUI can remove a whole directory source in
     one action.
     """
-    documents_by_key: dict[str, dict] = {}
+    documents_by_key: dict[str, InputDocument] = {}
     warnings: list[str] = []
     errors: list[str] = []
 
@@ -80,7 +124,7 @@ def collect_input_documents(paths: Iterable[str]) -> tuple[list[dict], list[str]
     return documents, warnings, errors
 
 
-def _common_source_root(documents: list[dict], raw_paths: list[str]) -> str | None:
+def _common_source_root(documents: list[InputDocument], raw_paths: list[str]) -> str | None:
     if not documents:
         return None
 
@@ -103,7 +147,7 @@ def build_conversion_plan(
     paths: Iterable[str],
     output_dir: str,
     preserve_structure: bool = False,
-) -> dict:
+) -> ConversionPlan:
     """Return a serializable conversion plan without writing output files."""
     raw_paths = [str(path) for path in paths if str(path or "").strip()]
     documents, warnings, errors = collect_input_documents(raw_paths)
@@ -128,7 +172,7 @@ def build_conversion_plan(
         if os.path.normcase(source_root) == os.path.normcase(drive_root):
             errors.append("所选文件的共同目录仅为磁盘根目录，无法安全保留目录结构。请分批选择。")
 
-    items: list[dict] = []
+    items: list[ConversionItem] = []
     outputs: dict[str, str] = {}
     for index, document in enumerate(documents):
         source_path = document["source_path"]
@@ -187,7 +231,7 @@ def build_conversion_plan(
     }
 
 
-def document_output_map(plan: dict) -> dict[str, str]:
+def document_output_map(plan: ConversionPlan) -> dict[str, str]:
     """Return the source-to-output mapping consumed by the Node renderer."""
     return {
         os.path.abspath(item["source_path"]): os.path.abspath(item["output_path"])

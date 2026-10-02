@@ -25,8 +25,11 @@ an installed user theme is added) while a broken or unsafe theme payload still r
 Choosing which themes to carry is advisory; embedding one is not.
 """
 
+from __future__ import annotations
+
 import logging
 from html import escape
+from typing import TYPE_CHECKING
 
 from core.config import (
     PLACEHOLDER_CONTENT,
@@ -51,6 +54,9 @@ from core.viewer_assets import (
 
 _logger = logging.getLogger(__name__)
 
+if TYPE_CHECKING:
+    from core.renderer_v2 import RendererEnvelope
+
 # Same wiring as the v1 rollback path: the viewer owns the button and its state.
 _NUMBERING_AUTOSTART = (
     "<script>"
@@ -66,7 +72,7 @@ def _byte_size(fragment: str) -> int:
     return len(fragment.encode("utf-8"))
 
 def assemble_document(
-    envelope: dict,
+    envelope: dict | RendererEnvelope,
     *,
     title: str,
     template_name: str = "modern",
