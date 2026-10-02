@@ -9,7 +9,8 @@ venv/
 
 # ===== 测试与代码检查缓存 =====
 .pytest_cache/
-.pytest-tmp-*/
+.pytest-*/
+.webview2-preview-*/
 .ruff_cache/
 
 # ===== 构建与打包产物 =====
