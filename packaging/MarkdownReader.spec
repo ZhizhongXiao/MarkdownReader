@@ -99,9 +99,6 @@ REQUIRED_FILES = (
     "templates/index/index.html",
     "templates/index/index.js",
     "templates/index/theme.css",
-    "node_renderer/render.js",
-    "node_renderer/package.json",
-    "node_renderer/package-lock.json",
     "renderer/dist/renderer.cjs",
     "renderer/dist/katex/katex.min.css",
     "renderer/dist/mermaid/mermaid.min.js",
@@ -114,15 +111,13 @@ for _relative in (
     "viewer/js",
     "themes/builtin",
     "themes/template",
-    "node_renderer/node_modules",
     "renderer/dist/katex",
     "renderer/dist/mermaid",
     "packaging/node",
 ):
     require_dir(_relative)
 
-# Validate the renderer for real before building: an empty or incomplete
-# node_modules satisfies an existence check while the first conversion fails.
+# Validate the bundled Node runtime before building.
 _probe = subprocess.run(
     [str(bundled_node), "--version"],
     capture_output=True,
@@ -159,25 +154,7 @@ if _hasher.hexdigest() != _expected_sha:
         "内置 Node 的 SHA-256 与 packaging/node-runtime.json 不一致。"
     )
 
-_smoke = subprocess.run(
-    [
-        sys.executable,
-        "-c",
-        "from core.renderer_node import validate_renderer_runtime; validate_renderer_runtime()",
-    ],
-    cwd=str(project_root),
-    capture_output=True,
-    text=True,
-)
-if _smoke.returncode != 0:
-    raise SystemExit(
-        "Node 渲染器自检未通过："
-        + ((_smoke.stderr or _smoke.stdout or "").strip()[:2000])
-    )
-
-# Cutover C4: the release renders with v2 by default, so the build has to prove
-# that the renderer/dist about to be packaged works with the node.exe about to be
-# packaged -- not that some Node on PATH happens to work.
+# Prove the renderer artifact works with the bundled Node executable.
 _v2_smoke_source = (
     "from core import renderer_v2; renderer_v2.validate_v2_runtime("
     + repr(str(bundled_node))
@@ -203,16 +180,14 @@ add_tree(datas, project_root / "gui" / "assets", "gui/assets")
 add_tree(datas, project_root / "viewer", "viewer")
 add_tree(datas, project_root / "themes", "themes")
 add_tree(datas, project_root / "templates" / "index", "templates/index")
-add_tree(datas, project_root / "node_renderer", "node_renderer")
-
-# The v2 renderer payload (Cutover C4): renderer/dist is a gitignored build
+# The renderer payload: renderer/dist is a gitignored build
 # artifact, so packaging/README.md and release_freeze.py own producing it while
 # this spec verifies and collects it. Only dist/ ships -- renderer/node_modules,
 # renderer/src and renderer/vendor are build-time inputs, not runtime payload.
 add_tree(datas, project_root / "renderer" / "dist", "renderer/dist")
 
-# Optional portable Node.js runtime. Put node.exe under packaging/node before
-# building if the release should run without user-installed Node.js.
+# Bundled Node.js runtime validated above. Every supported release includes it,
+# so the application does not depend on a user-installed Node.js.
 add_tree(datas, packaging_dir / "node", "node")
 
 icon_file = assets_dir / "MarkdownReader.ico"

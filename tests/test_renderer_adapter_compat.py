@@ -1,6 +1,6 @@
 """新 adapter 的 Phase 4B 兼容套件：footnote、额外数学分隔符、文档链接。
 
-对照对象是旧 production renderer 的既有契约（tests/test_renderer_links.py、
+契约基于既有语义记录（tests/test_renderer_links.py、
 tests/test_renderer_katex_assets.py、KEEP 语料 K8/K9），逐条在新 adapter 上重放。
 
 所有权（AGENTS §6）：
@@ -180,7 +180,7 @@ def test_extra_delimiters_never_turn_text_into_a_formula(markdown: str):
 def test_a_dollar_pair_across_prose_is_a_recorded_upstream_difference():
     """已记录的上游差异：upstream 的 $ 规则没有 texmath 的 pre/post 保护。
 
-    旧 production renderer 用 markdown-it-texmath 的 dollars 规则，要求 $…$ 的内容不以空白
+    dollars 语法遵循 markdown-it-texmath 规则，要求 $…$ 的内容不以空白
     结尾，因此「价格 $100 与 $200 之间。」不是公式；pinned upstream 的 math_inline 只跳过转义
     与空的 $$，会把首尾两个 $ 配成公式。$ 路径属 upstream（AGENTS §6：不得形成第二套
     $…$ parser），本阶段不修改该行为，只把它锁定为可见差异；记录见

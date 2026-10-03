@@ -42,7 +42,7 @@ git clone <MarkdownReader 仓库地址> MarkdownReader
 cd MarkdownReader
 git submodule update --init --recursive
 uv sync
-cd node_renderer; npm ci; cd ..
+cd renderer; npm ci; npm run build; cd ..
 cd tests/js; npm ci; cd ..
 pwsh tools/update_vscode_office.ps1 -Check
 ```
@@ -91,4 +91,3 @@ git submodule deinit -f upstream/vscode-office
 git rm --cached upstream/vscode-office
 # 然后手动删除 .gitmodules 中的条目与 upstream/vscode-office 目录
 ```
-

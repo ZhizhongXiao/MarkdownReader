@@ -10,7 +10,7 @@
  *   - warnings 在这里集中产生（heading 内的链接也因此只报一次）
  *
  * 只消费 context：source_path / output_path / document_map。
- * 改写规则与旧 production renderer（node_renderer/render.js）逐条一致：跳过 fragment / 协议相对 /
+ * 改写规则保留 MarkdownReader 既有文档链接语义：跳过 fragment / 协议相对 /
  * 其它 scheme，只处理 .md 与 .markdown，相对**输出目录**计算 ./ 前缀 + encodeURI，保留 query 与
  * fragment；未加入转换清单时保留原 href 并产出可读 warning，不使转换失败。
  */

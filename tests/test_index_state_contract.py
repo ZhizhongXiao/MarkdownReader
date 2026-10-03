@@ -12,7 +12,7 @@ discipline used by the Python contracts.
 
 The JS layer needs its own dependency (jsdom), installed in tests/js so it never
 reaches the packaged EXE: packaging/MarkdownReader.spec collects only gui/assets,
-viewer, themes, templates/index and node_renderer. When that layer is not installed the module skips
+viewer, themes and templates/index. When that layer is not installed the module skips
 with an explicit reason instead of failing.
 """
 
@@ -131,4 +131,3 @@ def test_index_state_contracts(index_page: dict):
     assert counts["pass"] == EXPECTED_PASS, output
     assert counts["xfail"] == EXPECTED_XFAIL, output
     assert completed.returncode == 0, output
-

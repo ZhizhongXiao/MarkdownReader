@@ -4,7 +4,7 @@ The end to end EXE smoke test lives in packaging/validate_release.py, but these
 cases lock the parts of the release contract that can be checked in process: the
 runtime prefers the Node the package carries, a conversion lands correctly in a
 directory whose name has Chinese characters and spaces (what a localized Windows
-profile actually looks like), and the packaged payload carries both renderers.
+    profile actually looks like), and the packaged payload carries the supported renderer.
 """
 
 import importlib.util
@@ -37,16 +37,14 @@ def _load_validation_module():
 validate_release = _load_validation_module()
 
 
-def test_the_release_payload_carries_both_renderers():
-    """v2 是 production 载荷，v1 的脚本与依赖继续随包发布（回退路径）。"""
+def test_the_release_payload_carries_only_the_supported_renderer():
     files = validate_release.RUNTIME_FILES
 
     assert ("renderer", "dist", "renderer.cjs") in files
     assert ("renderer", "dist", "katex") in files
     assert ("renderer", "dist", "mermaid") in files
     assert ("node", "node.exe") in files, "内置 Node 也是 v2 renderer 的运行时"
-    assert ("node_renderer", "render.js") in files, "v1 回退路径必须继续随包发布"
-    assert ("node_renderer", "node_modules") in files
+    assert not any(parts[0] == "node_renderer" for parts in files)
     manifest = json.loads(
         (ROOT / "gui" / "assets" / "js" / "manifest.json").read_text(encoding="utf-8")
     )

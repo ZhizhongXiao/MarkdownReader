@@ -26,12 +26,11 @@ packaging/.pyinstaller-build/
 packaging/node/
 
 # ===== Node / 前端依赖 =====
-node_renderer/node_modules/
-# 测试专用的 jsdom 测试层（不进打包：spec 只收集 gui/assets、templates、node_renderer）
+# 测试专用的 jsdom 测试层（不进打包）
 tests/js/node_modules/
-# 浏览器验收层（opt-in Playwright，不进打包：spec 只收集 gui/assets、templates、node_renderer）
+# 浏览器验收层（opt-in Playwright，不进打包）
 tests/browser/node_modules/
-# 新 renderer 自己的依赖（不进打包；spec 只收集 gui/assets、templates、node_renderer）
+# 新 renderer 自己的依赖（构建输入，不进打包）
 renderer/node_modules/
 
 # ===== 本地产物（编辑器 / 系统 / 覆盖率）=====

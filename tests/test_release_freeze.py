@@ -96,12 +96,11 @@ def test_a_missing_record_is_refused(tmp_path):
     assert release_freeze.qa_gate(tmp_path / "absent.md") is False
 
 
-def test_the_record_covers_both_renderer_lockfiles():
-    """v2 是 production、v1 是 rollback：两套依赖都必须进发布记录。"""
+def test_the_record_covers_the_supported_renderer_lockfile():
     labels = [label for label, _ in release_freeze.release_inputs()]
 
     assert any("renderer/package-lock.json" in label and "v2" in label for label in labels)
-    assert any("node_renderer/package-lock.json" in label and "v1" in label for label in labels)
+    assert not any("node_renderer" in label for label in labels)
     assert "node.exe" in labels
 
 

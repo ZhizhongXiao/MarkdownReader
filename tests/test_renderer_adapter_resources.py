@@ -132,7 +132,7 @@ def test_resources_channel_is_always_present_even_when_empty():
         "scripts": [],
         "author_references": [],
     }
-    assert "assets" not in envelope, "v1 的 assets.css 不属于 v2"
+    assert "assets" not in envelope, "adapter 使用 resources 字段交付资源"
     assert envelope["warnings"] == []
 
 

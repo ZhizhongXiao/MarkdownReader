@@ -39,10 +39,9 @@ from typing import NoReturn
 
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / "dist"
-# v2 是 production renderer，v1 保留为 rollback：两套依赖都进发布记录。
+# The v2 renderer is the only supported renderer shipped by releases.
 RENDERER_DIR = ROOT / "renderer"
 RENDERER_LOCK = RENDERER_DIR / "package-lock.json"
-NODE_RENDERER_LOCK = ROOT / "node_renderer" / "package-lock.json"
 PASS_MARKER = "QA 结论：通过"
 # The record is written by hand, so a tick may arrive as [X], with spaces inside
 # the brackets, or indented. Every shape counts the same. A box holding anything
@@ -543,16 +542,10 @@ def tool_version(distribution):
 
 
 def release_inputs() -> list:
-    """Return the (label, sha256) build inputs a release record must carry.
-
-    v2 is the production renderer and v1 stays the rollback path, so both
-    renderer dependency sets are recorded: swapping either lockfile without a
-    rebuild is a change the record has to show.
-    """
+    """Return the (label, sha256) build inputs a release record must carry."""
     runtime = json.loads(read(ROOT / "packaging" / "node-runtime.json"))
     return [
         ("uv.lock", sha256(ROOT / "uv.lock")),
-        ("node_renderer/package-lock.json  (v1 rollback)", sha256(NODE_RENDERER_LOCK)),
         ("renderer/package-lock.json  (v2 production)", sha256(RENDERER_LOCK)),
         ("node.exe", str(runtime.get("sha256"))),
     ]

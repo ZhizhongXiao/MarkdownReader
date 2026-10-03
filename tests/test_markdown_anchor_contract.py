@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from markdown_fixtures import fixture_path, load_cases, render_fixture  # noqa: E402
 
 import core.converter as converter  # noqa: E402
+from core.renderer_v2 import RendererEnvelope  # noqa: E402
 
 EXPECTED_ANCHOR_CASES = 1
 EXPECTED_ANCHOR_HEADINGS = 8
@@ -43,7 +44,7 @@ def anchor_case() -> dict:
 
 
 @pytest.fixture(scope="module")
-def rendered(anchor_case: dict) -> dict:
+def rendered(anchor_case: dict) -> RendererEnvelope:
     return render_fixture(anchor_case)
 
 
@@ -128,7 +129,6 @@ def test_toc_rows_link_back_to_the_body_headings(document_html: str):
 
     assert len(toc_ids) == len(body_ids) == EXPECTED_ANCHOR_HEADINGS
     assert toc_ids == body_ids, "TOC 的 data-id 必须与正文 heading id 一致"
-    # href 与 id 必须**字面相同**（不做 unquote）：两个 renderer 的 id 形态可以不同
-    # （v2 沿用上游 slugifyUnicode，对非 ASCII 做百分号编码），而浏览器跳转靠的就是
-    # 这种精确匹配。逐字符比较比各自的编码约定更严格。
+    # href 与 id 必须**字面相同**（不做 unquote）：上游 slugifyUnicode 会对非 ASCII
+    # 做百分号编码，而浏览器跳转依赖 href 与 id 精确匹配。
     assert link_targets == body_ids, "每个 TOC 链接都必须指向对应 heading"

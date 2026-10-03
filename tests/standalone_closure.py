@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from renderer_adapter import render  # noqa: E402
 
 from core.html_assembly import assemble_document  # noqa: E402
+from core.renderer_v2 import RendererEnvelope  # noqa: E402
 from tools.standalone_closure import scan  # noqa: E402
 
 DEFAULT_TITLE = "closure fixture"
@@ -22,12 +23,12 @@ DEMO_HTML = ROOT / "samples" / "demo.html"
 
 
 def read_demo_html() -> str:
-    """Return the committed production specimen (v1 assembler output)."""
+    """Return the committed production HTML specimen."""
     return DEMO_HTML.read_text(encoding="utf-8")
 
 
 def assemble(envelope: dict, **kwargs) -> dict:
-    """Assemble a v2 envelope with the new assembler (title defaults to a fixture)."""
+    """Assemble a renderer envelope (title defaults to a fixture)."""
     kwargs.setdefault("title", DEFAULT_TITLE)
     return assemble_document(envelope, **kwargs)
 
@@ -53,7 +54,7 @@ def assemble_and_scan(
     return {"envelope": envelope, "assembled": assembled, "report": report}
 
 
-def author_refs_from_envelope(envelope: dict) -> list:
+def author_refs_from_envelope(envelope: RendererEnvelope | dict) -> list:
     """Return the author provenance declarations an envelope carries (Cutover C1 channel).
 
     Returns the `resources.author_references` entries as-is: the checker accepts both

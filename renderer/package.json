@@ -2,7 +2,7 @@
   "name": "markdownreader-renderer",
   "version": "0.1.0",
   "private": true,
-  "description": "MarkdownReader renderer adapter (Phase 3): consumes the pinned vscode-office source and speaks the MarkdownReader renderer protocol.",
+  "description": "MarkdownReader's supported renderer adapter: consumes pinned vscode-office source and speaks the MarkdownReader renderer protocol.",
   "main": "entry.js",
   "scripts": {
     "build": "node build/build.js",

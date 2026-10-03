@@ -89,7 +89,7 @@ def test_demo_html_matches_the_committed_specimen(tmp_path: Path):
     assert actual == expected, (
         "samples/demo.html is no longer byte-identical to a fresh render: run "
         "`python tools/generate_demo.py` and commit the regenerated file "
-        "(or fix what changed in viewer/, themes/, node_renderer/ or samples/demo.md). "
+        "(or fix what changed in viewer/, themes/, renderer/ or samples/demo.md). "
         f"Generated {len(actual)} B, committed {len(expected)} B, first difference at byte "
         f"{_first_difference(actual, expected)}."
     )

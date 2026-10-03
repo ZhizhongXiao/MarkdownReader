@@ -187,8 +187,8 @@ def theme_ids(*, include_hidden: bool = False) -> list[str]:
 def theme_body_class(theme_id: str) -> str:
     """Return the stable CSS class of a theme.
 
-    Single implementation for the v1 converter and the v2 assembler; the class
-    *name* stays an implementation detail of this layer.
+    Single implementation for HTML assembly; the class *name* stays an
+    implementation detail of this layer.
     """
     safe_name = "".join(ch.lower() if ch.isalnum() else "-" for ch in str(theme_id)).strip("-")
     return f"theme-{safe_name or 'default'}"

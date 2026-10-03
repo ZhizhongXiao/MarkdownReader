@@ -3,7 +3,7 @@
 /**
  * 本地文件 → data URI 的唯一实现（Phase 5A）。
  *
- * 与旧 production renderer（node_renderer/render.js 的 resolveImageSource）保持同一语义：
+ * 保留 MarkdownReader 既有本地图片解析语义：
  *   - 只处理明确的本地路径；data: / http(s): / 协议相对 / 其它 scheme 一律不碰；
  *   - 读不到文件 → 返回 null（调用方保留原引用），并把**可读路径**写进 warnings；
  *   - 进程内 cache 只缓存成功结果（失败每次都要报出来，与旧实现一致）。

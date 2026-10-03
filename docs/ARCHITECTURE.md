@@ -7,7 +7,6 @@ core/           Python 调度：配置、转换计划、front matter、目录、
 gui/            pywebview 桌面界面；api.py 是稳定 façade，services/ 按对话框、转换、主题和生命周期/存储分工
                 assets/js/ 的 GUI 脚本按职责拆分，由 manifest 按序组装成内联 classic script
 renderer/       Node 渲染服务（v2 production adapter；产物 renderer/dist 随包发布）
-node_renderer/  Node 渲染服务（v1 回退：markdown-it 与插件、KaTeX）
 viewer/         阅读器外壳、布局与打印样式、交互模块（装配期合并成一个 classic script）
 themes/builtin/ 内置主题：base（token 回落）+ modern / office / vscode（可选）
 templates/      批量索引页（独立表面，不属于阅读器资产层）
@@ -18,10 +17,10 @@ packaging/      打包配置、图标与发布脚本
 Markdown 文件
   → core/conversion_plan.py   只读预检：递归收集、去重、输出路径、冲突检查
   → core/fm.py                front matter 解析（页面标题）
-  → core/renderer_node.py     子进程调用 Node，得到正文 HTML 与标题列表
+  → core/renderer_node.py     校验 Node 运行时并调用 v2 renderer，取得完整 envelope
   → core/toc.py               由标题列表生成嵌套目录
   → core/viewer_assets.py     阅读器资产：外壳、viewer 脚本、打印样式、主题样式链、主题注册表
-  → 装配                      正文 + 目录 + 资产 → 单文件 HTML（v2 在 core/html_assembly.py，v1 回退在 core/converter.py）
+  → core/html_assembly.py      正文 + 目录 + 资源 → 单文件 HTML
   → 浏览器                    负责全部阅读交互
 ```
 
@@ -41,11 +40,10 @@ Markdown 文件
 
 ### Node 渲染器
 
-- `renderer/` 是 v2 production renderer，复用 pinned `vscode-office` 语义并返回完整 renderer envelope；
+- `renderer/` 是唯一支持的 renderer，复用 pinned `vscode-office` 语义并返回完整 envelope；
   `core/html_assembly.py` 将 envelope 装配为最终单文件 HTML。
-- `node_renderer/` 是 v1 rollback renderer，保留旧 `markdown-it` 实现与依赖，供显式回退和兼容测试使用。
-- `core/renderer_node.py` 是两个 runtime 的调用与 dispatch 边界；`core/config.py::PRODUCTION_RENDERER_VERSION`
-  是 production policy 的唯一来源。v2 启动/转换失败不会静默回退到 v1。
+- `core/renderer_node.py` 校验 Node 运行时并调用 v2 bridge；renderer 或 artifact 失败时明确报错。
+- `core/config.py::PRODUCTION_RENDERER_VERSION` 是 GUI 与 QA 使用的 renderer 版本标识，不提供运行时选择器。
 - 选项与语法范围见 [兼容范围](MARKDOWN.md)；迁移状态与测试证据见 [兼容矩阵](MARKDOWN_COMPATIBILITY.md)。
 
 ### 模板（templates）与阅读器资产层

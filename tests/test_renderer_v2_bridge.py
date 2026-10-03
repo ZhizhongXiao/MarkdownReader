@@ -4,7 +4,7 @@
 
   * 真实调用：真实 Node + 真实 `renderer/dist/renderer.cjs`，断言完整 envelope 与各通道原样透传；
   * 协议与形状拒绝：patch `renderer_v2._invoke_artifact` 注入 stdout，不依赖 renderer 真的出错；
-  * 反证：artifact 缺失时**不回退 v1**（v1 helper 一旦被调用即 AssertionError）。
+  * artifact 缺失时给出可执行的 v2 构建提示。
 
 Node 版本下限与 runtime policy 归 `tests/test_node_runtime.py`；这里只管调用与 envelope。
 """
@@ -34,7 +34,7 @@ OFFLINE = {"fetch_remote_resources": False}
 
 @pytest.fixture(autouse=True)
 def _fresh_caches(monkeypatch):
-    """每个用例都从「未验证」开始，v1 的缓存也一并隔离。"""
+    """每个用例都从「未验证」开始。"""
     monkeypatch.setattr(renderer_v2, "_VALIDATED_RUNTIME", None)
     monkeypatch.setattr(renderer_node, "_RESOLVED_NODE", None)
     monkeypatch.setattr(renderer_node, "_RESOLVED_NODE_VERSION", None)
@@ -87,28 +87,23 @@ def test_every_channel_survives_the_bridge(tmp_path, node_command):
 
 
 def test_a_missing_artifact_fails_actionably_and_never_falls_back(monkeypatch, tmp_path):
-    """K26：显式选择 v2 后失败就失败，绝不偷偷跑 v1。"""
+    """缺少 v2 artifact 时应给出 actionable failure。"""
     monkeypatch.setattr(renderer_v2, "ARTIFACT", str(tmp_path / "missing" / "renderer.cjs"))
 
-    def forbidden(*args, **kwargs):
-        raise AssertionError("v2 失败时不得回退到 v1")
-
-    monkeypatch.setattr(renderer_node, "_render_markdown_v1", forbidden)
-
     with pytest.raises(RuntimeError) as error:
-        renderer_node.render_markdown_node("# x", renderer_version="v2")
+        renderer_node.render_markdown_node("# x")
 
     message = str(error.value)
     assert "构建产物缺失" in message
     assert "npm run build" in message
-    assert "不会回退" in message
+    assert str(tmp_path / "missing" / "renderer.cjs") in message
 
 
 def test_a_non_v2_protocol_response_is_refused(monkeypatch, node_command):
     _patch_stdout(monkeypatch, json.dumps({"protocol_version": 1, "ok": True}))
 
     with pytest.raises(RuntimeError) as error:
-        renderer_node.render_markdown_node("# x", renderer_version="v2")
+        renderer_node.render_markdown_node("# x")
 
     assert "protocol_version" in str(error.value)
 
@@ -129,7 +124,7 @@ def test_a_missing_protocol_version_is_refused(monkeypatch, node_command):
     )
 
     with pytest.raises(RuntimeError) as error:
-        renderer_node.render_markdown_node("# x", renderer_version="v2")
+        renderer_node.render_markdown_node("# x")
 
     assert "protocol_version" in str(error.value)
 
@@ -151,7 +146,7 @@ def test_an_error_envelope_becomes_a_readable_python_error(monkeypatch, node_com
     )
 
     with pytest.raises(RuntimeError) as error:
-        renderer_node.render_markdown_node("# x", renderer_version="v2")
+        renderer_node.render_markdown_node("# x")
 
     message = str(error.value)
     assert "invalid_json" in message
@@ -164,7 +159,7 @@ def test_a_stdout_that_is_not_one_envelope_is_refused(monkeypatch, node_command,
     _patch_stdout(monkeypatch, stdout)
 
     with pytest.raises(RuntimeError):
-        renderer_node.render_markdown_node("# x", renderer_version="v2")
+        renderer_node.render_markdown_node("# x")
 
 
 def test_a_missing_channel_is_refused(monkeypatch, node_command):
@@ -185,7 +180,7 @@ def test_a_missing_channel_is_refused(monkeypatch, node_command):
     )
 
     with pytest.raises(RuntimeError) as error:
-        renderer_node.render_markdown_node("# x", renderer_version="v2")
+        renderer_node.render_markdown_node("# x")
 
     assert "author_references" in str(error.value)
 
@@ -200,8 +195,8 @@ def test_the_v2_runtime_is_validated_once_per_process(monkeypatch, node_command)
 
     monkeypatch.setattr(renderer_v2, "_invoke_artifact", counting)
 
-    renderer_node.render_markdown_node("# one\n", renderer_version="v2", options=OFFLINE)
-    renderer_node.render_markdown_node("# two\n", renderer_version="v2", options=OFFLINE)
+    renderer_node.render_markdown_node("# one\n", options=OFFLINE)
+    renderer_node.render_markdown_node("# two\n", options=OFFLINE)
 
     assert len(calls) == 3, "一次冒烟 + 两次真实渲染"
     assert renderer_v2.validate_v2_runtime(node_command), "已缓存的运行时直接返回"

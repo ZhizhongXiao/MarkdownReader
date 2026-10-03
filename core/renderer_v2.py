@@ -2,7 +2,7 @@
 
 职责边界（Cutover C2 / K26）—— 只有这一层：
 
-  * `renderer.cjs` 构建产物的存在性检查（缺失即 actionable failure，**绝不回退 v1**）；
+  * `renderer.cjs` 构建产物的存在性检查（缺失即 actionable failure）；
   * v2 运行时冒烟（离线：显式关闭远程抓取，并证明 `dist/katex` 真的可加载）；
   * subprocess 协议（request 走 stdin，stdout 只接受一个 JSON 对象）；
   * envelope 契约（`protocol_version == 2`、`ok`、必在键与形状、renderer 错误码传播）。
@@ -40,8 +40,8 @@ BUILD_HINT = "请先执行：cd renderer; npm ci; npm run build"
 
 PROTOCOL_VERSION = 2
 
-# 实现策略，不是契约：v2 要覆盖远程抓取（8 s 超时 + 1 次 retry + 并发 4），比 v1 的一次
-# 子进程渲染慢；远程失败一律 fail-open，因此不会无限等待。
+# 实现策略，不是契约：v2 要覆盖远程抓取（8 s 超时 + 1 次 retry + 并发 4）；远程失败一律
+# fail-open，因此不会无限等待。
 TIMEOUT_SECONDS = 120
 
 REQUIRED_ENVELOPE_KEYS = ("html", "headings", "features", "warnings", "resources")
@@ -110,7 +110,7 @@ SMOKE_MARKDOWN = "# 自检\n\n行内公式 $a^2+b^2=c^2$。\n"
 SMOKE_OPTIONS = {"fetch_remote_resources": False, "math": True}
 
 # The v2 runtime is validated once per process; renders then reuse the answer.
-# 与 v1 的缓存分开：只跑 v1 的工作负载不该为 v2 的冒烟付出代价。
+# v2 runtime validation is cached once per process.
 _VALIDATED_RUNTIME: str | None = None
 
 
@@ -138,7 +138,7 @@ def require_artifact() -> str:
     """Return the v2 artifact path, failing actionably when it was never built."""
     if not os.path.isfile(ARTIFACT):
         raise RuntimeError(
-            f"v2 renderer 构建产物缺失：{ARTIFACT}。{BUILD_HINT}（显式选择 v2 后不会回退到 v1）。"
+            f"v2 renderer 构建产物缺失：{ARTIFACT}。{BUILD_HINT}"
         )
     return ARTIFACT
 
@@ -197,7 +197,7 @@ def parse_envelope(stdout: str) -> RendererEnvelope:
     if protocol != PROTOCOL_VERSION:
         raise RuntimeError(
             f"v2 renderer 返回了非 v2 协议（protocol_version={protocol!r}，"
-            f"期望 {PROTOCOL_VERSION}）：不做协议探测，也不会回退到 v1。"
+            f"期望 {PROTOCOL_VERSION}）：不做协议探测。"
         )
 
     if output.get("ok") is not True:
@@ -259,7 +259,7 @@ def validate_v2_runtime(node_command: str) -> str:
     """Prove the v2 renderer works once per process, then remember the answer.
 
     Node 版本下限与可执行文件解析由 `core/renderer_node.py` 负责，这里**不再读版本**。
-    冒烟离线且要求 KaTeX 真的被加载；失败不缓存（与 v1 同一姿态）。
+    冒烟离线且要求 KaTeX 真的被加载；失败不缓存。
     """
     global _VALIDATED_RUNTIME
     if _VALIDATED_RUNTIME is not None:

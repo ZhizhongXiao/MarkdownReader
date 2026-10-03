@@ -95,7 +95,7 @@ function collectHeadings(md, tokens, env) {
 /**
  * K14 要求 heading id 非空。markdown-it-anchor 对空标题（例如 `##` 后面没有文字）会给出
  * 空 slug —— 那是上游默认行为。这里只补一个**确定性** fallback，不发明新的 slug 规则，
- * 也不复刻旧 renderer 的 slug 文本：同一个文档每次得到同样的 id，且不与已有 id 冲突。
+ * 也不固定 slug 文本实现：同一个文档每次得到同样的 id，且不与已有 id 冲突。
  */
 const FALLBACK_PREFIX = "heading-";
 

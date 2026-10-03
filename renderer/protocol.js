@@ -32,7 +32,7 @@
  *                       只记录来源：**不 fetch、不改 HTML、不进 resources.items**（K13 保持原样）；普通文档为 []。
  *                       生产者在 Markdown token 层（html_block / html_inline）记录，绝不从最终 html 反推。
  * warnings 仍是**用户可读字符串数组**，只承载降级/缺失/不可读/抓取失败等需要注意的情况；
- * 成功内嵌不产生 warning；同一远程 URL 的同一失败只报一次（v1 的 envelope 属旧 production renderer）。
+ * 成功内嵌不产生 warning；同一远程 URL 的同一失败只报一次。
  *
  * 渲染是 async（Phase 5C 的远程抓取），但对外契约不变：stdout 仍只有一个 JSON envelope，
  * 诊断只走 stderr。

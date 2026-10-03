@@ -3,8 +3,8 @@
 The retired product behaviour was a "template" dropdown in the output sheet: it chose the
 document's builtin default theme, was persisted into `config.template`, and travelled with
 every conversion request. The closeout removes it from the product while `core` keeps
-accepting a template (the converter parameter and the v1 rollback stay untouched), so the
-rule belongs to the GUI boundary and is locked here:
+accepting an internal template argument, so the rule belongs to the GUI boundary and is
+locked here:
 
 * the bridge no longer offers `get_templates()`: with no selector there is no consumer, and an
   unused method would suggest the old behaviour still exists;

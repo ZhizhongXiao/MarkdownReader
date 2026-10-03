@@ -30,8 +30,6 @@ ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / "dist"
 RUNTIME_FILES = (
     ("node", "node.exe"),
-    ("node_renderer", "render.js"),
-    ("node_renderer", "node_modules"),
     ("renderer", "dist", "renderer.cjs"),
     ("renderer", "dist", "katex"),
     ("renderer", "dist", "mermaid"),

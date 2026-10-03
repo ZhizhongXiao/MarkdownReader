@@ -1,7 +1,7 @@
-"""Cutover C3：converter 的显式 v2 装配路径（K26）。
+"""Converter integration contracts for the supported renderer.
 
-这边测的是**接线**，不是 renderer 语义：`process_single(renderer_version="v2")` 必须把
-v2 envelope 交给 `core/html_assembly.py`，把 v1 的 warning 语义保留下来，并且**不改变默认路径**。
+这边测的是**接线**，不是 renderer 语义：converter 必须把 renderer envelope 交给
+`core/html_assembly.py`，并按固定顺序合并 renderer 与 assembly warnings。
 
 closure checker 只在测试里跑（`tools/standalone_closure.py`）；`core/converter.py` 运行期不得引用它
 （由 `test_the_runtime_converter_does_not_reference_the_closure_checker` 锁住）。
@@ -27,6 +27,7 @@ from theme_tree import broken_theme_tree  # noqa: E402
 from core import converter, renderer_v2, viewer_assets  # noqa: E402
 from core.html_assembly import assemble_document  # noqa: E402
 from core.renderer_node import render_markdown_node  # noqa: E402
+from core.renderer_v2 import RendererEnvelope  # noqa: E402
 from tools.standalone_closure import scan  # noqa: E402
 
 # 与 tests/test_renderer_adapter_resources.py 一致的 1x1 PNG。
@@ -68,7 +69,6 @@ def convert(
     options: dict | None = None,
     cfg: dict | None = None,
     link_context: dict | None = None,
-    version: str | None = "v2",
 ) -> dict:
     """Run the production converter and return the artefacts for assertions."""
     source = tmp_path / name
@@ -77,9 +77,6 @@ def convert(
     output = output or source.with_suffix(".html")
     report: dict = {}
     resolved_options = OFFLINE if options is None else options
-    if version != "v2":
-        resolved_options = None  # v1 拒绝非空 options
-    kwargs = {} if version is None else {"renderer_version": version}
     saved = converter.process_single(
         str(source),
         str(output),
@@ -87,7 +84,6 @@ def convert(
         link_context=link_context,
         report=report,
         renderer_options=resolved_options,
-        **kwargs,
     )
     return {
         "saved": saved,
@@ -98,12 +94,13 @@ def convert(
     }
 
 
-def envelope_for(markdown: str, context: dict, options: dict | None = None) -> dict:
+def envelope_for(
+    markdown: str, context: dict, options: dict | None = None
+) -> RendererEnvelope:
     """Render the same input directly, so the closure checker can be fed in tests."""
     return render_markdown_node(
         markdown,
         context=context,
-        renderer_version="v2",
         options=dict(OFFLINE, **(options or {})),
     )
 
@@ -259,7 +256,7 @@ def test_the_converter_writes_exactly_what_the_assembler_produced(tmp_path):
 
 
 def test_an_unusable_template_returns_none_without_writing(tmp_path):
-    """与 v1 同一失败语义：模板不可用时 log + 返回 None，不写文件。"""
+    """模板不可用时 log + 返回 None，不写文件。"""
     result = convert(tmp_path, "# 标题\n", cfg={"template": "no-such-template"})
 
     assert result["saved"] is None
@@ -277,25 +274,10 @@ def test_a_missing_v2_artifact_keeps_its_actionable_error(tmp_path, monkeypatch)
             str(source),
             str(tmp_path / "doc.html"),
             dict(CONFIG),
-            renderer_version="v2",
             renderer_options=OFFLINE,
         )
 
     assert "npm run build" in str(error.value)
-
-
-def test_explicit_v1_never_uses_the_v2_assembler(tmp_path, monkeypatch):
-    """回退路径：显式 v1 不经过 v2 assembler（默认已走 v2，见 cutover 套件）。"""
-
-    def forbidden(*args, **kwargs):
-        raise AssertionError("v1 路径不得调用 v2 assembler")
-
-    monkeypatch.setattr(converter, "assemble_document", forbidden)
-
-    result = convert(tmp_path, "# 标题\n", name="explicit.md", version="v1")
-
-    assert result["saved"] == str(result["output"])
-    assert "theme-modern" in result["html"]
 
 
 def test_the_runtime_converter_does_not_reference_the_closure_checker():
@@ -311,7 +293,7 @@ def test_a_missing_required_builtin_theme_fails_the_conversion(tmp_path, monkeyp
 
     6B 及以前主题样式只降级，产物会静默少一套主题变量；6C 起这一层不再有降级出口。
     装配层的同一契约由 `tests/test_theme_bundle_contract.py` 锁住，这里锁转换边界：
-    生产 v2 路径返回 None（因此不写文件），v1 回退路径上抛 —— 两条路径都不产出成品。
+    生产转换返回 None（因此不写文件），且不会产出缺少主题变量的成品。
     """
     monkeypatch.setattr(
         viewer_assets, "_THEMES_ROOT", str(broken_theme_tree(tmp_path / "tree"))
@@ -321,11 +303,6 @@ def test_a_missing_required_builtin_theme_fails_the_conversion(tmp_path, monkeyp
 
     assert result["saved"] is None
     assert result["html"] is None, "不得写出缺主题变量的成品"
-
-    with pytest.raises(ValueError):
-        convert(tmp_path, "# 标题\n\n正文。\n", name="v1.md", version="v1")
-    assert not (tmp_path / "v1.html").exists(), "v1 也不得留下半成品"
-
 
 def test_an_installed_user_theme_reaches_the_document_when_selected(tmp_path, monkeypatch):
     """Phase 7E：config.json 的 external_themes 决定文档额外携带哪些外置主题。"""

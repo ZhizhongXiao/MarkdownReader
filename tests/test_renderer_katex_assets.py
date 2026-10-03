@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from core.renderer_node import render_markdown_node
+from core.renderer_v2 import RendererEnvelope
 
 FONT_FAMILY_MARKER = "KaTeX_AMS"
 FONT_DATA_URI = "data:font/woff2"
@@ -24,7 +25,7 @@ FONT_DATA_URI = "data:font/woff2"
 _CODE_SNIPPET = '```python\nprint("Budget: $100; remaining: $200")\n```'
 
 
-def _render(markdown: str, tmp_path: Path) -> dict:
+def _render(markdown: str, tmp_path: Path) -> RendererEnvelope:
     return render_markdown_node(
         markdown,
         context={
@@ -35,10 +36,14 @@ def _render(markdown: str, tmp_path: Path) -> dict:
     )
 
 
+def _styles(result: RendererEnvelope) -> str:
+    return "\n".join(style["css"] for style in result["resources"]["styles"])
+
+
 def test_plain_prose_carries_no_katex_assets(tmp_path: Path):
     result = _render("只有普通文本，没有任何公式。", tmp_path)
 
-    assert result["assets"]["css"] == ""
+    assert result["resources"]["styles"] == []
     assert 'class="katex' not in result["html"]
 
 
@@ -48,7 +53,7 @@ def test_a_dollar_in_code_or_as_a_price_is_not_a_formula(tmp_path: Path):
 
     result = _render(markdown, tmp_path)
 
-    assert result["assets"]["css"] == "", "prose dollars must not pull in the fonts"
+    assert result["resources"]["styles"] == [], "prose dollars must not pull in the fonts"
     assert 'class="katex' not in result["html"]
 
 
@@ -64,8 +69,9 @@ def test_a_formula_gets_the_self_contained_stylesheet(markdown: str, tmp_path: P
     result = _render(markdown, tmp_path)
 
     assert 'class="katex' in result["html"]
-    assert FONT_FAMILY_MARKER in result["assets"]["css"]
-    assert FONT_DATA_URI in result["assets"]["css"]
+    styles = _styles(result)
+    assert FONT_FAMILY_MARKER in styles
+    assert FONT_DATA_URI in styles
 
 
 def test_malformed_formula_keeps_the_stylesheet(tmp_path: Path):
@@ -73,7 +79,7 @@ def test_malformed_formula_keeps_the_stylesheet(tmp_path: Path):
     result = _render("坏公式 $\\frac{1}{$ 后面正常。", tmp_path)
 
     assert "katex-error" in result["html"]
-    assert FONT_FAMILY_MARKER in result["assets"]["css"], (
+    assert FONT_FAMILY_MARKER in _styles(result), (
         "error markup is still KaTeX markup and needs its stylesheet"
     )
 

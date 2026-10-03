@@ -750,7 +750,7 @@ def test_the_app_starts_visible_and_closes_logging_before_deleting_and_recreates
         return StubWindow()
 
     monkeypatch.setattr(gui_app.webview, "create_window", fake_create_window)
-    monkeypatch.setattr("core.renderer_node.validate_renderer_runtime_for", lambda _version: None)
+    monkeypatch.setattr("core.renderer_node.validate_renderer_runtime", lambda: None)
 
     def fake_start(**_kwargs):
         events.append("start")

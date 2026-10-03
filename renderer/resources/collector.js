@@ -42,7 +42,7 @@ const MATH_TOKEN_TYPES = ["math_inline", "math_block"];
 const MISSING_IMAGE_WARNING = "图片无法内嵌，保留原引用：";
 
 // Windows 绝对路径（C:/dir/a.png）必须先判：否则会被通用 scheme 规则误判成 other-scheme。
-// 顺序与旧 production renderer 的 resolveImageSource 一致。
+// 保留已建立的文档资源顺序，方便 manifest 稳定且可预测。
 const ABSOLUTE_WINDOWS = /^[a-zA-Z]:[\\/]/;
 
 function classifySource(reference) {

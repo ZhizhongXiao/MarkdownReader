@@ -11,7 +11,7 @@
 
 - 改模板或渲染输出：运行 `python tools/generate_demo.py` 并提交重新生成的 `samples/demo.html`
   ——测试会比较它与当前源码的结果，不一致就是失败。
-- 改 `viewer/`、`themes/`、`templates/`、`node_renderer/`、`core/`、`gui/`：至少运行 `python -m pytest -q`。
+- 改 `viewer/`、`themes/`、`templates/`、`renderer/`、`core/`、`gui/`：至少运行 `python -m pytest -q`。
 - 改 GUI：确认 `python main.py` 能启动，GUI 资源路径没有被破坏。
 - 改打包配置：确认内置 Node 仍在，并运行 `python packaging/validate_release.py --mode both`。
 

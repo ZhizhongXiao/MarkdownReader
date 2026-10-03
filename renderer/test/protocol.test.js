@@ -5,7 +5,7 @@
  * 契约级检查在 Python 侧（tests/test_renderer_adapter_*.py）。
  *
  * Phase 5A：协议为 v2，成功 envelope 始终带 resources（没有资源时也是空结构）；
- * v1 的 assets.css 只属于旧 production renderer，不再是 adapter 契约。
+ * adapter 成功响应通过 resources 通道交付样式与资源。
  */
 
 const assert = require("node:assert");
@@ -53,7 +53,7 @@ test("stdout is one JSON v2 envelope with features, headings and resources", fun
   assert.strictEqual(envelope.features.plantuml, false);
   assert.ok(envelope.headings[0].anchor.length > 0, JSON.stringify(envelope.headings));
   assert.ok(Array.isArray(envelope.warnings));
-  assert.ok(!Object.prototype.hasOwnProperty.call(envelope, "assets"), "v1 的 assets.css 不属于 v2");
+  assert.ok(!Object.prototype.hasOwnProperty.call(envelope, "assets"), "资源通过 resources 字段交付");
   assert.strictEqual(envelope.resources.styles.length, 1, JSON.stringify(Object.keys(envelope)));
   assert.strictEqual(envelope.resources.styles[0].id, "katex");
   assert.ok(envelope.resources.styles[0].css.includes("data:font/woff2;base64,"));

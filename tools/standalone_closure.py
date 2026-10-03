@@ -57,6 +57,11 @@ if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
 from core.css_audit import CssAuditError, CssReference, scan_references  # noqa: E402
+from core.renderer_v2 import (  # noqa: E402
+    RendererEnvelope,
+    RendererResourceItem,
+    RendererResources,
+)
 
 # A value here must be closed (inlined) for the document to be standalone.
 # `<a href>` and plain text are not listed.
@@ -278,16 +283,20 @@ def collect_subresources(html: str) -> list[dict]:
     return found
 
 
-def _resources_channel(envelope: dict | None) -> dict:
+def _resources_channel(
+    envelope: RendererEnvelope | dict | None,
+) -> RendererResources | dict:
     """Return the envelope's `resources` object, tolerating a missing or malformed one."""
     channel = (envelope or {}).get("resources") or {}
     return channel if isinstance(channel, dict) else {}
 
 
-def _manifest_items(envelope: dict | None) -> dict[str, list[dict]]:
+def _manifest_items(
+    envelope: RendererEnvelope | dict | None,
+) -> dict[str, list[RendererResourceItem | dict]]:
     """Index manifest items by reference; the manifest carries one item per occurrence."""
     items = _resources_channel(envelope).get("items") or []
-    index: dict[str, list[dict]] = {}
+    index: dict[str, list[RendererResourceItem | dict]] = {}
     for item in items:
         reference = str((item or {}).get("ref") or "")
         if reference:
@@ -367,7 +376,7 @@ def payload_report(html: str, injections: list | None) -> dict:
 def scan(
     html: str,
     *,
-    envelope: dict | None = None,
+    envelope: RendererEnvelope | dict | None = None,
     injections: list | None = None,
     author_owned_refs=(),
 ) -> dict:

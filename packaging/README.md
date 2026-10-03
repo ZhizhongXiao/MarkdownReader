@@ -24,12 +24,12 @@ python -m PyInstaller --clean --noconfirm --workpath "packaging\.pyinstaller-bui
 需要完全排除旧产物影响时先删除 `dist/`。
 
 打包内容：GUI 静态资源、阅读器资产（`viewer/`）、内置主题（`themes/builtin/`）、批索引页模板
-（`templates/index/`）、v2 renderer 载荷（`renderer/dist/`）、Node 渲染脚本与依赖、内置 Node 运行时、
+（`templates/index/`）、v2 renderer 载荷（`renderer/dist/`）、内置 Node 运行时、
 启动图与程序图标。
 
 ## v2 renderer 载荷
 
-发布包默认使用 v2 renderer，因此必须带上：
+v2 是当前唯一支持的 renderer，因此每个发布包都必须带上：
 
 ```text
 renderer/dist/renderer.cjs
@@ -39,11 +39,9 @@ renderer/dist/mermaid/
 
 它们是 gitignored 构建产物（`cd renderer; npm ci; npm run build`）。`packaging/release_freeze.py`
 在 PyInstaller 之前自动执行这两步，spec 在缺少它们时直接让构建失败。构建期还会用
-`packaging/node/node.exe` 对 v1 与 v2 各做一次冒烟：既要证明内置 Node 能跑，也要证明即将打包的
-`renderer/dist` 与即将打包的 `node.exe` 真的能合作。
+`packaging/node/node.exe` 对 v2 renderer 做一次冒烟，证明即将打包的 artifact 与 Node runtime 能合作。
 
 `renderer/node_modules/`、`renderer/src/`、`renderer/vendor/` 是构建期输入，不进发布包。
-`node_renderer/`（脚本 + 依赖）继续随包发布，它是 v1 回退路径。
 
 ## 内置 Node
 

@@ -1,13 +1,13 @@
-"""新 renderer 与 Phase 1 KEEP 语料的语义对照（Phase 3 起，Phase 4B 全部覆盖）。
+"""v2 renderer 对 Phase 1 KEEP 语料的显式语义契约。
 
-不要求新旧 HTML 字节一致，只按语义断言（期望表直接复用 Phase 1 的 KEEP_EXPECTATIONS）。
+不锁定 HTML 字节，只按语义断言（期望表复用 Phase 1 的 KEEP_EXPECTATIONS）。
 每个 KEEP case 必须被显式分类：
 
-  * ADAPTER_CASES —— 新 adapter 已负责，逐条对照；
+  * ADAPTER_CASES —— v2 adapter 已负责，逐条断言；
   * PENDING_CASES  —— 尚未迁移，写明理由；不伪造通过、不改 Phase 1 契约。
 
 分类表由测试锁定：出现未分类的 case 即失败，避免静默缩小对照范围。
-Phase 1 的 7 个 TARGET xfail 属于旧 renderer 的门禁，本阶段不改动它们。
+迁移过程中遗留的 xfail 仅保留尚未支持的语法预期，不依赖旧 renderer 作为运行时 oracle。
 """
 
 import sys

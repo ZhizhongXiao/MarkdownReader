@@ -12,7 +12,6 @@
 ```powershell
 git submodule update --init --recursive
 uv sync
-cd node_renderer; npm ci; cd ..
 cd tests/js; npm ci; cd ..
 cd renderer; npm ci; npm run build; cd ..
 ```
@@ -39,8 +38,8 @@ cd tests/js; npm test; cd ..      # viewer 契约层（也可由 pytest 触发�
 - harness 自检：针对测试工具本身。
 - 文档契约：`samples/demo.html` 必须等于当前源码重新生成的结果。
 
-源码转换需要本机 Node 与已构建的 `renderer/dist/`；v1 rollback 兼容测试还会使用
-`node_renderer/node_modules`，JS 层需要 `tests/js/node_modules`。缺少对应依赖时相应测试层显式 skip 并说明原因，
+源码转换和 renderer 测试需要本机 Node 与已构建的 `renderer/dist/`；JS 层需要 `tests/js/node_modules`。
+缺少对应依赖时相应测试层显式 skip 并说明原因，
 不会静默通过。自动化测试不覆盖 GUI 运行时交互、真实打印和打包后的 EXE；发布前按
 [当前实机验收清单](QA-CHECKLIST-1.0.1-v2.md) 执行验收。
 
@@ -53,7 +52,6 @@ gui/api.py            稳定的 pywebview façade
 gui/services/         GUI 对话框/输入、转换、主题与生命周期/存储服务
 gui/assets/           GUI 静态资源（index.html、CSS、js/ 中按清单装配的 JavaScript）
 renderer/             生产 renderer（v2 adapter，产物 renderer/dist 随包发布）
-node_renderer/        v1 回退 renderer（markdown-it、footnote、texmath、KaTeX）
 viewer/viewer.html    阅读器外壳（工具栏、目录、正文容器）
 viewer/css/           共享布局样式与打印样式
 viewer/js/            阅读器交互模块 + manifest.json（加载顺序的唯一来源）
@@ -84,9 +82,8 @@ pwsh tools/update_vscode_office.ps1 -ExpectCommit <sha>     # 断言当前 check
 
 ## Renderer（v2 production；Phase 3 实现记录）
 
-`renderer/` 是当前 v2 production adapter，复用 pinned `vscode-office` 的 Markdown 实现。
-Cutover C4 已将 GUI 与转换流程切换到 v2；`node_renderer/` 保留为显式 v1 rollback runtime 和兼容测试路径。
-下面的构建与资源说明始于 Phase 3，个别历史阶段描述应结合这条当前状态阅读。
+`renderer/` 是唯一支持的 renderer，复用 pinned `vscode-office` 的 Markdown 实现。
+转换器将其完整 envelope 交给 `core/html_assembly.py` 装配；v1 runtime 不再参与源码运行、测试或发布载荷。
 
 ```powershell
 cd renderer
@@ -134,7 +131,7 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
   （`<head>` = viewer.css → theme 链 → `resources.styles` → print.css；`</body>` 前 = viewer.js → numbering →
   各 script 的 `script` 后 `boot`），并返回注入账本（label + position + bytes）；`tools/standalone_closure.py`
   判定 closure（四态与 severity 见 K24，证据按 occurrence 消费），缺 `--envelope` 时走 strict 模式。自检入口：
-  `uv run python tools/standalone_closure.py samples/demo.html`（生产 v1 产物基线 → standalone）、
+  `uv run python tools/standalone_closure.py samples/demo.html`（已提交的生产 HTML 标本 → standalone）、
   `uv run python tools/assemble_document.py --out build/smoke.html`（装配集成页：本地图片 + KaTeX + Mermaid）、
   `pwsh tools/run_browser_acceptance.ps1 -ExtraPage build/smoke.html`（opt-in：真实浏览器离线打开该页）。
 - author provenance（Cutover C1）：`renderer/document/author_references.js` 在 **token 层**记录作者 raw HTML 的外部
@@ -148,40 +145,22 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
   `resources` 是**必在**字段（没有资源时也是空结构）：`items` 是资源 manifest，`styles` 是交给 assembler 注入的 CSS，
   `scripts` 是按需交付的运行时（今天只有 mermaid），`author_references` 是作者 raw HTML 的 provenance（Cutover C1，见 K25）；
   `warnings` 保持用户可读字符串数组，成功内嵌不产生 warning（状态记在 manifest）。
-  失败同样是单个 JSON envelope + 退出码 1，诊断只走 stderr。v1 的 `assets.css` 只属于 v1（Cutover C4 后是回退路径）。
-- renderer 选择（Cutover C2，K26）：`core.renderer_node.render_markdown_node(markdown, context=…,
-  renderer_version="v1", options=None)` —— **显式**选择 v1 / v2；这是 bridge，默认 `v1`（它是低层 API，
-  production policy 见下一条）。
-  `core/renderer_v2.py` 负责调用 `renderer/dist/renderer.cjs`、校验 `protocol_version == 2` 与必在形状、
-  原样返回**完整** envelope；Node 可执行文件解析与版本下限（v2 需 major >= 18，常量 `MINIMUM_NODE_MAJOR`
-  也由 `packaging/MarkdownReader.spec` 在构建期断言）属于 `core/renderer_node.py`。
-  不做协议探测、不在 v2 失败时回退 v1、artifact 缺失给出构建提示；`options` 只对 v2 生效
-  （v1 收到非空 options 报 `ValueError`，不静默忽略）。
-- converter 的 v2 路径（Cutover C3，K26）：`process_single` / `process_batch` 增加**内部** keyword
-  `renderer_version`（默认 = `core.config.PRODUCTION_RENDERER_VERSION`）与 `renderer_options`。
-  v2 时 renderer 走 C2 的 bridge，装配交给 `core/html_assembly.py`（含注入账本）；
-  `report["warnings"]` 固定为 **renderer warnings + assembly warnings**（顺序即此顺序）。
-  v2 的 production 内部默认是 `_V2_DEFAULT_OPTIONS = {"math": True, "fetch_remote_resources": True}`，
-  `renderer_options` 在其上覆盖，**不进 config.json**：Phase 8 已决定 renderer protocol options 保持内部运行策略，
-  不成为用户偏好（见 `_V2_DEFAULT_OPTIONS` 的注释）。
-  失败语义与 v1 对齐：模板不可装配 → log + 返回 `None`（不写文件）；renderer / bridge 失败保留
-  actionable 异常（缺 artifact 不被吞成静默无输出）；未知 `renderer_version` 明确报错，不静默按 v1 处理。
-  `core/converter.py` 运行期**不调用** closure checker（它只是 test / release gate）。
-- production renderer policy（Cutover C4，K26）：`core/config.py::PRODUCTION_RENDERER_VERSION`（现为 `"v2"`）
-  是**唯一**的默认来源。它不经 `_DEFAULTS`、不进 `config.json`、GUI 不可覆盖 —— 这是源码级 policy，
-  不是用户设置；**回退 = 把这一行改回 `"v1"` 并重建**（v1 的 renderer、装配与打包资产都保留）。
-  GUI 启动校验跟随 policy：`validate_renderer_runtime_for(PRODUCTION_RENDERER_VERSION)`，因此
-  「包内缺 `renderer/dist`」或「Node < 18」会在**启动时**失败，而不是转换到一半。
-- 发布包与验收（Cutover C4）：`renderer/dist/`（`renderer.cjs` + `katex/` + `mermaid/`）是新的必需载荷，
-  spec 的 `REQUIRED_FILES` 与 `packaging/validate_release.py::RUNTIME_FILES` 两处断言；`release_freeze.py`
-  普通构建模式在 PyInstaller 之前自动 `npm ci` + `npm run build`（只构建一次，两种形态共用）。
-  `--tag --artifact-dir` 会复用验收候选，不会在人工验收后重建产物。构建期用**将被打包的**
-  `node.exe` 对 v1 与 v2 各冒烟一次。实机验收记录必须与当前 production renderer 对应
-  （当前记录为 `docs/QA-CHECKLIST-1.0.1-v2.md`；v1 时代记录只作历史。`release_freeze` 默认按 QA identity 发现唯一匹配项，也支持 `--qa-record` 显式指定）。
+- renderer bridge 与装配（K26）：`core.renderer_node.render_markdown_node(markdown, context=…, options=None)`
+  只调用 `renderer/dist/renderer.cjs`，校验 `protocol_version == 2` 与必在 envelope 形状，并原样返回完整结果。
+  `core/renderer_node.py` 负责解析 Node 与检查 major >= 18；`core/renderer_v2.py` 负责子进程协议和 envelope。
+  artifact 缺失、协议不符或 renderer 报错时明确失败，不存在其他 renderer 选择路径。
+- converter 始终通过 v2 bridge 与 `core/html_assembly.py` 生成 HTML；`report["warnings"]` 固定为
+  **renderer warnings + assembly warnings**。默认 renderer options 是 `math=True` 与
+  `fetch_remote_resources=True`，调用方可通过 `renderer_options` 覆盖；这些策略不进 `config.json`。
+  模板不可装配时记录错误并返回 `None`，renderer / bridge 错误保留 actionable 异常。运行期不调用 closure checker。
+- 打包时 `renderer/dist/`（`renderer.cjs` + `katex/` + `mermaid/`）是必需载荷；spec 的 `REQUIRED_FILES` 与
+  `packaging/validate_release.py::RUNTIME_FILES` 均会校验。`release_freeze.py` 在 PyInstaller 之前构建一次
+  renderer，两种形态共用；构建期使用**将被打包的** `node.exe` 对 renderer 做 v2 冒烟。
+  `--tag --artifact-dir` 复用精确验收候选。当前 1.0.1 QA 身份记录与历史发布材料保持冻结。
 
 - 阅读器资产层（Phase 6A/6B）：`core/viewer_assets.py` 是"阅读器由哪些文件组成"的唯一来源（页面外壳、
   viewer 脚本、打印样式、样式链、主题注册表）。`core/config.py` 只管 config.json 与 bundle 路径，且
-  **不反向依赖**它；`core/converter.py`（v1 回退）与 `core/html_assembly.py`（v2）都只经它取资产，
+  **不反向依赖**它；`core/html_assembly.py` 只经它取资产，
   `gui/api.py` 的主题列表也来自它。Phase 6B 把资产搬到 `viewer/` 与 `themes/builtin/<id>/`、并把
   viewer 脚本拆成按 `viewer/js/manifest.json` 拼接的模块时，改的正是这一个模块。
   契约清单与"哪些可以改"见 [Viewer 契约](VIEWER_CONTRACT.md)。
@@ -279,7 +258,8 @@ pwsh tools/run_browser_acceptance.ps1   # opt-in：真实浏览器离线渲染 M
     （`#template-select-*`、`buildTemplateDropdown`、`selectTemplate`、`updateTemplatePreview` 与整个 portal
     机制一并删除），转换请求也不再带 `template`。回落主题改由 bridge 边界的 `BOOTSTRAP_TEMPLATE = "modern"`
     注入：`BridgeApi.convert()` 忽略客户端送来的 `template`，因此旧页面或手写调用都无法让退役控件复活。
-    `core` 侧不变：converter 参数、`config.json::template`、v1 回退与 legacy 迁移语义全部保留。
+    在 Phase 12 当时，`core` 的 converter 参数、`config.json::template`、v1 回退与 legacy 迁移语义仍然保留；
+    Phase 13 随后退休了 v1 renderer 与回退路径。
   * **预览与携带正交**：右侧舞台是唯一预览面（`#theme-preview`；内置主题走 `preview-<id>` 类，外置主题把 6 个
     声明式 token 作为 `--preview-*` CSS 变量写在同一个元素上，GUI 永不执行用户 CSS）。预览状态只活在
     `_previewTheme`，不写 config、也不写阅读端偏好（`markdownreader-theme-id` 仍只属于阅读端）；携带只由行内

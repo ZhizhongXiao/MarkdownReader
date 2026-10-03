@@ -1,14 +1,12 @@
-"""Assemble a complete standalone HTML document from a renderer v2 envelope.
+"""Assemble a complete standalone HTML document from the renderer envelope.
 
-Phase 5D. The v2 adapter returns a body fragment plus resource channels
+The adapter returns a body fragment plus resource channels
 (`resources.styles` / `resources.scripts`); the page shell, the TOC and the
-viewer wiring belong to core. This module performs that assembly for the v2
-renderer path, while `core/converter.py` assembles the v1 rollback path inline.
+viewer wiring belong to core. This module owns document assembly.
 Reader assets -- page shell, viewer script, theme bundle, print sheet -- come from
 `core/viewer_assets.py`, which is the only layer that knows where they live.
 
-Deterministic injection order (mirrors the v1 order in `core/converter.py`, so a
-later cutover swaps the resource source instead of changing page structure):
+Deterministic injection order:
 
     <head>    viewer.css -> theme bundle (base + every builtin) -> resources.styles
               (manifest order) -> print.css
@@ -57,7 +55,7 @@ _logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from core.renderer_v2 import RendererEnvelope
 
-# Same wiring as the v1 rollback path: the viewer owns the button and its state.
+# The viewer owns the button and its state.
 _NUMBERING_AUTOSTART = (
     "<script>"
     "document.addEventListener('DOMContentLoaded',function(){"

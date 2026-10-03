@@ -88,12 +88,8 @@ def test_batch_continues_when_a_single_document_fails(tmp_path: Path, monkeypatc
     broken.write_text("# BOOM\n", encoding="utf-8")
     healthy.write_text("# Fine\n", encoding="utf-8")
 
-    def fake_render(md_text, context=None, renderer_version=None, options=None):
-        """Double for the production bridge call.
-
-        Production states the renderer version explicitly, and with the v2 policy
-        the payload is a v2 envelope, so the double returns that shape.
-        """
+    def fake_render(md_text, context=None, options=None):
+        """Double for the supported renderer bridge call."""
         if "BOOM" in md_text:
             raise ExpectedRenderFailure("simulated renderer failure")
         return {

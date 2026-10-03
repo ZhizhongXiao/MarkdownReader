@@ -7,7 +7,7 @@
   * PlantUML：token 与 URL 由 markdown-it-plantuml@^1.4.1 生成，只构造 server URL，不访问网络。
 
 runtime 注入、抓图、内嵌、data URI 全部属于 Phase 5，本套件对它们有显式断言（本模块完全离线）。
-旧 production renderer 两项都不支持，因此这里没有 old/new 对照（见 semantic parity 套件的 scope）。
+这两项是 v2 adapter 的正向行为契约，不依赖旧 renderer 的输出对照。
 PlantUML 围栏契约只覆盖「body 内含 @startuml/@enduml」的写法；缺标记的 body 未定义，
 本套件刻意不锁定。
 """

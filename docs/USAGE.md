@@ -119,8 +119,7 @@ Office 主题针对 Edge 打印做过优化，但不追求与 Word 逐页一致�
 
 正式包只使用内置 Node：出现该提示说明打包物不完整，请重新获取发布包。
 源码运行时确认已安装 Node.js（`node -v` 可用），并按开发说明在 `renderer/` 执行 `npm ci` 与 `npm run build`，
-生成 v2 production renderer 的 `renderer/dist/`。只有在运行 v1 rollback 兼容测试时，才需要安装
-`node_renderer/` 的 npm 依赖。
+生成 `renderer/dist/`。
 
 ### GUI 打不开或显示空白
 

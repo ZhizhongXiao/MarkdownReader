@@ -13,7 +13,7 @@
  * renderer.rules.math_inline / math_block —— 与 upstream 的规则名和渲染键完全重合，只加
  * “缺失 delimiter”会连带接管 dollar 渲染（ownership 反转）。审计记录见 Phase 4B 报告。
  *
- * grammar 与旧 production renderer characterization 一致：
+ * grammar 保留既有兼容性 characterization：
  *   - inline \(…\)：单行，内部允许转义对；跨行/未闭合不成立
  *   - block \[…\]：必须行首、可多行；段中不生效（注册时不带 alt，与旧行为一致）
  *   - begin/end：env 名为小写字母，\end 必须与 \begin 同名，content 含 begin/end 本体

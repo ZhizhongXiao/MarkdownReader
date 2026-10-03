@@ -1,7 +1,7 @@
 // Stage 6.1a — shared jsdom harness for the viewer behaviour contracts.
 //
 // Test-only. Not shipped: packaging/MarkdownReader.spec collects only
-// gui/assets, templates and node_renderer, so tests/js never reaches the EXE.
+// gui/assets and templates, so tests/js never reaches the EXE.
 //
 // Two rules this harness exists to enforce, both learned from the Stage 5
 // false-guardrail incident ("href=\"file:" that could never fail):
