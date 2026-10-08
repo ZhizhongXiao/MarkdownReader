@@ -20,8 +20,8 @@ Node 关闭后返回 `True`，宿主随后从主入口返回，操作系统即�
 已经进入处理，它完成后会重设期限。watchdog 标记关闭后，后续请求返回 `backend_closed`。Node 关闭在
 shutdown event 之前完成，宿主不会先退出而遗留 renderer 子进程。
 
-G4 只管理 Backend 与 Node 的生命周期，不引入请求传输。G5 的 IPC host 需要在其主循环中等待同一
-`wait_for_shutdown()` event，并在 event 触发后停止接受客户端、返回主入口。
+Named Pipe host 通过 watcher 等待同一个 `wait_for_shutdown()` event。Backend 关闭 Node 并触发该 event 后，
+host 设置 Win32 stop event，停止接受客户端并取消阻塞的管道 I/O，最后返回主入口。
 
 ## 验收
 
@@ -30,4 +30,5 @@ G4 只管理 Backend 与 Node 的生命周期，不引入请求传输。G5 的 I
 - `status` 不刷新期限，完成的 `convert` 会刷新期限。
 - 到期时 Node 子进程先退出，`wait_for_shutdown()` 才返回；Backend 拒绝后续请求。
 - 显式 `close()` 会关闭 Node 并唤醒 shutdown waiter。
-- 无 Named Pipe、TCP listener 或 GUI 依赖。
+- IPC host 收到同一个 shutdown event 后停止 accept，并等待已接入的客户端线程退出。
+- Backend 生命周期不依赖 GUI；本地 IPC 传输见 [G5 Named Pipe](G5_NAMED_PIPE.md)。

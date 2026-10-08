@@ -28,8 +28,8 @@ Python API 与传输层解耦，协议版本为 1。当前只接受 `status` 和
 `.html` / `.htm`，不能覆盖源文件。`overwrite` 可在单个请求中指定；未指定时沿用配置。`offline` 默认为
 `false`，为 `true` 时关闭远程资源抓取。
 
-Backend 在同一实例内串行处理请求，所以 RendererSession 与 Python core 的文件转换不会交叉执行。不同
-Backend 实例目前彼此独立；系统单实例约束及客户端间共享要由 G5/G6 的本地 IPC 与 ownership 实现。
+Backend 在同一实例内串行处理请求，所以 RendererSession 与 Python core 的文件转换不会交叉执行。G5 通过
+本机 Named Pipe 提供多个客户端到同一个 Backend 的共享入口；跨 Backend 进程的单实例 ownership 仍由 G6 实现。
 
 ## 命令行
 
@@ -38,9 +38,9 @@ python -m backend status
 python -m backend convert path\to\note.md --output path\to\note.html --offline
 ```
 
-CLI 适合独立检查和单文件转换。每次 CLI 调用都会在命令完成后关闭 Backend 并回收 Node；它不充当常驻
-服务，也不载入 GUI。长寿命 Backend 的 120 秒空闲退出由 [G4 生命周期](G4_BACKEND_IDLE.md) 定义；Named
-Pipe 与共享客户端仍属于后续阶段。
+CLI 适合独立检查和单文件转换。`status` / `convert` 调用会在命令完成后关闭 Backend 并回收 Node；它们不载入
+GUI。`serve` 子命令启动本机 Named Pipe host，在 Backend 触发 G4 的 120 秒 shutdown event 后停止接受连接并退出。
+协议、ACL 与 shutdown 协作见 [G5 Named Pipe](G5_NAMED_PIPE.md)。
 
 ## G3 验收
 

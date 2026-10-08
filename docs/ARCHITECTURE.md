@@ -4,7 +4,7 @@
 
 ```text
 core/           Python 调度：配置、转换计划、front matter、目录、渲染调度、索引生成、阅读器资产定位
-backend/        无 GUI 的转换服务宿主；拥有 RendererBridge，提供版本化 status / convert API
+backend/        无 GUI 的转换服务宿主；拥有 RendererBridge，通过本机 Named Pipe 提供版本化 status / convert API
 gui/            pywebview 桌面界面；api.py 是稳定 façade，services/ 按对话框、转换、主题和生命周期/存储分工
                 assets/js/ 的 GUI 脚本按职责拆分，由 manifest 按序组装成内联 classic script
 renderer/       Node 渲染服务（v2 production adapter；产物 renderer/dist 随包发布）
@@ -55,8 +55,9 @@ Markdown 文件
 - renderer 或 artifact 失败时明确报错；首次 smoke 失败不会缓存运行时验证结果。
 - `backend/service.py` 不导入 GUI，负责配置读取、单文件转换调度和 Backend 自有 RendererBridge 的关闭；
   `core/converter.py::process_single` 接受可选 renderer 注入，未注入时保留原有 GUI/core 调用路径。G3 的
-  JSON API 只实现 `status` 和 `convert`，CLI 为 `python -m backend`；G4 的空闲计时由 Backend 管理，不依赖 GUI，
-  Named Pipe 仍属于后续阶段。
+  JSON API 只实现 `status` 和 `convert`；G4 的空闲计时由 Backend 管理，不依赖 GUI。G5 的
+  `backend/named_pipe.py` 以本机 Named Pipe 承载 JSONL 请求；host 等待 Backend 的同一 shutdown event，事件触发后
+  停止 accept 并取消阻塞管道 I/O。细节见 [G5 Named Pipe](G5_NAMED_PIPE.md)。
 - `core/config.py::PRODUCTION_RENDERER_VERSION` 是 GUI 与 QA 使用的 renderer 版本标识，不提供运行时选择器。
 - 选项与语法范围见 [兼容范围](MARKDOWN.md)；迁移状态与测试证据见 [兼容矩阵](MARKDOWN_COMPATIBILITY.md)。
 

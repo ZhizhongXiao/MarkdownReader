@@ -1,4 +1,4 @@
-"""Headless entry point: python -m backend status|convert (Named Pipe follows in G5)."""
+"""Headless entry point: python -m backend status|convert|serve."""
 
 import argparse
 import json
@@ -7,6 +7,7 @@ import os
 import sys
 import uuid
 
+from backend.named_pipe import DEFAULT_PIPE_NAME, NamedPipeServer
 from backend.service import Backend
 
 
@@ -21,6 +22,9 @@ def main(argv: list[str] | None = None) -> int:
     convert.add_argument("--config", help="指定配置文件；默认使用 MDR profile")
     convert.add_argument("--overwrite", action=argparse.BooleanOptionalAction, default=None)
     convert.add_argument("--offline", action="store_true", help="关闭远程资源抓取")
+    serve = commands.add_parser("serve", help="通过本机 Named Pipe 提供 Backend 服务")
+    serve.add_argument("--config", help="指定配置文件；默认使用 MDR profile")
+    serve.add_argument("--pipe-name", default=DEFAULT_PIPE_NAME, help="本机 LOCAL 管道名称")
     args = parser.parse_args(argv)
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,
@@ -28,6 +32,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     params: dict[str, object] = {}
     config_path = None
+    if args.method == "serve":
+        config_path = args.config
+        with Backend(config_path=config_path) as backend:
+            NamedPipeServer(args.pipe_name).serve_until_shutdown(backend)
+        return 0
     if args.method == "convert":
         params = {"input_path": os.path.abspath(args.input_path), "offline": args.offline}
         if args.output is not None:
