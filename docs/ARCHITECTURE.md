@@ -3,7 +3,7 @@
 ## 分层与数据流
 
 ```text
-core/           Python 调度：配置、转换计划、front matter、目录、渲染调度、索引生成、阅读器资产定位
+core/           Python 调度：配置、转换计划、front matter、批次/单篇转换、目录、索引、阅读器资产定位
 backend/        无 GUI 的转换服务宿主；session Named Mutex 保证单 owner，通过 Named Pipe 提供版本化 status / convert API
 gui/            pywebview 桌面界面；api.py 是稳定 façade，services/ 按对话框、转换、主题和生命周期/存储分工
                 assets/js/ 的 GUI 脚本按职责拆分，由 manifest 按序组装成内联 classic script
@@ -32,8 +32,9 @@ Markdown 文件
 - 只负责调度与组装：不做 Markdown 解析，不实现阅读器交互。
 - `conversion_plan.py` 在任何写入之前给出可预览、可校验的转换计划，冲突在写入前拦下。
 - `renderer_node.py` 每进程只解析一次 Node 命令；frozen 包只使用内置 Node，缺失即视为打包物损坏。
-- `gui/api.py` 是稳定的 pywebview façade，保留 `pywebview.api.*` 方法与数据契约；内部由 `gui/services/` 的
-  对话框/输入、转换、主题、生命周期/存储服务承接工作。
+- `gui/api.py` 是稳定的 pywebview façade，内部由 `gui/services/` 的对话框/输入、Backend IPC 转换、主题、
+  生命周期/存储服务承接工作。G7 后 GUI 通过 `BackendClient` 确保 headless Backend 并使用 Named Pipe `status` /
+  `convert`；GUI 不导入默认 renderer bridge，也不负责 Node 生命周期。
 - 生命周期服务统一管理终止移除状态与在途操作 gate；对话框服务独立串行化 Tk 对话框。服务拆分不改变 GUI bridge
   方法、参数或返回 shape。
 - GUI 前端脚本位于 `gui/assets/js/`，由 `manifest.json` 固定装载顺序。`gui/app.py` 将片段组装为一个内联 classic
@@ -43,23 +44,24 @@ Markdown 文件
 
 - `renderer/` 是唯一支持的 renderer，复用 pinned `vscode-office` 语义并返回完整 envelope；
   `core/html_assembly.py` 将 envelope 装配为最终单文件 HTML。
-- `core/renderer_node.py` 在启动期检查 Node 版本与 v2 artifact。首次真实渲染把离线 KaTeX/runtime smoke
+- `core/renderer_node.py` 在 Backend 首次转换时检查 Node 版本与 v2 artifact。首次真实渲染把离线 KaTeX/runtime smoke
   与文档渲染放在同一个 Node 进程中；Python 校验 smoke envelope 后只向 assembly 交付正式文档 envelope。
   `core/renderer_v2.py::RendererBridge` 惰性持有一个 `RendererSession`，后续请求通过 JSONL 复用同一个
-  `renderer.cjs --server` 子进程。GUI/core 默认调用共用默认 bridge；Backend 创建自己的 bridge 并独立拥有
-  该 Session。每个 host 内的并发调用串行化，Node 每次仍 `createRenderer(options)`。
+  `renderer.cjs --server` 子进程。直接 core 调用共用默认 bridge；Backend 创建自己的 bridge 并独立拥有
+  该 Session。GUI 仅通过 Backend IPC 转换。每个 host 内的并发调用串行化，Node 每次仍 `createRenderer(options)`。
 - `core/renderer_session.py` 只负责启动、收发、关闭和已退出子进程的重建；不处理主题、配置、目录或装配。
   Host 关闭时关闭 stdin 并回收其 Node；Backend 在空闲 120 秒后先关闭 Node，再通知宿主循环退出，详见
   [G4 Backend idle 生命周期](G4_BACKEND_IDLE.md)。
   one-shot CLI 保留用于兼容与等价对照；协议和验收证据见 [G2 Renderer Session](G2_RENDERER_SESSION.md)。
 - renderer 或 artifact 失败时明确报错；首次 smoke 失败不会缓存运行时验证结果。
 - `backend/service.py` 不导入 GUI，负责配置读取、单文件转换调度和 Backend 自有 RendererBridge 的关闭；
-  `core/converter.py::process_single` 接受可选 renderer 注入，未注入时保留原有 GUI/core 调用路径。G3 的
+  `core/converter.py::process_single` 接受可选 renderer 注入，未注入时保留直接 core 调用路径。G3 的
   JSON API 只实现 `status` 和 `convert`；G4 的空闲计时由 Backend 管理，不依赖 GUI。G5 的
   `backend/named_pipe.py` 以本机 Named Pipe 承载 JSONL 请求；host 等待 Backend 的同一 shutdown event，事件触发后
   停止 accept 并取消阻塞管道 I/O。G6 的 `backend/ownership.py` 在 Backend 构造前取得 per-session mutex；
-  竞争启动者连接现有 host 并取得 status，不会创建第二个 Backend。细节见 [G5 Named Pipe](G5_NAMED_PIPE.md) 与
-  [G6 Backend ownership](G6_BACKEND_OWNERSHIP.md)。
+  竞争启动者连接现有 host 并取得 status，不会创建第二个 Backend。G7 的 GUI 保留批次计划、进度和索引生成，每篇
+  文档由 `core.batch` 调度并通过 Pipe `convert` 请求交给 Backend，索引仍在 core 生成。细节见 [G5 Named Pipe](G5_NAMED_PIPE.md)、
+  [G6 Backend ownership](G6_BACKEND_OWNERSHIP.md) 与 [G7 GUI client](G7_GUI_CLIENT.md)。
 - `core/config.py::PRODUCTION_RENDERER_VERSION` 是 GUI 与 QA 使用的 renderer 版本标识，不提供运行时选择器。
 - 选项与语法范围见 [兼容范围](MARKDOWN.md)；迁移状态与测试证据见 [兼容矩阵](MARKDOWN_COMPATIBILITY.md)。
 

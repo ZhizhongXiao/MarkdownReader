@@ -19,6 +19,7 @@ EXPECTED_PARAMETERS = {
     "select_input_directory": ["self"],
     "select_output_directory": ["self"],
     "prepare_conversion": ["self", "request"],
+    "get_backend_status": ["self"],
     "get_config": ["self"],
     "set_configs": ["self", "overrides"],
     "get_theme_state": ["self"],

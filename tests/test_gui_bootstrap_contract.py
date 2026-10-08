@@ -19,6 +19,7 @@ still decide what every generated page carries.
 
 import inspect
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
@@ -33,25 +34,31 @@ from core import paths  # noqa: E402
 from gui.api import BridgeApi  # noqa: E402
 
 
+class _BackendClient:
+    def __init__(self) -> None:
+        self.ensured = 0
+        self.requests: list[dict[str, object]] = []
+
+    def ensure_backend(self) -> dict[str, object]:
+        self.ensured += 1
+        return {"protocol": 1, "id": "status", "ok": True, "result": {"pid": 10}}
+
+    def request_convert(self, params: Mapping[str, object]) -> dict[str, object]:
+        captured = dict(params)
+        self.requests.append(captured)
+        return {"output_path": str(captured["output_path"]), "warnings": []}
+
+    def status(self) -> dict[str, object]:
+        return {"pid": 10, "renderer_pid": None}
+
+
 @pytest.fixture()
 def sandbox(tmp_path, monkeypatch):
-    """Run the bridge against a temporary profile and capture the conversion parameters."""
+    """Run the bridge against an injected Backend client and capture IPC parameters."""
     profile = tmp_path / "profile" / "config.json"
     monkeypatch.setattr(paths, "config_path", lambda: str(profile))
     monkeypatch.setattr(core_config, "PROJECT_ROOT", str(tmp_path / "app"))
-    captured: dict = {}
-
-    def fake_single(input_path, output_path, cfg, *args, **kwargs):
-        captured["cfg"] = cfg
-        return output_path
-
-    def fake_batch(inputs, output_dir, cfg, **kwargs):
-        captured["cfg"] = cfg
-        return []
-
-    monkeypatch.setattr("core.converter.process_single", fake_single)
-    monkeypatch.setattr("core.converter.process_batch", fake_batch)
-    return captured
+    return _BackendClient()
 
 
 def test_the_bridge_no_longer_offers_a_builtin_template_list() -> None:
@@ -91,7 +98,7 @@ def test_a_gui_conversion_renders_with_the_bootstrap_theme(sandbox, tmp_path: Pa
     source = tmp_path / "note.md"
     source.write_text("# 标题\n\n正文。\n", encoding="utf-8")
 
-    result = BridgeApi().convert(
+    result = BridgeApi(backend_client=sandbox).convert(
         {
             "inputs": [str(source)],
             "output_dir": str(tmp_path / "out"),
@@ -101,9 +108,8 @@ def test_a_gui_conversion_renders_with_the_bootstrap_theme(sandbox, tmp_path: Pa
     )
 
     assert result.get("success") is not False, result
-    cfg = sandbox.get("cfg")
-    assert cfg is not None, "the conversion has to reach the converter"
-    assert cfg["template"] == "modern"
+    assert sandbox.ensured == 1
+    assert sandbox.requests[0]["template"] == "modern"
 
 
 def test_a_client_supplied_template_cannot_override_the_bootstrap(sandbox, tmp_path: Path) -> None:
@@ -111,7 +117,7 @@ def test_a_client_supplied_template_cannot_override_the_bootstrap(sandbox, tmp_p
     source = tmp_path / "note.md"
     source.write_text("# 标题\n\n正文。\n", encoding="utf-8")
 
-    BridgeApi().convert(
+    BridgeApi(backend_client=sandbox).convert(
         {
             "inputs": [str(source)],
             "output_dir": str(tmp_path / "out"),
@@ -121,9 +127,41 @@ def test_a_client_supplied_template_cannot_override_the_bootstrap(sandbox, tmp_p
         }
     )
 
-    cfg = sandbox.get("cfg")
-    assert cfg is not None, "the conversion has to reach the converter"
-    assert cfg["template"] == "modern", (
+    assert sandbox.requests[0]["template"] == "modern", (
         "a request-supplied template won the conversion: the GUI boundary must render with "
         "BOOTSTRAP_TEMPLATE no matter what the client sends"
     )
+
+
+def test_gui_conversion_sends_each_batch_document_through_the_backend(sandbox, tmp_path: Path):
+    source_root = tmp_path / "notes"
+    nested = source_root / "nested"
+    nested.mkdir(parents=True)
+    first = source_root / "first.md"
+    second = nested / "second.md"
+    first.write_text("[second](nested/second.md)\n", encoding="utf-8")
+    second.write_text("# Second\n", encoding="utf-8")
+
+    result = BridgeApi(backend_client=sandbox).convert(
+        {
+            "inputs": [str(source_root)],
+            "output_dir": str(tmp_path / "out"),
+            "preserve_structure": True,
+            "overwrite": True,
+            "build_index": True,
+        }
+    )
+
+    assert result["success"] is True
+    assert sandbox.ensured == 1
+    assert len(sandbox.requests) == 2
+    link_map = sandbox.requests[0]["document_map"]
+    assert isinstance(link_map, dict)
+    assert sandbox.requests[1]["document_map"] == link_map
+    assert link_map[str(first)] == str(tmp_path / "out" / "notes-HTML" / "first.html")
+    assert link_map[str(second)] == str(
+        tmp_path / "out" / "notes-HTML" / "nested" / "second.html"
+    )
+    entry_file = result.get("entry_file")
+    assert isinstance(entry_file, str)
+    assert Path(entry_file).is_file()

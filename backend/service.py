@@ -158,7 +158,10 @@ class Backend:
             raise BackendError("config_not_found", f"配置文件不存在：{self._config_path}")
 
         started = time.perf_counter()
-        cfg = load_config(self._config_path, runtime_overrides={"overwrite": params.overwrite})
+        cfg = load_config(
+            self._config_path,
+            runtime_overrides={"overwrite": params.overwrite, "template": params.template},
+        )
         _logger.debug(
             "timing stage=config_read elapsed_ms=%.2f", (time.perf_counter() - started) * 1000,
         )
@@ -166,8 +169,14 @@ class Backend:
         report: dict = {}
         started = time.perf_counter()
         try:
+            link_context: dict[str, object] = {
+                "source_path": str(source),
+                "output_path": str(output),
+            }
+            if params.document_map is not None:
+                link_context["document_map"] = params.document_map
             saved = process_single(
-                str(source), str(output), cfg, report=report,
+                str(source), str(output), cfg, link_context=link_context, report=report,
                 renderer_options={"fetch_remote_resources": False} if params.offline else None,
                 renderer=self._render,
             )

@@ -5,9 +5,11 @@ import os
 from collections.abc import Callable, Mapping, Sequence
 from typing import NotRequired, TypedDict
 
+from core.batch import process_batch as process_batch_core
 from core.config import load_config
 from core.conversion_plan import ConversionPlan, build_conversion_plan, document_output_map
 from core.viewer_assets import normalize_theme_id
+from gui.services.backend_client import BackendClient, BackendClientError, BackendClientPort
 
 _logger = logging.getLogger("gui")
 
@@ -42,10 +44,12 @@ class ConversionService:
         notify_status: Callable[[str, str, list[str] | None, str], None],
         open_file_uri: Callable[[str], None],
         bootstrap_template: str,
+        backend_client: BackendClientPort | None = None,
     ) -> None:
         self._notify_status = notify_status
         self._open_file_uri = open_file_uri
         self._bootstrap_template = bootstrap_template
+        self._backend = backend_client or BackendClient()
 
     def prepare(self, request: dict | None = None) -> ConversionPlan:
         """Return the read-only plan for the GUI's structured conversion request."""
@@ -72,15 +76,16 @@ class ConversionService:
             }
 
     def convert(self, request: dict | None = None) -> ConversionResult:
-        """Convert one structured request; the facade owns terminal-operation gating."""
+        """Plan locally and render every document through the shared Backend host."""
         try:
-            from core.converter import process_batch, process_single
             from core.index_builder import make_index_filename
         except Exception as error:
             return {"success": False, "files": [], "errors": [str(error)]}
 
         request = request or {}
         paths = request.get("inputs", [])
+        if not isinstance(paths, list):
+            return {"success": False, "files": [], "errors": ["输入路径必须是数组。"]}
         output_dir = request.get("output_dir", "")
         overwrite = bool(request.get("overwrite", False))
         build_index = bool(request.get("build_index", True))
@@ -117,11 +122,15 @@ class ConversionService:
             if not items:
                 return {"success": False, "files": [], "errors": ["未找到 Markdown 文件。"]}
 
+            self._backend.ensure_backend()
             is_batch = len(inputs) > 1 or os.path.isdir(paths[0])
             actual_output_dir = plan["output_dir"]
             entry_file = ""
             documents: list[dict] = []
+            files: list[str] = []
             warnings_list = list(plan.get("warnings", []))
+            link_map = document_output_map(plan)
+            errors_list: list[str] = []
 
             if is_batch:
                 source_name = ""
@@ -130,17 +139,18 @@ class ConversionService:
                     source_name = os.path.basename(os.path.normpath(selected_root))
 
                 index_filename = make_index_filename(source_name)
-                results = process_batch(
+                results = process_batch_core(
                     inputs,
                     actual_output_dir,
                     cfg,
+                    self._convert_batch_document,
                     source_root=plan.get("source_root") or None,
                     index_filename=index_filename,
                     collection_name=source_name,
                     plan=plan,
                     progress_callback=self._notify_status,
                 )
-                files = [result.get("path", "") for result in results]
+                files = [str(result.get("path", "")) for result in results]
                 documents = results
                 for result in results:
                     warnings_list.extend(result.get("warnings", []))
@@ -149,41 +159,55 @@ class ConversionService:
                     entry_file = os.path.abspath(index_path)
                 elif files:
                     entry_file = os.path.abspath(files[0])
-                errors_list = [] if len(results) == len(items) else [
-                    f"有 {len(items) - len(results)} 个文档生成失败。"
-                ]
+                if len(results) != len(items):
+                    errors_list = [f"有 {len(items) - len(results)} 个文档生成失败。"]
             else:
                 item = items[0]
+                input_path = item["source_path"]
                 out_path = item["output_path"]
-                self._notify_status(inputs[0], "converting", [], out_path)
-                render_report: dict = {}
-                saved = process_single(
-                    inputs[0],
-                    out_path,
-                    cfg,
-                    link_context={
-                        "source_path": inputs[0],
-                        "output_path": out_path,
-                        "document_map": document_output_map(plan),
-                    },
-                    report=render_report,
-                )
-                files = [saved] if saved else []
-                entry_file = os.path.abspath(saved) if saved else ""
-                errors_list = [] if saved else ["生成 HTML 失败。"]
+                self._notify_status(input_path, "converting", [], out_path)
                 item_result = dict(item)
-                item_warnings: list[str] = render_report.get("warnings", [])
+                conversion_error = ""
+                try:
+                    report: dict = {}
+                    saved = self._convert_batch_document(
+                        input_path,
+                        out_path,
+                        cfg,
+                        {
+                            "source_path": input_path,
+                            "output_path": out_path,
+                            "document_map": link_map,
+                        },
+                        report,
+                    )
+                    item_warnings: list[str] = report.get("warnings", [])
+                except Exception as error:
+                    conversion_error = str(error)
+                    errors_list = [conversion_error]
+                    saved = ""
+                    item_warnings = []
+                if saved:
+                    files = [saved]
+                    entry_file = os.path.abspath(saved)
                 status = "warning" if item_warnings else ("success" if saved else "error")
                 item_result.update(
                     {
-                        "path": saved or "",
+                        "path": saved,
                         "status": status,
-                        "warnings": item_warnings,
+                        "warnings": item_warnings or (
+                            [conversion_error] if conversion_error else []
+                        ),
                     }
                 )
                 documents = [item_result]
+                if not errors_list and not saved:
+                    errors_list = ["生成 HTML 失败。"]
                 warnings_list.extend(item_warnings)
-                self._notify_status(inputs[0], status, item_warnings, saved or out_path)
+                if saved:
+                    self._notify_status(input_path, status, item_warnings, saved)
+                elif conversion_error:
+                    self._notify_status(input_path, "error", [conversion_error], out_path)
 
             if auto_open and entry_file:
                 self._open_file_uri(entry_file)
@@ -200,3 +224,49 @@ class ConversionService:
         except Exception as error:
             _logger.exception("转换失败")
             return {"success": False, "files": [], "errors": [str(error)]}
+
+    def backend_status(self) -> dict[str, object]:
+        """Return the shared headless Backend status, ensuring it is available."""
+        return self._backend.status()
+
+    def _convert_batch_document(
+        self,
+        input_path: str,
+        output_path: str,
+        cfg: dict,
+        link_context: dict[str, object],
+        report: dict,
+        *,
+        renderer_options: dict | None = None,
+    ) -> str:
+        document_map = link_context.get("document_map")
+        if not isinstance(document_map, dict) or any(
+            not isinstance(source, str) or not isinstance(target, str)
+            for source, target in document_map.items()
+        ):
+            raise BackendClientError("invalid_conversion_context", "批次文档映射格式无效。")
+        result = self._backend.request_convert(
+            {
+                "input_path": input_path,
+                "output_path": output_path,
+                "overwrite": bool(cfg.get("overwrite", False)),
+                "offline": bool(
+                    renderer_options is not None
+                    and renderer_options.get("fetch_remote_resources") is False
+                ),
+                "template": normalize_theme_id(str(cfg.get("template", self._bootstrap_template))),
+                "document_map": document_map,
+            }
+        )
+        saved = result.get("output_path")
+        warnings = result.get("warnings", [])
+        if not isinstance(saved, str) or not saved:
+            raise BackendClientError(
+                "invalid_backend_response", "Backend 转换结果缺少 output_path。",
+            )
+        if not isinstance(warnings, list) or any(not isinstance(item, str) for item in warnings):
+            raise BackendClientError(
+                "invalid_backend_response", "Backend 转换结果中的 warnings 格式无效。",
+            )
+        report["warnings"] = warnings
+        return saved

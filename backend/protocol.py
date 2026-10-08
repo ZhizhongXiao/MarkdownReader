@@ -38,6 +38,8 @@ class ConvertParams:
     output_path: str | None
     overwrite: bool | None
     offline: bool
+    template: str | None = None
+    document_map: dict[str, str] | None = None
 
 
 def parse_request(value: object) -> Request:
@@ -67,13 +69,17 @@ def parse_request(value: object) -> Request:
 
 
 def parse_convert_params(params: dict[str, object]) -> ConvertParams:
-    unknown = params.keys() - {"input_path", "output_path", "overwrite", "offline"}
+    unknown = params.keys() - {
+        "input_path", "output_path", "overwrite", "offline", "template", "document_map",
+    }
     if unknown:
         raise BackendError("invalid_params", f"未知转换参数：{', '.join(sorted(unknown))}")
     input_path = params.get("input_path")
     output_path = params.get("output_path")
     overwrite = params.get("overwrite")
     offline = params.get("offline", False)
+    template = params.get("template")
+    raw_document_map = params.get("document_map")
     if not isinstance(input_path, str) or not input_path.strip():
         raise BackendError("invalid_params", "input_path 必须为非空字符串。")
     if output_path is not None and (not isinstance(output_path, str) or not output_path.strip()):
@@ -82,4 +88,15 @@ def parse_convert_params(params: dict[str, object]) -> ConvertParams:
         raise BackendError("invalid_params", "overwrite 必须为布尔值。")
     if not isinstance(offline, bool):
         raise BackendError("invalid_params", "offline 必须为布尔值。")
-    return ConvertParams(input_path, output_path, overwrite, offline)
+    if template is not None and (not isinstance(template, str) or not template.strip()):
+        raise BackendError("invalid_params", "template 必须为非空字符串。")
+    document_map: dict[str, str] | None = None
+    if raw_document_map is not None:
+        if not isinstance(raw_document_map, dict):
+            raise BackendError("invalid_params", "document_map 必须是路径到路径的对象。")
+        document_map = {}
+        for source, output in raw_document_map.items():
+            if not isinstance(source, str) or not isinstance(output, str):
+                raise BackendError("invalid_params", "document_map 必须是路径到路径的对象。")
+            document_map[source] = output
+    return ConvertParams(input_path, output_path, overwrite, offline, template, document_map)

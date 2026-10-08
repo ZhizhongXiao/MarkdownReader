@@ -12,18 +12,17 @@ import time
 from collections.abc import Mapping
 from typing import Protocol
 
+from core.batch import DEFAULT_INDEX_FILENAME
+from core.batch import process_batch as _process_batch
 from core.config import (
     normalize_template_name,
 )
 from core.conversion_plan import (
     ConversionPlan,
-    build_conversion_plan,
     collect_input_documents,
-    document_output_map,
 )
 from core.fm import parse_front_matter
 from core.html_assembly import assemble_document
-from core.index_builder import DEFAULT_INDEX_FILENAME, build_index
 from core.renderer_node import render_markdown_node
 from core.renderer_v2 import RendererEnvelope
 
@@ -247,96 +246,35 @@ def process_batch(
     *,
     renderer_options: dict | None = None,
 ) -> list[dict]:
-    """Process multiple Markdown files.
+    """Process a batch through the established core result and index pipeline."""
 
-    Args:
-        inputs: List of .md file paths.
-        output_dir: Directory to write HTML outputs.
-        cfg: Configuration dict.
-        source_root: Source directory used to preserve relative paths.
-        index_filename: Generated batch index filename.
-        collection_name: Source directory name displayed by the index.
-        renderer_options: Forwarded to ``process_single``.
-
-    Returns:
-        List of result dicts with keys: filename, title, author, date, tags.
-    """
-    results: list[dict] = []
-    if plan is None:
-        plan = build_conversion_plan(
-            inputs,
-            output_dir,
-            preserve_structure=bool(source_root),
-        )
-    link_map = document_output_map(plan)
-
-    for item in plan.get("items", []):
-        input_path = item["source_path"]
-        out_path = item["output_path"]
-        filename = item["output_relative"]
-        if progress_callback:
-            progress_callback(input_path, "converting", [], out_path)
-
-        render_report: dict = {}
-        try:
-            saved = process_single(
-                input_path,
-                out_path,
-                cfg,
-                link_context={
-                    "source_path": input_path,
-                    "output_path": out_path,
-                    "document_map": link_map,
-                },
-                report=render_report,
-                renderer_options=renderer_options,
-            )
-        except Exception as e:
-            _logger.error("转换失败：%s；原因：%s", input_path, e)
-            if progress_callback:
-                progress_callback(input_path, "error", [str(e)], out_path)
-            continue
-
-        if saved:
-            # Extract metadata for index
-            try:
-                with open(input_path, encoding="utf-8") as f:
-                    raw = f.read()
-                meta, _ = parse_front_matter(raw)
-            except Exception:
-                meta = {}
-
-            results.append(
-                {
-                    "filename": filename.replace(os.sep, "/"),
-                    "path": saved,
-                    "title": meta.get("title") or os.path.splitext(os.path.basename(filename))[0],
-                    "author": meta.get("author", ""),
-                    "date": meta.get("date", ""),
-                    "tags": meta.get("tags", []),
-                    "source_path": input_path,
-                    "output_path": saved,
-                    "status": "warning" if render_report.get("warnings") else "success",
-                    "warnings": render_report.get("warnings", []),
-                }
-            )
-            if progress_callback:
-                progress_callback(
-                    input_path,
-                    "warning" if render_report.get("warnings") else "success",
-                    render_report.get("warnings", []),
-                    saved,
-                )
-        elif progress_callback:
-            progress_callback(input_path, "error", ["生成 HTML 失败。"], out_path)
-
-    # Generate index if enabled
-    if cfg.get("build_index", True):
-        build_index(
-            plan.get("output_dir", output_dir),
-            results,
-            filename=index_filename,
-            collection_name=collection_name,
+    def convert_one(
+        input_path: str,
+        output_path: str,
+        cfg: dict,
+        link_context: dict[str, object],
+        report: dict,
+        *,
+        renderer_options: dict | None = None,
+    ) -> str | None:
+        return process_single(
+            input_path,
+            output_path,
+            cfg,
+            link_context=link_context,
+            report=report,
+            renderer_options=renderer_options,
         )
 
-    return results
+    return _process_batch(
+        inputs,
+        output_dir,
+        cfg,
+        convert_one,
+        source_root=source_root,
+        index_filename=index_filename,
+        collection_name=collection_name,
+        plan=plan,
+        progress_callback=progress_callback,
+        renderer_options=renderer_options,
+    )

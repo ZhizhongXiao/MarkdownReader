@@ -4,6 +4,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 from core.conversion_plan import ConversionPlan
+from gui.services.backend_client import BackendClientPort
 from gui.services.conversion import ConversionResult, ConversionService, _refused_plan
 from gui.services.dialogs import DialogInputService
 from gui.services.lifecycle import LifecycleStorageService, WebViewWindow
@@ -25,7 +26,7 @@ def _refused_path() -> dict:
 class BridgeApi:
     """Public API exposed to pywebview; service details stay behind this facade."""
 
-    def __init__(self) -> None:
+    def __init__(self, backend_client: BackendClientPort | None = None) -> None:
         self._lifecycle = LifecycleStorageService()
         self._dialogs = DialogInputService()
         self._themes = ThemeService(self._dialogs, self._lifecycle.open_directory)
@@ -33,6 +34,7 @@ class BridgeApi:
             self._lifecycle.notify_conversion_status,
             self._lifecycle.open_file_uri,
             BOOTSTRAP_TEMPLATE,
+            backend_client,
         )
 
     @contextmanager
@@ -77,6 +79,16 @@ class BridgeApi:
     def prepare_conversion(self, request: dict | None = None) -> ConversionPlan:
         with self._operation() as allowed:
             return self._conversion.prepare(request) if allowed else _refused_plan()
+
+    def get_backend_status(self) -> dict[str, object]:
+        """Ensure the GUI's shared headless Backend and return its status facts."""
+        with self._operation() as allowed:
+            if not allowed:
+                return {"ok": False, "error": "移除用户数据已开始，本次操作被拒绝。"}
+            try:
+                return {"ok": True, "result": self._conversion.backend_status()}
+            except Exception as error:
+                return {"ok": False, "error": str(error)}
 
     # Profile and theme state
 

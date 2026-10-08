@@ -33,5 +33,5 @@ Node 退出后返回；watcher 随即设置 Win32 stop event。Accept 循环用 
 - 多个本机客户端可以同时连接同一 host，响应保留各自请求 ID。
 - 通过管道转换 `samples/demo.md`，输出字节与 `samples/demo.html` 一致。
 - Backend idle shutdown 会停止 accept，并取消无数据客户端的阻塞读取；服务退出后无法建立新连接。
-- Named Pipe host、IPC 客户端 API 和 session 单实例 ownership 已建立；GUI 迁移、VS Code 接入和崩溃恢复仍在后续阶段。
+- Named Pipe host、IPC 客户端 API、session 单实例 ownership 与 GUI 客户端接入已建立；VS Code 接入和崩溃恢复仍在后续阶段。
 - 客户端连接建立有超时；渲染请求/响应期限与 Node 自动重建策略属于 G9。

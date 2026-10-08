@@ -154,27 +154,6 @@ def main():
 
     setup_logging(verbose=True)
 
-
-    # Node belongs to the runtime, not to a conversion job: resolve and validate
-
-    # it once here, so a broken package fails at launch rather than in the middle
-
-    # of a batch.
-
-    from core.renderer_node import validate_renderer_runtime
-
-
-    try:
-
-        validate_renderer_runtime()
-
-    except RuntimeError as error:
-
-        logging.getLogger(__name__).error("启动检查失败：%s", error)
-
-        raise SystemExit(1) from error
-
-
     # Create the API instance
 
     api = BridgeApi()

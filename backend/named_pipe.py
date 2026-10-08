@@ -6,10 +6,13 @@ import json
 import logging
 import threading
 from collections.abc import Mapping
+from typing import TYPE_CHECKING
 
 from backend import named_pipe_win32 as win32
 from backend.protocol import PROTOCOL_VERSION, Response
-from backend.service import Backend
+
+if TYPE_CHECKING:
+    from backend.service import Backend
 
 _logger = logging.getLogger(__name__)
 DEFAULT_PIPE_NAME = r"\\.\pipe\LOCAL\MarkdownReader.v1"

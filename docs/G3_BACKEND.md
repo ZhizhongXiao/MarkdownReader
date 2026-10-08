@@ -9,7 +9,7 @@ renderer。每个 Backend 拥有自己的 `RendererBridge`；首次有效转换�
 Backend 将配置路径交给 `core.config.load_config`，并将单文件转换委托给现有的
 `core.converter.process_single`。转换计划、Markdown 解析、资源处理和 HTML assembly 仍由 core 完成。
 `process_single` 的 `renderer` 参数用于注入 Backend 自有的渲染函数；既有调用不传该参数时，继续走默认
-renderer bridge。
+renderer bridge。G7 后 GUI 不再使用该默认路径；GUI 的每篇文档转换通过 G5 Named Pipe 委托给本服务。
 
 ## 请求协议
 
@@ -50,4 +50,5 @@ GUI。`serve` 子命令启动本机 Named Pipe host，在 Backend 触发 G4 的 
 - 同一 Backend 连续转换 demo 三次，仅创建一个 `renderer.cjs --server` 进程；三份输出均与
   `samples/demo.html` 字节一致。
 - 关闭 Backend 后，其 RendererSession 子进程正常退出；默认 core bridge 不会被 Backend 关闭或占用。
+- GUI 作为 Named Pipe 客户端转换时，默认 core bridge 保持未启动；Backend 自己持有实际 RendererSession。
 - 无效版本、方法、参数及已关闭的 Backend 都返回协议化错误。
