@@ -49,12 +49,14 @@ Markdown 文件
   `renderer.cjs --server` 子进程。GUI/core 默认调用共用默认 bridge；Backend 创建自己的 bridge 并独立拥有
   该 Session。每个 host 内的并发调用串行化，Node 每次仍 `createRenderer(options)`。
 - `core/renderer_session.py` 只负责启动、收发、关闭和已退出子进程的重建；不处理主题、配置、目录或装配。
-  Host 关闭时关闭 stdin 并回收其 Node；Backend 进程生命周期与 120 秒空闲退出分别由服务宿主阶段管理。
+  Host 关闭时关闭 stdin 并回收其 Node；Backend 在空闲 120 秒后先关闭 Node，再通知宿主循环退出，详见
+  [G4 Backend idle 生命周期](G4_BACKEND_IDLE.md)。
   one-shot CLI 保留用于兼容与等价对照；协议和验收证据见 [G2 Renderer Session](G2_RENDERER_SESSION.md)。
 - renderer 或 artifact 失败时明确报错；首次 smoke 失败不会缓存运行时验证结果。
 - `backend/service.py` 不导入 GUI，负责配置读取、单文件转换调度和 Backend 自有 RendererBridge 的关闭；
   `core/converter.py::process_single` 接受可选 renderer 注入，未注入时保留原有 GUI/core 调用路径。G3 的
-  JSON API 只实现 `status` 和 `convert`，CLI 为 `python -m backend`；Named Pipe 和 idle timeout 属于后续阶段。
+  JSON API 只实现 `status` 和 `convert`，CLI 为 `python -m backend`；G4 的空闲计时由 Backend 管理，不依赖 GUI，
+  Named Pipe 仍属于后续阶段。
 - `core/config.py::PRODUCTION_RENDERER_VERSION` 是 GUI 与 QA 使用的 renderer 版本标识，不提供运行时选择器。
 - 选项与语法范围见 [兼容范围](MARKDOWN.md)；迁移状态与测试证据见 [兼容矩阵](MARKDOWN_COMPATIBILITY.md)。
 

@@ -25,8 +25,8 @@ python -m backend status          # 无 GUI 检查 Backend 状态，不启动 No
 python -m backend convert path\to\note.md --offline
 ```
 
-G3 Backend API 与生命周期边界见 [Backend 服务宿主](G3_BACKEND.md)。CLI 每次调用都是独立宿主进程；
-跨调用复用、空闲退出与 GUI/VS Code IPC 会在后续阶段加入。
+G3 Backend API 与 G4 空闲生命周期见 [Backend 服务宿主](G3_BACKEND.md) 和
+[G4 idle 生命周期](G4_BACKEND_IDLE.md)。CLI 每次调用都是独立宿主进程；GUI/VS Code IPC 留给后续阶段。
 
 ## 测试
 

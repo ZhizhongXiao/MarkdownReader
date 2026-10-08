@@ -26,6 +26,7 @@ from core.renderer_node import validate_renderer_runtime
 from core.renderer_v2 import RendererBridge, RendererEnvelope
 
 _logger = logging.getLogger(__name__)
+BACKEND_IDLE_TIMEOUT_SECONDS = 120.0
 
 
 class Backend:
@@ -35,9 +36,19 @@ class Backend:
         started = time.perf_counter()
         self._config_path = os.path.abspath(config_path) if config_path else None
         self._renderer = RendererBridge()
-        self._lock = threading.Lock()
+        self._condition = threading.Condition()
+        self._shutdown_lock = threading.Lock()
+        self._shutdown_event = threading.Event()
         self._closed = False
+        self._last_activity = time.monotonic()
+        self._idle_timeout = BACKEND_IDLE_TIMEOUT_SECONDS
+        self._idle_thread = threading.Thread(
+            target=self._expire_when_idle,
+            name="mdr-backend-idle",
+            daemon=True,
+        )
         atexit.register(self.close)
+        self._idle_thread.start()
         _logger.debug(
             "timing stage=backend_start elapsed_ms=%.2f", (time.perf_counter() - started) * 1000,
         )
@@ -52,11 +63,45 @@ class Backend:
         self.close()
 
     def close(self) -> None:
-        """Wait for an in-flight conversion, refuse new work, and reap this host's Node."""
-        with self._lock:
+        """Refuse new work, wake the host loop, and reap this host's Node."""
+        with self._condition:
             self._closed = True
+            self._condition.notify_all()
+        self._finish_shutdown()
+        self._join_idle_thread()
+
+    def wait_for_shutdown(self, timeout: float | None = None) -> bool:
+        """Wait for idle expiry or explicit close; expiry closes Node before returning."""
+        stopped = self._shutdown_event.wait(timeout)
+        if stopped:
+            self._join_idle_thread()
+        return stopped
+
+    def _expire_when_idle(self) -> None:
+        should_close = False
+        with self._condition:
+            while not self._closed:
+                remaining = self._last_activity + self._idle_timeout - time.monotonic()
+                if remaining <= 0:
+                    self._closed = True
+                    self._condition.notify_all()
+                    should_close = True
+                    break
+                self._condition.wait(timeout=remaining)
+        if should_close:
+            self._finish_shutdown()
+
+    def _finish_shutdown(self) -> None:
+        with self._shutdown_lock:
+            if self._shutdown_event.is_set():
+                return
             self._renderer.close()
             atexit.unregister(self.close)
+            self._shutdown_event.set()
+
+    def _join_idle_thread(self) -> None:
+        if threading.current_thread() is not self._idle_thread:
+            self._idle_thread.join()
 
     def handle_request(self, value: object) -> Response:
         """Transport-neutral entry point; every failure is a structured response."""
@@ -64,7 +109,7 @@ class Backend:
         request_id = request_id if isinstance(request_id, str) else None
         try:
             request = parse_request(value)
-            with self._lock:
+            with self._condition:
                 if self._closed:
                     raise BackendError("backend_closed", "Backend 已关闭。")
                 if request.method == "status":
@@ -72,7 +117,12 @@ class Backend:
                         "pid": os.getpid(), "renderer_pid": self._renderer.pid, "renderer": "v2",
                     }
                 else:
-                    result = self._convert(parse_convert_params(request.params))
+                    params = parse_convert_params(request.params)
+                    try:
+                        result = self._convert(params)
+                    finally:
+                        self._last_activity = time.monotonic()
+                        self._condition.notify_all()
             return {"protocol": PROTOCOL_VERSION, "id": request.id, "ok": True, "result": result}
         except BackendError as error:
             code, message = error.code, str(error)

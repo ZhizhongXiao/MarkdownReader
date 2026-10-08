@@ -27,7 +27,7 @@ HTML assembly 语义。新增代码只使用 Python 与 Node 标准库，无新�
   请求超时、EOF、无效 JSON 或响应 ID/协议不匹配会关闭该子进程，错误交给调用方。
   生产 bridge 遇到 v2 envelope/渲染失败也会关闭该 Session；下一次请求重新启动并 smoke。
 
-当前 G2 的 Node 跟随 Python 宿主生命周期；G3 才引入独立 Backend，G4 才实现 120 秒空闲退出。
+当前 G2 的 Node 跟随 Python 宿主生命周期；G3 引入独立 Backend，G4 在 Backend 中实现 120 秒空闲退出。
 当前失败的在途请求不会自动重放，G9 再完善一次自动重试与服务级故障恢复。
 
 ## JSONL 传输协议 v1

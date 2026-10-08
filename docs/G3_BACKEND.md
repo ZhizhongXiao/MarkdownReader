@@ -38,9 +38,9 @@ python -m backend status
 python -m backend convert path\to\note.md --output path\to\note.html --offline
 ```
 
-CLI 适合独立检查和单文件转换。每次 CLI 调用都会退出并回收 Node；它不充当常驻服务，不提供 120 秒
-空闲计时，也不载入 GUI。G4/G5 加入宿主生命周期与 Named Pipe 后，GUI 和其他本地客户端会连接同一
-Backend 实例。
+CLI 适合独立检查和单文件转换。每次 CLI 调用都会在命令完成后关闭 Backend 并回收 Node；它不充当常驻
+服务，也不载入 GUI。长寿命 Backend 的 120 秒空闲退出由 [G4 生命周期](G4_BACKEND_IDLE.md) 定义；Named
+Pipe 与共享客户端仍属于后续阶段。
 
 ## G3 验收
 
