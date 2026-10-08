@@ -52,7 +52,8 @@ def test_renderer_request_timing_preserves_stdout(monkeypatch, tmp_path: Path, c
     )
 
     with caplog.at_level(logging.DEBUG, logger="core.renderer_v2"):
-        stdout = renderer_v2._invoke_artifact("node", "# baseline", {}, {})
+        session = renderer_v2.RendererSession("node", str(tmp_path / "renderer.cjs"))
+        stdout = renderer_v2._invoke_artifact(session, "# baseline", {}, {})
 
     assert stdout == expected_stdout
     assert any(

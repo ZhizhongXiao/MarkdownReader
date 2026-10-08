@@ -9,6 +9,8 @@ Markdown is rendered by the v2 adapter and assembled by `core/html_assembly.py`.
 import logging
 import os
 import time
+from collections.abc import Mapping
+from typing import Protocol
 
 from core.config import (
     normalize_template_name,
@@ -23,6 +25,7 @@ from core.fm import parse_front_matter
 from core.html_assembly import assemble_document
 from core.index_builder import DEFAULT_INDEX_FILENAME, build_index
 from core.renderer_node import render_markdown_node
+from core.renderer_v2 import RendererEnvelope
 
 _logger = logging.getLogger(__name__)
 
@@ -31,6 +34,15 @@ _logger = logging.getLogger(__name__)
 # renderer protocol options 保持内部运行策略，不成为用户偏好；timeout / retries / maxBytes 仍是
 # 5C 的实现策略。
 _V2_DEFAULT_OPTIONS = {"math": True, "fetch_remote_resources": True}
+
+
+class DocumentRenderer(Protocol):
+    """The converter needs only a render call; the host owns its process lifetime."""
+
+    def __call__(
+        self, markdown: str, /, context: Mapping[str, object] | None = None,
+        *, options: Mapping[str, object] | None = None,
+    ) -> RendererEnvelope: ...
 
 
 def _resolve_v2_options(overrides: dict | None) -> dict:
@@ -98,6 +110,7 @@ def process_single(
     report: dict | None = None,
     *,
     renderer_options: dict | None = None,
+    renderer: DocumentRenderer | None = None,
 ) -> str | None:
     """Convert a single Markdown file to a standalone HTML document.
 
@@ -111,6 +124,7 @@ def process_single(
         report: When given, receives the conversion warnings.
         renderer_options: Options passed to the v2 renderer. ``None`` uses
             ``_V2_DEFAULT_OPTIONS``; supplied values are merged over those defaults.
+        renderer: Optional host-owned renderer; omitted calls use the shared core bridge.
 
     Returns:
         The output path on success, or None on failure. When the output already
@@ -158,6 +172,7 @@ def process_single(
         output_path=output_path,
         renderer_options=renderer_options,
         report=report,
+        renderer=renderer,
     )
 
 def _convert_document(
@@ -171,11 +186,13 @@ def _convert_document(
     output_path: str,
     renderer_options: dict | None,
     report: dict | None,
+    renderer: DocumentRenderer | None = None,
 ) -> str | None:
     """Render and assemble a document through the supported v2 pipeline."""
     conversion_started = time.perf_counter()
     render_started = time.perf_counter()
-    envelope = render_markdown_node(
+    render = render_markdown_node if renderer is None else renderer
+    envelope = render(
         body_md,
         context=render_context,
         options=_resolve_v2_options(renderer_options),

@@ -55,7 +55,7 @@ def test_six_production_conversions_share_one_real_node_and_preserve_demo_bytes(
     for index in range(6):
         output = generate_demo(output=tmp_path / f"demo-{index}.html")
         assert output.read_bytes() == expected
-        session = renderer_v2._SESSION
+        session = renderer_v2._DEFAULT_BRIDGE._session
         assert session is not None
         pids.append(session.pid)
     assert len(spawned_renderers) == 1, "包含首次 smoke，整个生产转换序列只能启动一次 renderer"
@@ -234,7 +234,7 @@ def test_dead_child_is_recreated_with_a_fresh_smoke(monkeypatch):
 
     monkeypatch.setattr(renderer_v2, "_invoke_artifact", observe)
     renderer_node.render_markdown_node("# before")
-    session = renderer_v2._SESSION
+    session = renderer_v2._DEFAULT_BRIDGE._session
     assert session is not None and session._process is not None
     generation = session.start()
     session._process.terminate()

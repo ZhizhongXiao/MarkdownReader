@@ -49,8 +49,11 @@ MERMAID_BOOT_MARKER = "window.mermaid.initialize"
 @pytest.fixture(autouse=True)
 def _fresh_v2_runtime(monkeypatch):
     """每个用例都从「v2 运行时未验证」开始，并确保 Node 可用。"""
+    renderer_v2.close_renderer_session()
     require_node()
-    monkeypatch.setattr(renderer_v2, "_VALIDATED_RUNTIME", None)
+    monkeypatch.setattr(renderer_v2._DEFAULT_BRIDGE, "_validated_generation", None)
+    yield
+    renderer_v2.close_renderer_session()
 
 
 def write_png(directory: Path, name: str = "pic.png") -> Path:

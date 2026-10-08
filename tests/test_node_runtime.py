@@ -110,7 +110,7 @@ def test_a_failing_first_render_does_not_cache_runtime_validation(monkeypatch):
     monkeypatch.setattr(renderer_v2, "_invoke_artifact", fail_smoke)
     with pytest.raises(RuntimeError, match="smoke failed"):
         renderer_node.render_markdown_node("# first request")
-    assert renderer_v2._VALIDATED_RUNTIME is None
+    assert renderer_v2._DEFAULT_BRIDGE._validated_generation is None
 
 
 def test_the_version_probe_is_read_once(monkeypatch):

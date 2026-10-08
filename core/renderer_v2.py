@@ -112,10 +112,63 @@ class RendererEnvelope(TypedDict):
 SMOKE_MARKDOWN = "# 自检\n\n行内公式 $a^2+b^2=c^2$。\n"
 SMOKE_OPTIONS = {"fetch_remote_resources": False, "math": True}
 
-# One process-wide session; the lock includes first-use validation and envelope parsing.
-_SESSION: RendererSession | None = None
-_SESSION_LOCK = threading.Lock()
-_VALIDATED_RUNTIME: tuple[RendererSession, int] | None = None
+class RendererBridge:
+    """A host owns this bridge, which owns exactly one lazily created Session."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._session: RendererSession | None = None
+        self._validated_generation: int | None = None
+
+    @property
+    def pid(self) -> int | None:
+        with self._lock:
+            return self._session.pid if self._session is not None else None
+
+    def close(self) -> None:
+        with self._lock:
+            if self._session is not None:
+                self._session.close()
+            self._session = None
+            self._validated_generation = None
+
+    def _get_session(self, node_command: str) -> RendererSession:
+        artifact = require_artifact()
+        session = self._session
+        if session is None or (session.node_command, session.artifact) != (node_command, artifact):
+            if session is not None:
+                session.close()
+            session = RendererSession(node_command, artifact, timeout=TIMEOUT_SECONDS)
+            self._session = session
+            self._validated_generation = None
+        return session
+
+    def render(
+        self,
+        node_command: str,
+        markdown: str,
+        context: Mapping[str, object] | None = None,
+        options: Mapping[str, object] | None = None,
+    ) -> RendererEnvelope:
+        """Serialize requests and validate smoke once for each child generation."""
+        with self._lock:
+            session = self._get_session(node_command)
+            generation = session.start()
+            try:
+                envelope = _render_in_session(
+                    session, markdown, context, options,
+                    needs_validation=self._validated_generation != generation,
+                )
+            except RuntimeError:
+                session.close()
+                self._validated_generation = None
+                raise
+            self._validated_generation = generation
+            return envelope
+
+
+# Transitional default for existing core/GUI callers; Backend owns a separate bridge.
+_DEFAULT_BRIDGE = RendererBridge()
 
 
 def node_major(version: str) -> int:
@@ -133,29 +186,10 @@ def node_major(version: str) -> int:
 
 def close_renderer_session() -> None:
     """Release the shared renderer on host exit or explicit host shutdown."""
-    global _SESSION, _VALIDATED_RUNTIME
-    with _SESSION_LOCK:
-        if _SESSION is not None:
-            _SESSION.close()
-        _SESSION = None
-        _VALIDATED_RUNTIME = None
+    _DEFAULT_BRIDGE.close()
 
 
 atexit.register(close_renderer_session)
-
-
-def _get_session(node_command: str) -> RendererSession:
-    """Called under _SESSION_LOCK; retire an old command/artifact before replacing it."""
-    global _SESSION, _VALIDATED_RUNTIME
-    artifact = require_artifact()
-    session = _SESSION
-    if session is None or (session.node_command, session.artifact) != (node_command, artifact):
-        if session is not None:
-            session.close()
-        session = RendererSession(node_command, artifact, timeout=TIMEOUT_SECONDS)
-        _SESSION = session
-        _VALIDATED_RUNTIME = None
-    return session
 
 
 def require_artifact() -> str:
@@ -168,7 +202,7 @@ def require_artifact() -> str:
 
 
 def _invoke_artifact(
-    node_command: str,
+    session: RendererSession,
     markdown: str,
     options,
     context,
@@ -190,7 +224,7 @@ def _invoke_artifact(
     stage = "runtime_validation+request" if runtime_validation else "request"
     started = time.perf_counter()
     try:
-        return _get_session(node_command).request(request)
+        return session.request(request)
     finally:
         _logger.debug(
             "timing stage=renderer_request purpose=%s elapsed_ms=%.2f",
@@ -257,31 +291,20 @@ def render_markdown_v2(
     options: Mapping[str, object] | None = None,
 ) -> RendererEnvelope:
     """Serialize callers through one Session, validating each new Node generation."""
-    with _SESSION_LOCK:
-        session = _get_session(node_command)
-        generation = session.start()
-        try:
-            return _render_in_session(session, generation, node_command, markdown, context, options)
-        except RuntimeError:
-            session.close()
-            raise
+    return _DEFAULT_BRIDGE.render(node_command, markdown, context, options)
 
 
 def _render_in_session(
     session: RendererSession,
-    generation: int,
-    node_command: str,
     markdown: str,
     context: Mapping[str, object] | None,
     options: Mapping[str, object] | None,
+    *,
+    needs_validation: bool,
 ) -> RendererEnvelope:
-    global _VALIDATED_RUNTIME
-    identity = (session, generation)
-    validated_runtime = _VALIDATED_RUNTIME
-    needs_validation = validated_runtime != identity
     started = time.perf_counter()
     stdout = _invoke_artifact(
-        node_command,
+        session,
         markdown,
         options,
         context,
@@ -300,7 +323,6 @@ def _render_in_session(
     smoke_envelope = parse_envelope(json.dumps(runtime_validation, ensure_ascii=False))
     _require_smoke_evidence(smoke_envelope)
     envelope = parse_envelope(json.dumps(response, ensure_ascii=False))
-    _VALIDATED_RUNTIME = identity
     _logger.debug(
         "timing stage=renderer_smoke_ready elapsed_ms=%.2f",
         (time.perf_counter() - started) * 1000,

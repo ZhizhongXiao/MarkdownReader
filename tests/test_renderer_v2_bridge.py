@@ -211,12 +211,14 @@ def test_the_v2_runtime_is_validated_once_per_process(monkeypatch, node_command)
         "warnings",
         "resources",
     }, "runtime smoke 附加字段不得流入生产 envelope"
-    validated_runtime = renderer_v2._VALIDATED_RUNTIME
+    bridge = renderer_v2._DEFAULT_BRIDGE
+    validated_runtime = bridge._validated_generation
     resolved_runtime = renderer_node.validate_renderer_runtime()
     assert validated_runtime is not None
-    session, generation = validated_runtime
+    session = bridge._session
+    assert session is not None
     assert session.node_command == resolved_runtime
-    assert session.start() == generation
+    assert session.start() == validated_runtime
 
 
 def test_first_request_carries_offline_smoke_and_unwraps_the_v2_envelope(monkeypatch):

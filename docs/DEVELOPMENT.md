@@ -21,7 +21,12 @@ cd renderer; npm ci; npm run build; cd ..
 ```powershell
 python main.py                    # GUI（当前入口只启动界面，不解析命令行参数）
 python tools/generate_demo.py     # 重新生成 samples/demo.html
+python -m backend status          # 无 GUI 检查 Backend 状态，不启动 Node
+python -m backend convert path\to\note.md --offline
 ```
+
+G3 Backend API 与生命周期边界见 [Backend 服务宿主](G3_BACKEND.md)。CLI 每次调用都是独立宿主进程；
+跨调用复用、空闲退出与 GUI/VS Code IPC 会在后续阶段加入。
 
 ## 测试
 
