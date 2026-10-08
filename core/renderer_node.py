@@ -4,6 +4,7 @@ import logging
 import os
 import subprocess
 import sys
+import time
 
 from core.config import BUNDLE_ROOT
 
@@ -51,6 +52,7 @@ def probe_node_version(node_command: str) -> str:
         return _RESOLVED_NODE_VERSION
 
     missing = "未找到可用的 Node.js，请检查内置 Node 或系统 PATH。"
+    started = time.perf_counter()
     try:
         result = subprocess.run(
             [node_command, "--version"],
@@ -61,6 +63,11 @@ def probe_node_version(node_command: str) -> str:
         )
     except FileNotFoundError as error:
         raise RuntimeError(missing) from error
+    finally:
+        _logger.debug(
+            "timing stage=node_version_probe elapsed_ms=%.2f",
+            (time.perf_counter() - started) * 1000,
+        )
     if result.returncode != 0:
         raise RuntimeError(missing)
     version = (result.stdout or "").strip()
@@ -90,7 +97,7 @@ def _require_v2_node_major(version: str) -> int:
 
 
 def validate_renderer_runtime() -> str:
-    """Validate Node and the v2 artifact once, then remember the runtime."""
+    """Check Node and the v2 artifact; first-use smoke runs with the real render."""
     global _RESOLVED_NODE
     if _RESOLVED_NODE is not None:
         return _RESOLVED_NODE
@@ -99,9 +106,14 @@ def validate_renderer_runtime() -> str:
     _require_v2_node_major(probe_node_version(node_command))
     from core import renderer_v2
 
-    renderer_v2.validate_v2_runtime(node_command)
+    started = time.perf_counter()
+    renderer_v2.require_artifact()
+    _logger.debug(
+        "timing stage=renderer_artifact_ready elapsed_ms=%.2f",
+        (time.perf_counter() - started) * 1000,
+    )
     _RESOLVED_NODE = node_command
-    _logger.debug("Node 与 v2 渲染运行时已就绪：%s", node_command)
+    _logger.debug("Node 与 v2 renderer artifact 已就绪：%s", node_command)
     return node_command
 
 

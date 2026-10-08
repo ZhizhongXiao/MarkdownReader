@@ -8,6 +8,7 @@ Markdown is rendered by the v2 adapter and assembled by `core/html_assembly.py`.
 
 import logging
 import os
+import time
 
 from core.config import (
     normalize_template_name,
@@ -56,11 +57,16 @@ def _write_output(output_path: str, template_html: str) -> str:
     durable artifact -- diffs, checksums and the committed demo specimen compare its bytes -- so the
     platform default must not rewrite every line break into CRLF on Windows.
     """
+    started = time.perf_counter()
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, "w", encoding="utf-8", newline="\n") as f:
         f.write(template_html)
 
     _logger.info("已生成：%s", output_path)
+    _logger.debug(
+        "timing stage=output_write elapsed_ms=%.2f",
+        (time.perf_counter() - started) * 1000,
+    )
     return output_path
 
 
@@ -167,11 +173,18 @@ def _convert_document(
     report: dict | None,
 ) -> str | None:
     """Render and assemble a document through the supported v2 pipeline."""
+    conversion_started = time.perf_counter()
+    render_started = time.perf_counter()
     envelope = render_markdown_node(
         body_md,
         context=render_context,
         options=_resolve_v2_options(renderer_options),
     )
+    _logger.debug(
+        "timing stage=renderer_total elapsed_ms=%.2f",
+        (time.perf_counter() - render_started) * 1000,
+    )
+    assembly_started = time.perf_counter()
     try:
         assembled = assemble_document(
             envelope,
@@ -183,6 +196,11 @@ def _convert_document(
     except ValueError as error:
         _logger.error("v2 装配失败：%s；原因：%s", output_path, error)
         return None
+    finally:
+        _logger.debug(
+            "timing stage=html_assembly elapsed_ms=%.2f",
+            (time.perf_counter() - assembly_started) * 1000,
+        )
 
     if report is not None:
         # renderer warnings 在前（网络降级、资源缺失），assembly warnings 在后。
@@ -192,7 +210,12 @@ def _convert_document(
             assembled.get("assembly_warnings") or []
         )
 
-    return _write_output(output_path, assembled["html"])
+    result = _write_output(output_path, assembled["html"])
+    _logger.debug(
+        "timing stage=conversion_pipeline elapsed_ms=%.2f",
+        (time.perf_counter() - conversion_started) * 1000,
+    )
+    return result
 
 
 def process_batch(

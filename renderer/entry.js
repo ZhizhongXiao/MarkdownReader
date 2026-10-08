@@ -138,7 +138,14 @@ async function main() {
   }
 
   try {
-    emit(serialize(okEnvelope(await renderRequest(request))), 0);
+    const runtimeValidation = request.runtime_validation
+      ? okEnvelope(await renderRequest(request.runtime_validation))
+      : null;
+    const envelope = okEnvelope(await renderRequest(request));
+    if (runtimeValidation) {
+      envelope.runtime_validation = runtimeValidation;
+    }
+    emit(serialize(envelope), 0);
   } catch (error) {
     fail(
       "render_failed",

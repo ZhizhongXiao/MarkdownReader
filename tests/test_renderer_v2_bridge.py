@@ -13,6 +13,7 @@ import base64
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -190,17 +191,75 @@ def test_the_v2_runtime_is_validated_once_per_process(monkeypatch, node_command)
     original = renderer_v2._invoke_artifact
 
     def counting(*args, **kwargs):
-        calls.append(args)
+        calls.append(kwargs.get("runtime_validation", False))
         return original(*args, **kwargs)
 
     monkeypatch.setattr(renderer_v2, "_invoke_artifact", counting)
 
-    renderer_node.render_markdown_node("# one\n", options=OFFLINE)
+    first = renderer_node.render_markdown_node("# one\n", options=OFFLINE)
     renderer_node.render_markdown_node("# two\n", options=OFFLINE)
 
-    assert len(calls) == 3, "一次冒烟 + 两次真实渲染"
-    assert renderer_v2.validate_v2_runtime(node_command), "已缓存的运行时直接返回"
-    assert len(calls) == 3, "已缓存的运行时不再冒烟"
+    assert calls == [True, False], "首次真实请求合并 smoke；后续请求不再校验"
+    assert set(first) == {
+        "protocol_version",
+        "ok",
+        "html",
+        "headings",
+        "features",
+        "warnings",
+        "resources",
+    }, "runtime smoke 附加字段不得流入生产 envelope"
+    validated_runtime = renderer_v2._VALIDATED_RUNTIME
+    resolved_runtime = renderer_node.validate_renderer_runtime()
+    assert validated_runtime == resolved_runtime
+
+
+def test_first_request_carries_offline_smoke_and_unwraps_the_v2_envelope(monkeypatch):
+    calls = []
+    actual = {
+        "protocol_version": 2,
+        "ok": True,
+        "html": "<p>actual</p>",
+        "headings": [],
+        "features": {},
+        "warnings": [],
+        "resources": {"items": [], "styles": [], "scripts": [], "author_references": []},
+    }
+    smoke = {
+        "protocol_version": 2,
+        "ok": True,
+        "html": '<span class="katex">formula</span>',
+        "headings": [],
+        "features": {"katex": True},
+        "warnings": [],
+        "resources": {
+            "items": [],
+            "styles": [{"id": "katex", "css": ""}],
+            "scripts": [],
+            "author_references": [],
+        },
+    }
+
+    def fake_run(args, **kwargs):
+        calls.append(json.loads(kwargs["input"]))
+        response = dict(actual, runtime_validation=smoke)
+        return SimpleNamespace(returncode=0, stdout=json.dumps(response), stderr="")
+
+    monkeypatch.setattr(renderer_v2.subprocess, "run", fake_run)
+
+    envelope = renderer_v2.render_markdown_v2(
+        "node", "# actual", {}, {"fetch_remote_resources": True}
+    )
+
+    assert len(calls) == 1
+    assert calls[0]["runtime_validation"] == {
+        "markdown": renderer_v2.SMOKE_MARKDOWN,
+        "options": {"fetch_remote_resources": False, "math": True},
+        "context": {},
+    }
+    assert calls[0]["options"] == {"fetch_remote_resources": True}
+    assert set(envelope) == set(actual)
+    assert envelope["html"] == "<p>actual</p>"
 
 
 def test_the_v2_smoke_is_offline_and_proves_katex(node_command):

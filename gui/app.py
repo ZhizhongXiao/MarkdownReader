@@ -7,6 +7,7 @@ import logging
 import os
 import sys
 import threading
+import time
 from typing import Protocol, cast
 
 # Ensure project root is on sys.path so gui.api can import core.*
@@ -147,6 +148,7 @@ def load_gui_document() -> str:
 
 
 def main():
+    startup_started = time.perf_counter()
     # Setup root logger
     from core.logger import setup_logging
 
@@ -268,6 +270,14 @@ def main():
         handler.mark_ready()
 
     window.events.loaded += reveal_window
+
+    def log_gui_ready():
+        _logger.debug(
+            "timing stage=gui_ready elapsed_ms=%.2f",
+            (time.perf_counter() - startup_started) * 1000,
+        )
+
+    window.events.loaded += log_gui_ready
 
     _logger.info("MarkdownReader 已启动，请选择 Markdown 文件后开始转换。")
 

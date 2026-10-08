@@ -21,6 +21,7 @@ import json
 import logging
 import os
 import subprocess
+import time
 from collections.abc import Mapping
 from typing import Literal, NotRequired, TypedDict, cast
 
@@ -109,8 +110,7 @@ class RendererEnvelope(TypedDict):
 SMOKE_MARKDOWN = "# 自检\n\n行内公式 $a^2+b^2=c^2$。\n"
 SMOKE_OPTIONS = {"fetch_remote_resources": False, "math": True}
 
-# The v2 runtime is validated once per process; renders then reuse the answer.
-# v2 runtime validation is cached once per process.
+# The first real renderer request carries the offline runtime smoke in the same Node process.
 _VALIDATED_RUNTIME: str | None = None
 
 
@@ -143,14 +143,29 @@ def require_artifact() -> str:
     return ARTIFACT
 
 
-def _invoke_artifact(node_command: str, markdown: str, options, context) -> str:
-    """Run the artifact once and return its raw stdout."""
+def _invoke_artifact(
+    node_command: str,
+    markdown: str,
+    options,
+    context,
+    *,
+    runtime_validation: bool = False,
+) -> str:
+    """Run one renderer process and return its raw stdout."""
     request = {
         "markdown": markdown,
         "options": {} if options is None else dict(options),
         "context": {} if context is None else dict(context),
     }
+    if runtime_validation:
+        request["runtime_validation"] = {
+            "markdown": SMOKE_MARKDOWN,
+            "options": SMOKE_OPTIONS,
+            "context": {},
+        }
     artifact = require_artifact()
+    stage = "runtime_validation+request" if runtime_validation else "request"
+    started = time.perf_counter()
     try:
         result = subprocess.run(
             [node_command, artifact],
@@ -167,6 +182,12 @@ def _invoke_artifact(node_command: str, markdown: str, options, context) -> str:
         raise RuntimeError(f"v2 renderer 运行超过 {TIMEOUT_SECONDS} 秒，已超时。") from error
     except Exception as error:
         raise RuntimeError(f"运行 v2 renderer 失败：{error}") from error
+    finally:
+        _logger.debug(
+            "timing stage=renderer_process purpose=%s elapsed_ms=%.2f",
+            stage,
+            (time.perf_counter() - started) * 1000,
+        )
 
     if result.returncode != 0:
         stderr = (result.stderr or "").strip() or "(no stderr)"
@@ -233,9 +254,37 @@ def render_markdown_v2(
     context: Mapping[str, object] | None = None,
     options: Mapping[str, object] | None = None,
 ) -> RendererEnvelope:
-    """Call the v2 artifact once and return the complete validated envelope."""
-    stdout = _invoke_artifact(node_command, markdown, options, context)
-    return parse_envelope(stdout)
+    """Call the v2 artifact once, merging its first-use smoke into the real request."""
+    global _VALIDATED_RUNTIME
+    validated_runtime = _VALIDATED_RUNTIME
+    needs_validation = validated_runtime is None or validated_runtime != node_command
+    started = time.perf_counter()
+    stdout = _invoke_artifact(
+        node_command,
+        markdown,
+        options,
+        context,
+        runtime_validation=needs_validation,
+    )
+    envelope = parse_envelope(stdout)
+    if not needs_validation:
+        return envelope
+
+    response = json.loads(stdout)
+    if not isinstance(response, dict):
+        raise RuntimeError("v2 renderer 返回的不是 JSON 对象。")
+    runtime_validation = response.pop("runtime_validation", None)
+    if not isinstance(runtime_validation, dict):
+        raise RuntimeError("首次 v2 renderer 请求未返回 runtime smoke 证据。")
+    smoke_envelope = parse_envelope(json.dumps(runtime_validation, ensure_ascii=False))
+    _require_smoke_evidence(smoke_envelope)
+    envelope = parse_envelope(json.dumps(response, ensure_ascii=False))
+    _VALIDATED_RUNTIME = node_command
+    _logger.debug(
+        "timing stage=renderer_smoke_ready elapsed_ms=%.2f",
+        (time.perf_counter() - started) * 1000,
+    )
+    return envelope
 
 
 def _require_smoke_evidence(envelope: RendererEnvelope) -> None:
@@ -253,21 +302,3 @@ def _require_smoke_evidence(envelope: RendererEnvelope) -> None:
         raise RuntimeError("v2 renderer 冒烟的 author_references 必须为空。")
     if envelope["warnings"]:
         raise RuntimeError(f"v2 renderer 冒烟产生了 warning：{envelope['warnings']}")
-
-
-def validate_v2_runtime(node_command: str) -> str:
-    """Prove the v2 renderer works once per process, then remember the answer.
-
-    Node 版本下限与可执行文件解析由 `core/renderer_node.py` 负责，这里**不再读版本**。
-    冒烟离线且要求 KaTeX 真的被加载；失败不缓存。
-    """
-    global _VALIDATED_RUNTIME
-    if _VALIDATED_RUNTIME is not None:
-        return _VALIDATED_RUNTIME
-
-    require_artifact()
-    envelope = render_markdown_v2(node_command, SMOKE_MARKDOWN, {}, SMOKE_OPTIONS)
-    _require_smoke_evidence(envelope)
-    _VALIDATED_RUNTIME = node_command
-    _logger.debug("v2 renderer 运行时已就绪：%s", ARTIFACT)
-    return node_command

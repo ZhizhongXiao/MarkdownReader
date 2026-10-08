@@ -42,7 +42,10 @@ Markdown 文件
 
 - `renderer/` 是唯一支持的 renderer，复用 pinned `vscode-office` 语义并返回完整 envelope；
   `core/html_assembly.py` 将 envelope 装配为最终单文件 HTML。
-- `core/renderer_node.py` 校验 Node 运行时并调用 v2 bridge；renderer 或 artifact 失败时明确报错。
+- `core/renderer_node.py` 在启动期检查 Node 版本与 v2 artifact。首次真实渲染把离线 KaTeX/runtime smoke
+  与文档渲染放在同一个 Node 进程中；Python 校验 smoke envelope 后只向 assembly 交付正式文档 envelope。
+  后续 one-shot 请求仍各自启动 renderer，长连接复用由 G2 引入。
+- renderer 或 artifact 失败时明确报错；首次 smoke 失败不会缓存运行时验证结果。
 - `core/config.py::PRODUCTION_RENDERER_VERSION` 是 GUI 与 QA 使用的 renderer 版本标识，不提供运行时选择器。
 - 选项与语法范围见 [兼容范围](MARKDOWN.md)；迁移状态与测试证据见 [兼容矩阵](MARKDOWN_COMPATIBILITY.md)。
 

@@ -25,28 +25,28 @@ def _completed(args, stdout):
     return subprocess.CompletedProcess(args, 0, stdout=stdout, stderr="")
 
 
-def test_runtime_is_validated_once_per_process(monkeypatch):
+def test_startup_preflight_checks_node_and_artifact_once_per_process(monkeypatch):
     probes = []
-    validations = []
+    artifact_checks = []
 
     def fake_run(args, **kwargs):
         probes.append(list(args))
         return _completed(args, "v22.0.0")
 
-    def validate_v2(node_command):
-        validations.append(node_command)
-        return node_command
+    def require_artifact():
+        artifact_checks.append(True)
+        return "renderer.cjs"
 
     monkeypatch.setattr(renderer_node.subprocess, "run", fake_run)
     monkeypatch.setattr(renderer_node, "resolve_node_runtime", lambda: "node")
-    monkeypatch.setattr(renderer_v2, "validate_v2_runtime", validate_v2)
+    monkeypatch.setattr(renderer_v2, "require_artifact", require_artifact)
 
     first = renderer_node.validate_renderer_runtime()
     second = renderer_node.validate_renderer_runtime()
 
     assert first == second == "node"
     assert probes == [["node", "--version"]]
-    assert validations == ["node"]
+    assert artifact_checks == [True]
 
 
 def test_the_bridge_uses_v2_and_preserves_offline_defaults(monkeypatch):
@@ -91,7 +91,7 @@ def test_a_source_checkout_may_use_path(monkeypatch, tmp_path):
     assert renderer_node.resolve_node_runtime() == "node"
 
 
-def test_a_failing_v2_smoke_does_not_cache_the_runtime(monkeypatch):
+def test_a_failing_first_render_does_not_cache_runtime_validation(monkeypatch):
     monkeypatch.setattr(renderer_node, "resolve_node_runtime", lambda: "node")
     monkeypatch.setattr(
         renderer_node.subprocess,
@@ -99,13 +99,15 @@ def test_a_failing_v2_smoke_does_not_cache_the_runtime(monkeypatch):
         lambda args, **kwargs: _completed(args, "v22.0.0"),
     )
 
-    def fail_smoke(node_command):
+    def fail_smoke(*_args, **kwargs):
+        assert kwargs["runtime_validation"] is True
         raise RuntimeError("smoke failed")
 
-    monkeypatch.setattr(renderer_v2, "validate_v2_runtime", fail_smoke)
+    monkeypatch.setattr(renderer_v2, "require_artifact", lambda: "renderer.cjs")
+    monkeypatch.setattr(renderer_v2, "_invoke_artifact", fail_smoke)
     with pytest.raises(RuntimeError, match="smoke failed"):
-        renderer_node.validate_renderer_runtime()
-    assert renderer_node._RESOLVED_NODE is None
+        renderer_node.render_markdown_node("# first request")
+    assert renderer_v2._VALIDATED_RUNTIME is None
 
 
 def test_the_version_probe_is_read_once(monkeypatch):
@@ -129,10 +131,10 @@ def test_the_v2_floor_rejects_old_node_before_runtime_validation(monkeypatch):
         lambda args, **kwargs: _completed(args, "v17.9.0"),
     )
 
-    def forbidden(node_command):
-        raise AssertionError("runtime validation must follow the version floor")
+    def forbidden():
+        raise AssertionError("artifact check must follow the version floor")
 
-    monkeypatch.setattr(renderer_v2, "validate_v2_runtime", forbidden)
+    monkeypatch.setattr(renderer_v2, "require_artifact", forbidden)
     with pytest.raises(RuntimeError) as error:
         renderer_node.validate_renderer_runtime()
     assert "major >= 18" in str(error.value)
@@ -154,8 +156,8 @@ def test_an_unparseable_node_version_is_refused(monkeypatch):
     )
     monkeypatch.setattr(
         renderer_v2,
-        "validate_v2_runtime",
-        lambda node_command: pytest.fail("invalid version must be rejected first"),
+        "require_artifact",
+        lambda: pytest.fail("invalid version must be rejected first"),
     )
 
     with pytest.raises(RuntimeError) as error:

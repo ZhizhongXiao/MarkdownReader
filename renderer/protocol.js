@@ -10,6 +10,7 @@
  * 输入（stdin）：
  *   { "markdown": "...", "options": {}, "context": { "source_path": "",
  *     "output_path": "", "document_map": {} } }
+ *   可选的 runtime_validation 对象仅供 Python 在首次正式渲染时传入；entry 会先渲染它，再渲染主请求。
  *
  * options 中与资源层相关的项（Phase 5C，均为实现选项，不是永久 KEEP contract）：
  *   fetch_remote_resources  默认 true：联网尝试内嵌远程图片与 PlantUML 图像；
@@ -86,7 +87,32 @@ function validateRequest(value) {
   if (!isPlainObject(context)) {
     throw new ProtocolError("invalid_request", "context 必须是对象。");
   }
-  return { markdown: value.markdown, options, context };
+
+  let runtimeValidation = null;
+  if (value.runtime_validation !== undefined) {
+    const candidate = value.runtime_validation;
+    if (!isPlainObject(candidate) || typeof candidate.markdown !== "string") {
+      throw new ProtocolError(
+        "invalid_request",
+        "runtime_validation 必须包含 string 字段 markdown。",
+      );
+    }
+    const validationOptions = candidate.options === undefined ? {} : candidate.options;
+    const validationContext = candidate.context === undefined ? {} : candidate.context;
+    if (!isPlainObject(validationOptions) || !isPlainObject(validationContext)) {
+      throw new ProtocolError(
+        "invalid_request",
+        "runtime_validation 的 options 与 context 必须是对象。",
+      );
+    }
+    runtimeValidation = {
+      markdown: candidate.markdown,
+      options: validationOptions,
+      context: validationContext,
+    };
+  }
+
+  return { markdown: value.markdown, options, context, runtime_validation: runtimeValidation };
 }
 
 function emptyResources() {
