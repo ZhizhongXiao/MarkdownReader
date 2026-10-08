@@ -16,9 +16,11 @@ from core import renderer_node, renderer_v2  # noqa: E402
 
 @pytest.fixture(autouse=True)
 def _fresh_runtime_cache(monkeypatch):
+    renderer_v2.close_renderer_session()
     monkeypatch.setattr(renderer_node, "_RESOLVED_NODE", None)
     monkeypatch.setattr(renderer_node, "_RESOLVED_NODE_VERSION", None)
-    monkeypatch.setattr(renderer_v2, "_VALIDATED_RUNTIME", None)
+    yield
+    renderer_v2.close_renderer_session()
 
 
 def _completed(args, stdout):
@@ -104,6 +106,7 @@ def test_a_failing_first_render_does_not_cache_runtime_validation(monkeypatch):
         raise RuntimeError("smoke failed")
 
     monkeypatch.setattr(renderer_v2, "require_artifact", lambda: "renderer.cjs")
+    monkeypatch.setattr(renderer_v2.RendererSession, "start", lambda _self: 1)
     monkeypatch.setattr(renderer_v2, "_invoke_artifact", fail_smoke)
     with pytest.raises(RuntimeError, match="smoke failed"):
         renderer_node.render_markdown_node("# first request")

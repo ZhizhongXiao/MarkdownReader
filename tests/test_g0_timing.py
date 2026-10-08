@@ -3,7 +3,6 @@
 import logging
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -41,18 +40,15 @@ def test_conversion_timing_logs_do_not_change_written_html(tmp_path: Path, monke
         assert any(f"timing stage={stage} elapsed_ms=" in message for message in timing_messages)
 
 
-def test_renderer_process_timing_preserves_stdout(monkeypatch, tmp_path: Path, caplog):
+def test_renderer_request_timing_preserves_stdout(monkeypatch, tmp_path: Path, caplog):
     expected_stdout = '{"protocol_version":2,"ok":true}'
     monkeypatch.setattr(
         renderer_v2, "require_artifact", lambda: str(tmp_path / "renderer.cjs")
     )
-    monkeypatch.setattr(renderer_v2, "_VALIDATED_RUNTIME", "node")
     monkeypatch.setattr(
-        renderer_v2.subprocess,
-        "run",
-        lambda *_args, **_kwargs: SimpleNamespace(
-            returncode=0, stdout=expected_stdout, stderr=""
-        ),
+        renderer_v2.RendererSession,
+        "request",
+        lambda *_args, **_kwargs: expected_stdout,
     )
 
     with caplog.at_level(logging.DEBUG, logger="core.renderer_v2"):
@@ -60,6 +56,6 @@ def test_renderer_process_timing_preserves_stdout(monkeypatch, tmp_path: Path, c
 
     assert stdout == expected_stdout
     assert any(
-        "timing stage=renderer_process purpose=request elapsed_ms=" in record.getMessage()
+        "timing stage=renderer_request purpose=request elapsed_ms=" in record.getMessage()
         for record in caplog.records
     )

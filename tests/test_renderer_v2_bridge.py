@@ -13,7 +13,6 @@ import base64
 import json
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -36,9 +35,11 @@ OFFLINE = {"fetch_remote_resources": False}
 @pytest.fixture(autouse=True)
 def _fresh_caches(monkeypatch):
     """每个用例都从「未验证」开始。"""
-    monkeypatch.setattr(renderer_v2, "_VALIDATED_RUNTIME", None)
+    renderer_v2.close_renderer_session()
     monkeypatch.setattr(renderer_node, "_RESOLVED_NODE", None)
     monkeypatch.setattr(renderer_node, "_RESOLVED_NODE_VERSION", None)
+    yield
+    renderer_v2.close_renderer_session()
 
 
 @pytest.fixture
@@ -48,6 +49,7 @@ def node_command():
 
 def _patch_stdout(monkeypatch, stdout):
     """Replace the artifact call with a fixed stdout (the renderer never runs)."""
+    monkeypatch.setattr(renderer_v2.RendererSession, "start", lambda _self: 1)
     monkeypatch.setattr(renderer_v2, "_invoke_artifact", lambda *args, **kwargs: stdout)
 
 
@@ -211,7 +213,10 @@ def test_the_v2_runtime_is_validated_once_per_process(monkeypatch, node_command)
     }, "runtime smoke 附加字段不得流入生产 envelope"
     validated_runtime = renderer_v2._VALIDATED_RUNTIME
     resolved_runtime = renderer_node.validate_renderer_runtime()
-    assert validated_runtime == resolved_runtime
+    assert validated_runtime is not None
+    session, generation = validated_runtime
+    assert session.node_command == resolved_runtime
+    assert session.start() == generation
 
 
 def test_first_request_carries_offline_smoke_and_unwraps_the_v2_envelope(monkeypatch):
@@ -240,12 +245,13 @@ def test_first_request_carries_offline_smoke_and_unwraps_the_v2_envelope(monkeyp
         },
     }
 
-    def fake_run(args, **kwargs):
-        calls.append(json.loads(kwargs["input"]))
+    def fake_request(_self, payload):
+        calls.append(payload)
         response = dict(actual, runtime_validation=smoke)
-        return SimpleNamespace(returncode=0, stdout=json.dumps(response), stderr="")
+        return json.dumps(response)
 
-    monkeypatch.setattr(renderer_v2.subprocess, "run", fake_run)
+    monkeypatch.setattr(renderer_v2.RendererSession, "start", lambda _self: 1)
+    monkeypatch.setattr(renderer_v2.RendererSession, "request", fake_request)
 
     envelope = renderer_v2.render_markdown_v2(
         "node", "# actual", {}, {"fetch_remote_resources": True}

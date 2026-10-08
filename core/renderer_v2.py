@@ -4,7 +4,7 @@
 
   * `renderer.cjs` 构建产物的存在性检查（缺失即 actionable failure）；
   * v2 运行时冒烟（离线：显式关闭远程抓取，并证明 `dist/katex` 真的可加载）；
-  * subprocess 协议（request 走 stdin，stdout 只接受一个 JSON 对象）；
+  * 共享 RendererSession（JSONL 外层交给 transport，内层继续校验 v2 envelope）；
   * envelope 契约（`protocol_version == 2`、`ok`、必在键与形状、renderer 错误码传播）。
 
 **不做**的事：解析 Node 可执行文件、读 Node 版本、判定 Node 下限。那是运行时归属，由
@@ -13,19 +13,21 @@
 **导入必须无副作用**：`packaging/MarkdownReader.spec` 在构建期
 `from core.renderer_v2 import MINIMUM_NODE_MAJOR`，因此模块加载时只能定义常量与函数 ——
 不检查 artifact、不启动 Node、不跑冒烟。真正的验证只发生在函数被显式调用时。同理本模块
-**不导入 `core.renderer_node`**（保持自包含，spec 的导入不牵扯运行时模块），代价是同一个
-Windows 子进程细节在这里各写一份。
+**不导入 `core.renderer_node`**（spec 的常量导入不牵扯 Node 解析或启动）。
+实际进程收发与清理由 `core.renderer_session` 承担；退出 hook 只注册，不启动进程。
 """
 
+import atexit
 import json
 import logging
 import os
-import subprocess
+import threading
 import time
 from collections.abc import Mapping
 from typing import Literal, NotRequired, TypedDict, cast
 
 from core.config import BUNDLE_ROOT
+from core.renderer_session import RendererSession
 
 _logger = logging.getLogger(__name__)
 
@@ -110,8 +112,10 @@ class RendererEnvelope(TypedDict):
 SMOKE_MARKDOWN = "# 自检\n\n行内公式 $a^2+b^2=c^2$。\n"
 SMOKE_OPTIONS = {"fetch_remote_resources": False, "math": True}
 
-# The first real renderer request carries the offline runtime smoke in the same Node process.
-_VALIDATED_RUNTIME: str | None = None
+# One process-wide session; the lock includes first-use validation and envelope parsing.
+_SESSION: RendererSession | None = None
+_SESSION_LOCK = threading.Lock()
+_VALIDATED_RUNTIME: tuple[RendererSession, int] | None = None
 
 
 def node_major(version: str) -> int:
@@ -127,11 +131,31 @@ def node_major(version: str) -> int:
     return int(head)
 
 
-def _subprocess_window_kwargs() -> dict:
-    """Hide the Node child window on Windows (与 core/renderer_node.py 同一平台细节)。"""
-    if os.name != "nt":
-        return {}
-    return {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0)}
+def close_renderer_session() -> None:
+    """Release the shared renderer on host exit or explicit host shutdown."""
+    global _SESSION, _VALIDATED_RUNTIME
+    with _SESSION_LOCK:
+        if _SESSION is not None:
+            _SESSION.close()
+        _SESSION = None
+        _VALIDATED_RUNTIME = None
+
+
+atexit.register(close_renderer_session)
+
+
+def _get_session(node_command: str) -> RendererSession:
+    """Called under _SESSION_LOCK; retire an old command/artifact before replacing it."""
+    global _SESSION, _VALIDATED_RUNTIME
+    artifact = require_artifact()
+    session = _SESSION
+    if session is None or (session.node_command, session.artifact) != (node_command, artifact):
+        if session is not None:
+            session.close()
+        session = RendererSession(node_command, artifact, timeout=TIMEOUT_SECONDS)
+        _SESSION = session
+        _VALIDATED_RUNTIME = None
+    return session
 
 
 def require_artifact() -> str:
@@ -151,7 +175,7 @@ def _invoke_artifact(
     *,
     runtime_validation: bool = False,
 ) -> str:
-    """Run one renderer process and return its raw stdout."""
+    """Exchange one request with the shared renderer and return the inner v2 JSON."""
     request = {
         "markdown": markdown,
         "options": {} if options is None else dict(options),
@@ -163,38 +187,16 @@ def _invoke_artifact(
             "options": SMOKE_OPTIONS,
             "context": {},
         }
-    artifact = require_artifact()
     stage = "runtime_validation+request" if runtime_validation else "request"
     started = time.perf_counter()
     try:
-        result = subprocess.run(
-            [node_command, artifact],
-            input=json.dumps(request, ensure_ascii=False),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=TIMEOUT_SECONDS,
-            cwd=os.path.dirname(artifact),
-            **_subprocess_window_kwargs(),
-        )
-    except subprocess.TimeoutExpired as error:
-        raise RuntimeError(f"v2 renderer 运行超过 {TIMEOUT_SECONDS} 秒，已超时。") from error
-    except Exception as error:
-        raise RuntimeError(f"运行 v2 renderer 失败：{error}") from error
+        return _get_session(node_command).request(request)
     finally:
         _logger.debug(
-            "timing stage=renderer_process purpose=%s elapsed_ms=%.2f",
+            "timing stage=renderer_request purpose=%s elapsed_ms=%.2f",
             stage,
             (time.perf_counter() - started) * 1000,
         )
-
-    if result.returncode != 0:
-        stderr = (result.stderr or "").strip() or "(no stderr)"
-        raise RuntimeError(
-            f"v2 renderer 执行失败（退出码 {result.returncode}）。错误输出：{stderr}"
-        )
-    return result.stdout or ""
 
 
 def parse_envelope(stdout: str) -> RendererEnvelope:
@@ -254,10 +256,29 @@ def render_markdown_v2(
     context: Mapping[str, object] | None = None,
     options: Mapping[str, object] | None = None,
 ) -> RendererEnvelope:
-    """Call the v2 artifact once, merging its first-use smoke into the real request."""
+    """Serialize callers through one Session, validating each new Node generation."""
+    with _SESSION_LOCK:
+        session = _get_session(node_command)
+        generation = session.start()
+        try:
+            return _render_in_session(session, generation, node_command, markdown, context, options)
+        except RuntimeError:
+            session.close()
+            raise
+
+
+def _render_in_session(
+    session: RendererSession,
+    generation: int,
+    node_command: str,
+    markdown: str,
+    context: Mapping[str, object] | None,
+    options: Mapping[str, object] | None,
+) -> RendererEnvelope:
     global _VALIDATED_RUNTIME
+    identity = (session, generation)
     validated_runtime = _VALIDATED_RUNTIME
-    needs_validation = validated_runtime is None or validated_runtime != node_command
+    needs_validation = validated_runtime != identity
     started = time.perf_counter()
     stdout = _invoke_artifact(
         node_command,
@@ -279,12 +300,19 @@ def render_markdown_v2(
     smoke_envelope = parse_envelope(json.dumps(runtime_validation, ensure_ascii=False))
     _require_smoke_evidence(smoke_envelope)
     envelope = parse_envelope(json.dumps(response, ensure_ascii=False))
-    _VALIDATED_RUNTIME = node_command
+    _VALIDATED_RUNTIME = identity
     _logger.debug(
         "timing stage=renderer_smoke_ready elapsed_ms=%.2f",
         (time.perf_counter() - started) * 1000,
     )
     return envelope
+
+
+def validate_v2_runtime(node_command: str) -> str:
+    """Build-time health check, sharing the production Session and offline smoke gate."""
+    envelope = render_markdown_v2(node_command, SMOKE_MARKDOWN, {}, SMOKE_OPTIONS)
+    _require_smoke_evidence(envelope)
+    return node_command
 
 
 def _require_smoke_evidence(envelope: RendererEnvelope) -> None:

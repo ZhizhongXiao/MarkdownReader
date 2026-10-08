@@ -44,7 +44,11 @@ Markdown 文件
   `core/html_assembly.py` 将 envelope 装配为最终单文件 HTML。
 - `core/renderer_node.py` 在启动期检查 Node 版本与 v2 artifact。首次真实渲染把离线 KaTeX/runtime smoke
   与文档渲染放在同一个 Node 进程中；Python 校验 smoke envelope 后只向 assembly 交付正式文档 envelope。
-  后续 one-shot 请求仍各自启动 renderer，长连接复用由 G2 引入。
+  `core/renderer_v2.py` 惰性持有进程内唯一的 `RendererSession`，后续请求通过 JSONL 复用同一个
+  `renderer.cjs --server` 子进程。并发调用在 bridge 内串行化，Node 每次仍 `createRenderer(options)`。
+- `core/renderer_session.py` 只负责启动、收发、关闭和已退出子进程的重建；不处理主题、配置、目录或装配。
+  Python 正常退出时关闭 stdin 并回收 Node，独立 Backend 与 120 秒空闲退出仍属于后续阶段。
+  one-shot CLI 保留用于兼容与等价对照；协议和验收证据见 [G2 Renderer Session](G2_RENDERER_SESSION.md)。
 - renderer 或 artifact 失败时明确报错；首次 smoke 失败不会缓存运行时验证结果。
 - `core/config.py::PRODUCTION_RENDERER_VERSION` 是 GUI 与 QA 使用的 renderer 版本标识，不提供运行时选择器。
 - 选项与语法范围见 [兼容范围](MARKDOWN.md)；迁移状态与测试证据见 [兼容矩阵](MARKDOWN_COMPATIBILITY.md)。

@@ -85,6 +85,9 @@ pwsh tools/update_vscode_office.ps1 -ExpectCommit <sha>     # 断言当前 check
 `renderer/` 是唯一支持的 renderer，复用 pinned `vscode-office` 的 Markdown 实现。
 转换器将其完整 envelope 交给 `core/html_assembly.py` 装配；v1 runtime 不再参与源码运行、测试或发布载荷。
 
+G2 起 Python 生产路径通过 `RendererSession` 复用 `renderer.cjs --server`；直接调用产物的 one-shot
+协议继续可用。JSONL 格式、进程生命周期和复用验收见 [G2 Renderer Session](G2_RENDERER_SESSION.md)。
+
 ```powershell
 cd renderer
 npm ci          # 只安装 renderer 自己的依赖；绝不在 upstream 内安装任何东西
