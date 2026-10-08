@@ -29,7 +29,8 @@ Python API 与传输层解耦，协议版本为 1。当前只接受 `status` 和
 `false`，为 `true` 时关闭远程资源抓取。
 
 Backend 在同一实例内串行处理请求，所以 RendererSession 与 Python core 的文件转换不会交叉执行。G5 通过
-本机 Named Pipe 提供多个客户端到同一个 Backend 的共享入口；跨 Backend 进程的单实例 ownership 仍由 G6 实现。
+本机 Named Pipe 提供多个客户端到同一个 Backend 的共享入口；G6 使用 per-session Named Mutex 仲裁常驻 host 的
+并发启动，确保同一登录会话只有一个 owner。
 
 ## 命令行
 

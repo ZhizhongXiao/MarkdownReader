@@ -7,7 +7,7 @@ import os
 import time
 from ctypes import wintypes
 from functools import cache
-from typing import NoReturn
+from typing import Literal, NoReturn
 
 _INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
 _ERROR_FILE_NOT_FOUND = 2
@@ -29,6 +29,8 @@ _GENERIC_READ = 0x80000000
 _GENERIC_WRITE = 0x40000000
 _OPEN_EXISTING = 3
 _WAIT_OBJECT_0 = 0
+_WAIT_ABANDONED_0 = 0x00000080
+_WAIT_TIMEOUT = 0x00000102
 _WAIT_FAILED = 0xFFFFFFFF
 _INFINITE = 0xFFFFFFFF
 
@@ -85,6 +87,12 @@ def _kernel32() -> ctypes.WinDLL:
     kernel32.CloseHandle.restype = wintypes.BOOL
     kernel32.LocalFree.argtypes = [wintypes.HLOCAL]
     kernel32.LocalFree.restype = wintypes.HLOCAL
+    kernel32.CreateMutexW.argtypes = [
+        ctypes.POINTER(_SecurityAttributes), wintypes.BOOL, wintypes.LPCWSTR,
+    ]
+    kernel32.CreateMutexW.restype = wintypes.HANDLE
+    kernel32.ReleaseMutex.argtypes = [wintypes.HANDLE]
+    kernel32.ReleaseMutex.restype = wintypes.BOOL
     kernel32.CreateNamedPipeW.argtypes = [
         wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD,
         wintypes.DWORD, wintypes.DWORD, wintypes.DWORD,
@@ -214,7 +222,7 @@ def event_is_set(event_handle: int) -> bool:
     result = _kernel32().WaitForSingleObject(wintypes.HANDLE(event_handle), 0)
     if result == _WAIT_OBJECT_0:
         return True
-    if result == 0x00000102:  # WAIT_TIMEOUT
+    if result == _WAIT_TIMEOUT:
         return False
     _raise_last_error()
 
@@ -224,8 +232,7 @@ def close_handle(handle: int) -> None:
         _raise_last_error()
 
 
-def create_server_pipe(pipe_name: str) -> int:
-    kernel32 = _kernel32()
+def _protected_security_descriptor() -> wintypes.LPVOID:
     advapi32 = _advapi32()
     logon_sid = _current_logon_sid()
     security_descriptor = wintypes.LPVOID()
@@ -234,6 +241,43 @@ def create_server_pipe(pipe_name: str) -> int:
         sddl, _SDDL_REVISION_1, ctypes.byref(security_descriptor), None,
     ):
         _raise_last_error()
+    return security_descriptor
+
+
+def create_backend_mutex(mutex_name: str) -> int:
+    kernel32 = _kernel32()
+    security_descriptor = _protected_security_descriptor()
+    security = _SecurityAttributes(
+        ctypes.sizeof(_SecurityAttributes), security_descriptor, False,
+    )
+    try:
+        handle = kernel32.CreateMutexW(ctypes.byref(security), False, mutex_name)
+        if not handle:
+            _raise_last_error()
+        return int(handle)
+    finally:
+        kernel32.LocalFree(security_descriptor)
+
+
+def wait_mutex(handle: int) -> Literal["acquired", "abandoned", "timeout"]:
+    result = _kernel32().WaitForSingleObject(wintypes.HANDLE(handle), 0)
+    if result == _WAIT_OBJECT_0:
+        return "acquired"
+    if result == _WAIT_ABANDONED_0:
+        return "abandoned"
+    if result == _WAIT_TIMEOUT:
+        return "timeout"
+    _raise_last_error()
+
+
+def release_mutex(handle: int) -> None:
+    if not _kernel32().ReleaseMutex(wintypes.HANDLE(handle)):
+        _raise_last_error()
+
+
+def create_server_pipe(pipe_name: str) -> int:
+    kernel32 = _kernel32()
+    security_descriptor = _protected_security_descriptor()
     security = _SecurityAttributes(
         ctypes.sizeof(_SecurityAttributes), security_descriptor, False,
     )

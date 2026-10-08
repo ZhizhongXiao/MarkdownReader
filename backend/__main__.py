@@ -8,6 +8,8 @@ import sys
 import uuid
 
 from backend.named_pipe import DEFAULT_PIPE_NAME, NamedPipeServer
+from backend.ownership import BackendOwnership, connect_or_acquire
+from backend.protocol import PROTOCOL_VERSION, BackendError
 from backend.service import Backend
 
 
@@ -33,10 +35,7 @@ def main(argv: list[str] | None = None) -> int:
     params: dict[str, object] = {}
     config_path = None
     if args.method == "serve":
-        config_path = args.config
-        with Backend(config_path=config_path) as backend:
-            NamedPipeServer(args.pipe_name).serve_until_shutdown(backend)
-        return 0
+        return _serve(args.config, args.pipe_name, BackendOwnership())
     if args.method == "convert":
         params = {"input_path": os.path.abspath(args.input_path), "offline": args.offline}
         if args.output is not None:
@@ -51,6 +50,29 @@ def main(argv: list[str] | None = None) -> int:
     # ASCII JSON is valid UTF-8 even when stdout is redirected under a Windows code page.
     print(json.dumps(response, ensure_ascii=True))
     return 0 if response["ok"] else 1
+
+
+def _serve(config_path: str | None, pipe_name: str, ownership: BackendOwnership) -> int:
+    """Run the owner host, or return the status of the already running host."""
+    try:
+        try:
+            existing = connect_or_acquire(ownership, pipe_name=pipe_name)
+        except BackendError as error:
+            print(json.dumps({
+                "protocol": PROTOCOL_VERSION,
+                "id": None,
+                "ok": False,
+                "error": {"code": error.code, "message": str(error)},
+            }, ensure_ascii=True))
+            return 1
+        if existing is not None:
+            print(json.dumps(existing, ensure_ascii=True))
+            return 0 if existing["ok"] else 1
+        with Backend(config_path=config_path) as backend:
+            NamedPipeServer(pipe_name).serve_until_shutdown(backend)
+        return 0
+    finally:
+        ownership.close()
 
 
 if __name__ == "__main__":
